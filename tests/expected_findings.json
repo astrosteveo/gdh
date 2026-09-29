@@ -1,0 +1,81 @@
+{
+ "blind__scene_01": [
+  [
+   "warning",
+   "floating",
+   "Barrels/Barrel2"
+  ],
+  [
+   "warning",
+   "material_range",
+   "Rug"
+  ]
+ ],
+ "blind__scene_02": [
+  [
+   "warning",
+   "camera_far",
+   "Camera3D"
+  ],
+  [
+   "warning",
+   "label3d_facing",
+   "Shops/Bakery/SignText"
+  ]
+ ],
+ "blind__scene_03": [
+  [
+   "warning",
+   "alpha_unused",
+   "Bushes/Bush1/Card0"
+  ],
+  [
+   "warning",
+   "shadow_bias",
+   "Sun"
+  ]
+ ],
+ "blind__scene_04": [],
+ "blind__scene_05": [],
+ "blind__scene_06": [
+  [
+   "warning",
+   "camera_roll",
+   "Camera3D"
+  ]
+ ],
+ "blind__scene_07": [],
+ "blind__scene_08": [
+  [
+   "warning",
+   "sibling_offset",
+   "Window/GridPanel/Grid/Slot03/Icon"
+  ],
+  [
+   "warning",
+   "text_key",
+   "Window/DetailPanel/ItemName"
+  ]
+ ],
+ "blind__scene_09": [
+  [
+   "warning",
+   "region_smear",
+   "PlatformC"
+  ],
+  [
+   "warning",
+   "texture_filter",
+   "Slime"
+  ]
+ ],
+ "blind__scene_10": [],
+ "probes__isolation": [
+  [
+   "warning",
+   "floating",
+   "Crate"
+  ]
+ ],
+ "smoke__smoke": []
+}

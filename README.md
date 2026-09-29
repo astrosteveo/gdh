@@ -62,6 +62,17 @@ Environment variables:
 | `GODOT` | Path to the Godot binary. Default: `godot`. |
 | `GDH_GPU_INDEX` | Vulkan device index to render on. Default: Godot picks one. |
 
+## Drive a running game
+
+```sh
+gdh live start --project path/to/game
+gdh live step 30 --hold ui_right --shot
+gdh live eval "get_node('Player').position"
+gdh live stop
+```
+
+`gdh live` starts the game off-screen, held at frame 0, and runs it an exact number of frames per `step`. Steps can inject actions, keys and clicks. Between commands you can save frames in any view, run the probes, inspect the scene tree and evaluate expressions. See [docs/live.md](docs/live.md).
+
 ## Probes
 
 After capturing, `gdh` checks the scene's data for likely defects. Examples are floating objects, a tilted camera, geometry cut off by the far plane, material values out of range, blurry pixel art, raw translation keys and misaligned UI items. It prints each finding and saves a zoomed crop of it. See [docs/probes.md](docs/probes.md) for the checks, their thresholds and test results.
@@ -75,10 +86,13 @@ After capturing, `gdh` checks the scene's data for likely defects. Examples are 
 | Path | Contents |
 |---|---|
 | `src/gdh/cli.py` | The `gdh` command |
+| `src/gdh/capture.py`, `live.py` | `gdh capture` and `gdh live` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
+| `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
 | `src/gdh/harness/probes.gd` | The probes |
 | `testbed/` | Godot project with test scenes |
-| `docs/` | Test reports and probe documentation |
+| `tests/` | `uv run pytest`: probe findings on the testbed, and live control |
+| `docs/` | Live control, probes, and test reports |
 
 ## License
 

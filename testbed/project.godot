@@ -4,5 +4,9 @@ config_version=5
 config/name="testbed"
 run/main_scene="res://smoke/smoke.tscn"
 
+[autoload]
+
+GameState="*res://live/game_state.gd"
+
 [rendering]
 renderer/rendering_method="forward_plus"

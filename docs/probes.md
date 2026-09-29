@@ -11,7 +11,7 @@ Each finding has these fields:
 | `node` | Path relative to the scene root |
 | `message` | What's wrong, in one or two sentences |
 | `data` | The measured values |
-| `screen_rect` | `[x, y, w, h]` in viewport pixels, or `null` |
+| `screen_rect` | `[x, y, w, h]` in screenshot pixels, or `null` |
 | `view` | The capture that shows the problem best |
 | `crop` | The crop `gdh` saved, relative to the output directory |
 

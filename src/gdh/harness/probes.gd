@@ -6,8 +6,10 @@ extends RefCounted
 ##   result.stats: counters that show whether each check ran
 ##
 ## severity is "warning" (likely wrong) or "info" (worth a look, often intended).
-## screen_rect is [x, y, w, h] in viewport pixels, or null. view names the
+## screen_rect is [x, y, w, h] in screenshot pixels, or null. view names the
 ## capture that shows the problem best.
+
+const Common := preload("common.gd")
 
 # A gap under 2 cm reads as contact at normal viewing distance. Above 1 m an
 # object is more likely hung or mounted on purpose.
@@ -227,7 +229,8 @@ func _check_floating(meshes: Array[MeshInstance3D]) -> void:
 	# the faces avoids physics trouble with scaled bodies.
 	var holder := Node3D.new()
 	holder.name = "__gdh_probe_bodies"
-	_tree.root.add_child(holder)
+	# Internal, so game code walking root's children doesn't see it.
+	_tree.root.add_child(holder, false, Node.INTERNAL_MODE_BACK)
 	var body_of := {}
 	for mi in meshes:
 		var faces := mi.mesh.get_faces()
@@ -247,9 +250,10 @@ func _check_floating(meshes: Array[MeshInstance3D]) -> void:
 		body.add_child(cs)
 		holder.add_child(body)
 		body_of[mi] = body.get_rid()
-	# Bodies join the physics space on the next physics step.
-	await _tree.physics_frame
-	await _tree.physics_frame
+	# Wait for the bodies to register. Process frames, not physics frames:
+	# physics stops while the game is paused, and queries still work then.
+	await _tree.process_frame
+	await _tree.process_frame
 	var space := _viewport.find_world_3d().direct_space_state
 	var mesh_of := {}
 	for mi in body_of:
@@ -646,7 +650,8 @@ func _add(probe: String, severity: String, node: Node, message: String,
 		data := {}, rect: Variant = null, view := "normal") -> void:
 	var screen_rect: Variant = null
 	if rect is Rect2:
-		screen_rect = [roundi(rect.position.x), roundi(rect.position.y), roundi(rect.size.x), roundi(rect.size.y)]
+		var r := Common.to_shot(_tree, rect)
+		screen_rect = [roundi(r.position.x), roundi(r.position.y), roundi(r.size.x), roundi(r.size.y)]
 	_findings.append({
 		"probe": probe,
 		"severity": severity,

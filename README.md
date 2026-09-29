@@ -8,7 +8,7 @@ Linux only for now.
 
 - Linux
 - Godot 4.7 (tested with 4.7.2)
-- `xvfb-run` (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
+- Xvfb (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
 - A Vulkan driver for your GPU
 - [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+ and Pillow)
 

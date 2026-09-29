@@ -83,7 +83,7 @@ The commands are `status`, `step`, `shot`, `probes`, `tree`, `eval`, `run`, `pau
 
 ## Tests
 
-`uv run pytest` runs `tests/test_live.py` against `testbed/live/arena.tscn`. The tests need Godot, a GPU with Vulkan, and `xvfb-run`. They check:
+`uv run pytest` runs `tests/test_live.py` against `testbed/live/arena.tscn`. The tests need Godot, a GPU with Vulkan, and Xvfb. They check:
 
 - exact frame counts and movement at 60 and 120 ticks per second
 - that taps reach `_physics_process`, `_process` and `_input` once each

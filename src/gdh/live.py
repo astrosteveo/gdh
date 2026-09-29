@@ -8,13 +8,13 @@ import json
 import os
 import secrets
 import shutil
-import signal
 import socket
 import subprocess
 import time
 from pathlib import Path
 
-from gdh.godot import HARNESS, godot_cmd, godot_env, project_ticks, write_alert_shims
+from gdh.godot import (HARNESS, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
+                       start_xvfb, write_alert_shims)
 from gdh.images import crop_findings, save_tiles
 
 LIVE_SCRIPT = HARNESS / "live.gd"
@@ -29,16 +29,6 @@ class LiveError(Exception):
 
 def session_path(name):
     return SESSION_DIR / f"{name}.json"
-
-
-def pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
 
 
 def log_tail(path, lines=15):
@@ -59,21 +49,10 @@ def load_session(name):
         raise LiveError(f"No live session '{name}'. Start one with: gdh live start --project <dir>")
     session = json.loads(path.read_text())
     if not pid_alive(session["pid"]):
+        kill_groups(*session.get("groups", [session["pid"]]))
         remove_session(session)
         raise LiveError(f"Session '{name}' has ended. Last lines of {session['log']}:\n{log_tail(session['log'])}")
     return session
-
-
-def kill_group(pid):
-    """Stop the whole process group: xvfb-run, Xvfb and Godot."""
-    for sig, wait in ((signal.SIGTERM, 3.0), (signal.SIGKILL, 1.0)):
-        try:
-            os.killpg(pid, sig)
-        except ProcessLookupError:
-            return
-        deadline = time.monotonic() + wait
-        while time.monotonic() < deadline and pid_alive(pid):
-            time.sleep(0.1)
 
 
 def request(session, cmd, args=None, timeout=300):
@@ -168,21 +147,25 @@ def cmd_start(args):
     log_path = out / "godot.log"
     # The token goes in the environment, which only this user can read. The
     # command line is visible to everyone in the process list.
-    env = godot_env(shims)
+    xvfb, display = start_xvfb(args.resolution)
+    env = godot_env(shims, display)
     env["GDH_TOKEN"] = token
     with open(log_path, "w") as log:
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                                 env=env, start_new_session=True)
-    session = {"name": name, "pid": proc.pid, "port": 0, "token": token, "project": str(project),
-               "out": str(out), "log": str(log_path), "shims": str(shims)}
+    # pid is Godot, the process that matters for liveness. groups are the
+    # process groups of Godot and Xvfb, which stop kills.
+    session = {"name": name, "pid": proc.pid, "groups": [proc.pid, xvfb.pid], "port": 0, "token": token,
+               "project": str(project), "out": str(out), "log": str(log_path), "shims": str(shims)}
     deadline = time.monotonic() + args.timeout
     while not ready.exists():
         if proc.poll() is not None:
+            kill_groups(proc.pid, xvfb.pid)
             remove_session(session)
             raise LiveError(f"Godot exited with code {proc.returncode} before the game was ready. "
                             f"Last lines of {log_path}:\n{log_tail(log_path)}")
         if time.monotonic() > deadline:
-            kill_group(proc.pid)
+            kill_groups(proc.pid, xvfb.pid)
             remove_session(session)
             raise LiveError(f"The game wasn't ready after {args.timeout} s. Last lines of {log_path}:\n{log_tail(log_path)}")
         time.sleep(0.2)
@@ -191,7 +174,7 @@ def cmd_start(args):
     for e in info.get("errors", []):
         print(f"{e['type']}: {e['message']} at {e['where']}")
     if not info.get("port"):
-        kill_group(proc.pid)
+        kill_groups(proc.pid, xvfb.pid)
         remove_session(session)
         raise LiveError(info.get("error") or "The game didn't open a port.")
     session["port"] = info["port"]
@@ -217,8 +200,8 @@ def cmd_stop(args):
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline and pid_alive(session["pid"]):
             time.sleep(0.2)
-        if pid_alive(session["pid"]):
-            kill_group(session["pid"])
+    # Xvfb exits with Godot, but make sure the whole group is gone.
+    kill_groups(*session.get("groups", [session["pid"]]))
     remove_session(session)
     print(f"Stopped session '{args.session}'.")
     return 0

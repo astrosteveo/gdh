@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from gdh.godot import HARNESS, alert_shims, godot_cmd, godot_env
+from gdh.godot import HARNESS, alert_shims, godot_cmd, godot_env, kill_groups, start_xvfb
 from gdh.images import crop_findings, save_tiles
 
 CAPTURE_SCRIPT = HARNESS / "capture.gd"
@@ -21,13 +21,21 @@ def capture_one(project, scene, out_dir, args, shims):
     if args.modes:
         user_args += ["--modes", args.modes]
     cmd = godot_cmd(project, args.resolution, ["--script", str(CAPTURE_SCRIPT), "--", *user_args])
-    with open(out_dir / "godot.log", "w") as log:
-        try:
-            proc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT,
-                                  env=godot_env(shims), timeout=args.timeout)
-            code = proc.returncode
-        except subprocess.TimeoutExpired:
-            code = "timeout"
+    xvfb, display = start_xvfb(args.resolution)
+    try:
+        with open(out_dir / "godot.log", "w") as log:
+            proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                    env=godot_env(shims, display), start_new_session=True)
+            try:
+                code = proc.wait(timeout=args.timeout)
+            except subprocess.TimeoutExpired:
+                code = "timeout"
+    finally:
+        # Godot may have left children, so stop its whole group, then Xvfb.
+        kill_groups(*([proc.pid] if "proc" in locals() else []), xvfb.pid)
+        xvfb.wait()
+        if "proc" in locals():
+            proc.wait()
     report_path = out_dir / "report.json"
     report = json.loads(report_path.read_text()) if report_path.exists() else {}
     if report:
@@ -67,4 +75,5 @@ def cmd_import(args):
     project = Path(args.project).resolve()
     cmd = [os.environ.get("GODOT", "godot"), "--headless", "--import", "--path", str(project)]
     with alert_shims() as shims:
-        return subprocess.run(cmd, env=godot_env(shims)).returncode
+        # Headless needs no display. The bogus one keeps any child off the desktop.
+        return subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display")).returncode

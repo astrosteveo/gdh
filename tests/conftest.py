@@ -9,8 +9,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 TESTBED = ROOT / "testbed"
 
-if not (shutil.which("xvfb-run") and shutil.which("godot")):
-    pytest.skip("needs godot and xvfb-run on PATH", allow_module_level=True)
+if not (shutil.which("Xvfb") and shutil.which("godot")):
+    pytest.skip("needs godot and Xvfb on PATH", allow_module_level=True)
 
 
 def gdh(*args, check=True):

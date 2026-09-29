@@ -122,8 +122,7 @@ def test_killed_session_is_cleaned_up(tmp_path):
     name = f"{SESSION}-kill"
     gdh("live", "start", "--project", TESTBED, "--scene", "res://live/arena.tscn",
         "--session", name, "--out", tmp_path)
-    pid = json.loads(session_path(name).read_text())["pid"]
-    os.killpg(pid, signal.SIGKILL)
+    os.kill(json.loads(session_path(name).read_text())["pid"], signal.SIGKILL)
     time.sleep(1)
     proc = gdh("live", "status", "--session", name, check=False)
     assert "has ended" in proc.stderr

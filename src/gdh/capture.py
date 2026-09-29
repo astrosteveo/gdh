@@ -20,12 +20,12 @@ def capture_one(project, scene, out_dir, args, shims):
     user_args = ["--scene", scene, "--out", str(out_dir), "--warmup", str(args.warmup)]
     if args.modes:
         user_args += ["--modes", args.modes]
-    cmd = godot_cmd(project, args.resolution, ["--script", str(CAPTURE_SCRIPT), "--", *user_args])
+    cmd = godot_cmd(project, args.resolution, ["--script", str(CAPTURE_SCRIPT)], args.game_args)
     xvfb, display = start_xvfb(args.resolution)
     try:
         with open(out_dir / "godot.log", "w") as log:
             proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                    env=godot_env(shims, display), start_new_session=True)
+                                    env=godot_env(shims, display, user_args), start_new_session=True)
             try:
                 code = proc.wait(timeout=args.timeout)
             except subprocess.TimeoutExpired:

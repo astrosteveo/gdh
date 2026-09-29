@@ -53,6 +53,7 @@ Use `--modes normal,wireframe` to render only some views, which is faster.
 
 ```sh
 gdh live start --project <dir> [--scene res://...] --session <name>   # held at game frame 0
+gdh live start --project <dir> --session <name> -- --level 3          # arguments after -- go to the game
 gdh live status --session <name>
 gdh live step 30 --hold ui_right --session <name>                     # run exactly 30 frames, then hold
 gdh live shot --session <name> [--view wireframe]
@@ -74,7 +75,7 @@ gdh live stop --session <name>
 
   Input arrives the way a player's does, so `_input`, `is_action_just_pressed` and `is_action_pressed` all see it.
 - **Coordinates** are screenshot pixels everywhere. `tree` gives each node's `screen` position (`[x, y, w, h]` for Controls), so click at the center of what `tree` reports.
-- **`eval`** evaluates one Godot Expression, with the current scene as its base. `scene`, `tree`, `root` and every autoload by name are available. It can't assign with `=`. Use `set("prop", value)` or call a method instead.
+- **`eval`** evaluates one Godot Expression, with the current scene as its base. `scene`, `tree`, `root`, every autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`...) are available. It can't assign with `=`. Use `set("prop", value)` or call a method instead.
 - **Errors.** Every reply lists the engine errors raised since the previous command. Read them after every step. They're often the real bug.
 - **Nodes that run while held.** `status` lists nodes with process mode ALWAYS or WHEN_PAUSED. They keep running while the game is held, so account for them when measuring.
 

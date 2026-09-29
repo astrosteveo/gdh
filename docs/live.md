@@ -11,6 +11,8 @@ gdh live probes                                  # run the probes on the current
 gdh live stop
 ```
 
+Arguments after `--` go to the game: `gdh live start --project path/to/game -- --server ws://localhost:8787` gives the game exactly `["--server", "ws://localhost:8787"]` from `OS.get_cmdline_user_args()`. The harness's own settings travel in the `GDH_ARGS` environment variable, so they never mix with the game's.
+
 Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/harness/live.gd`, which loads the scene and attaches the control node `bridge.gd`. The project's autoloads load as usual. The control node is an internal child of the root, so game code that walks `root.get_children()` doesn't see it.
 
 ## Time
@@ -52,7 +54,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `step N --shot` | A frame after the step |
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
-| `eval EXPR` | Any Godot expression. The base is the current scene. `scene`, `tree`, `root` and each autoload by name are also available. |
+| `eval EXPR` | Any Godot expression. The base is the current scene. `scene`, `tree`, `root`, each autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) are also available. |
 | `status` | Game frame, held or running, scene, nodes that run while held |
 
 Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Every reply lists the engine errors raised since the previous reply, with repeats merged. Add `--json` to any command for the raw reply.

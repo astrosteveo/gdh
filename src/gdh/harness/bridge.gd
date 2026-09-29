@@ -266,7 +266,8 @@ func _cmd_tree(args: Dictionary) -> Dictionary:
 
 
 ## Evaluates a Godot Expression with the current scene as base. Inputs: tree,
-## scene, root, and each autoload by name, as in GDScript.
+## scene, root, each autoload by name, and the engine's singletons (OS, Engine,
+## Input, Time, RenderingServer...), as in GDScript.
 func _cmd_eval(args: Dictionary) -> Dictionary:
 	var expression := Expression.new()
 	var scene := get_tree().current_scene
@@ -277,6 +278,10 @@ func _cmd_eval(args: Dictionary) -> Dictionary:
 		if setting.name.begins_with("autoload/") and get_tree().root.has_node(autoload):
 			names.append(autoload)
 			values.append(get_tree().root.get_node(autoload))
+	for singleton in Engine.get_singleton_list():
+		if not names.has(singleton):
+			names.append(singleton)
+			values.append(Engine.get_singleton(singleton))
 	var err := expression.parse(args.get("expr", ""), names)
 	if err != OK:
 		return {"error": expression.get_error_text()}

@@ -20,7 +20,7 @@ SESSION = f"test-{os.getpid()}"
 def arena(tmp_path_factory):
     out = tmp_path_factory.mktemp("live")
     gdh("live", "start", "--project", TESTBED, "--scene", "res://live/arena.tscn",
-        "--session", SESSION, "--out", out)
+        "--session", SESSION, "--out", out, "--", "--level", "3", "--hard")
     yield out
     gdh("live", "stop", "--session", SESSION)
 
@@ -31,6 +31,14 @@ def live(*args):
 
 def value(expr):
     return live("eval", expr)["result"]["value"]
+
+
+def test_eval_reaches_engine_singletons(arena):
+    assert value("Engine.get_physics_ticks_per_second()") == 60
+
+
+def test_game_gets_only_its_own_arguments(arena):
+    assert value("OS.get_cmdline_user_args()") == ["--level", "3", "--hard"]
 
 
 def test_starts_held_at_frame_zero(arena):

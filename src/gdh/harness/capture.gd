@@ -27,9 +27,9 @@ var _args := {}
 
 func _initialize() -> void:
 	OS.add_logger(_errors)
-	_args = Common.parse_args(OS.get_cmdline_user_args())
+	_args = Common.harness_args()
 	if not _args.has("scene") or not _args.has("out"):
-		printerr("capture.gd: --scene and --out are required")
+		printerr("capture.gd: GDH_ARGS needs --scene and --out")
 		quit(2)
 		return
 	DirAccess.make_dir_recursive_absolute(_args.out)

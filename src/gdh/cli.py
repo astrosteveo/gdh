@@ -3,6 +3,9 @@
 Godot runs under Xvfb with the Vulkan driver, so windows never reach the
 user's desktop. Environment: GODOT (binary, default "godot"), GDH_GPU_INDEX
 (Vulkan device index; default lets Godot choose).
+
+Arguments after `--` go to the game (capture and live start), where
+OS.get_cmdline_user_args() returns exactly them.
 """
 import argparse
 import sys
@@ -25,7 +28,7 @@ def main():
     cap.add_argument("--resolution", default="1280x720")
     cap.add_argument("--timeout", type=int, default=120, help="Seconds per scene")
     cap.add_argument("--tiles", action="store_true", help="Also save normal.png as 2x2 tiles at 2x zoom")
-    cap.set_defaults(func=cmd_capture)
+    cap.set_defaults(func=cmd_capture, game_args=[])
 
     imp = sub.add_parser("import", help="Import project assets headlessly")
     imp.add_argument("--project", required=True)
@@ -33,7 +36,16 @@ def main():
 
     live.add_parsers(sub)
 
-    args = parser.parse_args()
+    argv = sys.argv[1:]
+    game_args = []
+    if "--" in argv:
+        split = argv.index("--")
+        argv, game_args = argv[:split], argv[split + 1:]
+    args = parser.parse_args(argv)
+    if game_args and not hasattr(args, "game_args"):
+        parser.error("arguments after -- go to the game: only capture and live start take them")
+    if hasattr(args, "game_args"):
+        args.game_args = game_args
     try:
         sys.exit(args.func(args))
     except live.LiveError as e:

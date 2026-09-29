@@ -142,13 +142,13 @@ def cmd_start(args):
     if args.scene:
         user_args += ["--scene", args.scene]
     # --fixed-fps matching the tick rate makes every frame exactly one physics tick.
-    cmd = godot_cmd(project, args.resolution,
-                    ["--fixed-fps", str(ticks), "--script", str(LIVE_SCRIPT), "--", *user_args])
+    cmd = godot_cmd(project, args.resolution, ["--fixed-fps", str(ticks), "--script", str(LIVE_SCRIPT)],
+                    args.game_args)
     log_path = out / "godot.log"
     # The token goes in the environment, which only this user can read. The
     # command line is visible to everyone in the process list.
     xvfb, display = start_xvfb(args.resolution)
-    env = godot_env(shims, display)
+    env = godot_env(shims, display, user_args)
     env["GDH_TOKEN"] = token
     with open(log_path, "w") as log:
         proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -331,7 +331,8 @@ def add_parsers(sub):
         p.set_defaults(func=func)
         return p
 
-    p = command("start", cmd_start, "Launch the game, held at frame 0")
+    p = command("start", cmd_start, "Launch the game, held at frame 0 (arguments after -- go to the game)")
+    p.set_defaults(game_args=[])
     p.add_argument("--project", required=True, help="Godot project directory")
     p.add_argument("--scene", help="res:// path (default: the project's main scene)")
     p.add_argument("--out", help="Output directory (default: ./captures/live/<session>)")

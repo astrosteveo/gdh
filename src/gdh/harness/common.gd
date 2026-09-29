@@ -51,6 +51,17 @@ static func _image_size(tree: SceneTree) -> Vector2i:
 
 ## Parses "--key value" pairs after "--" on the command line. "modes" becomes
 ## an Array.
+## The harness's own settings, which gdh passes in GDH_ARGS (a JSON array in
+## the same --key value form) so the command line after `--` is all the game's.
+static func harness_args() -> Dictionary:
+	var parsed = JSON.parse_string(OS.get_environment("GDH_ARGS"))
+	var argv := PackedStringArray()
+	if parsed is Array:
+		for item in parsed:
+			argv.append(str(item))
+	return parse_args(argv)
+
+
 static func parse_args(argv: PackedStringArray) -> Dictionary:
 	var out := {}
 	var i := 0

@@ -47,6 +47,12 @@ The skill runs gdh from the plugin's own copy of this repo, so `uv` is the only 
 gdh capture --project path/to/game --scene res://levels/level_1.tscn --out captures/level_1
 ```
 
+Arguments after `--` go to the game, and `OS.get_cmdline_user_args()` returns exactly them:
+
+```sh
+gdh capture --project path/to/game --scene res://main.tscn --out captures/main -- --level 3
+```
+
 Nothing is installed into the project. For each scene, the output directory gets these files:
 
 | File | Contents |

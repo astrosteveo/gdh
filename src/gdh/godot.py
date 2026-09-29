@@ -1,4 +1,5 @@
 """Launching Godot off-screen: Xvfb, the command line, environment and alert stand-ins."""
+import json
 import os
 import re
 import select
@@ -38,8 +39,11 @@ def alert_shims():
         yield write_alert_shims(tmp)
 
 
-def godot_env(shims, display):
+def godot_env(shims, display, harness_args=()):
     env = dict(os.environ)
+    # The harness's settings travel in the environment, so the command line
+    # after `--` holds only the game's own arguments.
+    env["GDH_ARGS"] = json.dumps([str(a) for a in harness_args])
     # Keep Godot and anything it spawns off the user's session. Wayland
     # clients fall back to "wayland-0" when WAYLAND_DISPLAY is unset, so point
     # it at a socket that doesn't exist.
@@ -122,7 +126,7 @@ def start_xvfb(resolution, timeout=15):
     return proc, f":{number}"
 
 
-def godot_cmd(project, resolution, extra):
+def godot_cmd(project, resolution, extra, game_args=()):
     gpu = ["--gpu-index", os.environ["GDH_GPU_INDEX"]] if "GDH_GPU_INDEX" in os.environ else []
     return [
         os.environ.get("GODOT", "godot"),
@@ -133,6 +137,7 @@ def godot_cmd(project, resolution, extra):
         "--resolution", resolution,
         "--path", str(project),
         *extra,
+        *(["--", *game_args] if game_args else []),
     ]
 
 

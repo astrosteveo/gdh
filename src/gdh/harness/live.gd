@@ -15,7 +15,7 @@ const ErrorCollector := preload("errors.gd")
 func _initialize() -> void:
 	var errors := ErrorCollector.new()
 	OS.add_logger(errors)
-	var args := Common.parse_args(OS.get_cmdline_user_args())
+	var args := Common.harness_args()
 	# Wireframe data is only built for meshes created after this call.
 	RenderingServer.set_debug_generate_wireframes(true)
 	# Hold before the scene's first frame: _ready runs, _process doesn't.

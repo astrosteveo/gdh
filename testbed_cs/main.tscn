@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://Probe.cs" id="1_probe"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_probe"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_probe")
+
+[node name="Box" type="MeshInstance3D" parent="."]
+mesh = SubResource("BoxMesh_probe")
+
+[node name="Camera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 4)
+current = true
+
+[node name="Light" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 0, 0)

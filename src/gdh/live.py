@@ -13,7 +13,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from gdh.godot import (HARNESS, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
+from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
                        start_xvfb, write_alert_shims)
 from gdh.images import crop_findings, save_tiles
 
@@ -21,7 +21,7 @@ LIVE_SCRIPT = HARNESS / "live.gd"
 SESSION_DIR = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache") / "gdh"
 
 
-class LiveError(Exception):
+class LiveError(GdhError):
     pass
 
 
@@ -128,6 +128,8 @@ def cmd_start(args):
             raise LiveError(f"Session '{name}' is already running. Stop it with: gdh live stop --session {name}")
         remove_session(old)
     project = Path(args.project).resolve()
+    if not args.no_build:
+        build_csharp(project)
     out = Path(args.out or Path.cwd() / "captures" / "live" / name).resolve()
     out.mkdir(parents=True, exist_ok=True)
     SESSION_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -333,6 +335,7 @@ def add_parsers(sub):
 
     p = command("start", cmd_start, "Launch the game, held at frame 0 (arguments after -- go to the game)")
     p.set_defaults(game_args=[])
+    p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     p.add_argument("--project", required=True, help="Godot project directory")
     p.add_argument("--scene", help="res:// path (default: the project's main scene)")
     p.add_argument("--out", help="Output directory (default: ./captures/live/<session>)")

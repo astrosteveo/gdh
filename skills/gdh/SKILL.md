@@ -23,6 +23,8 @@ uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh --help     # no install
 
 Requirements are Linux, Godot 4.x as `godot` on PATH (or set `GODOT=/path/to/godot`), Xvfb, and a Vulkan driver. After adding or changing assets such as textures or models, run `gdh import --project <dir>` so Godot imports them before capturing.
 
+A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gdh builds it with `dotnet build` before every `capture`, `live start` and `import`, and runs `godot-mono`, so there's nothing to do by hand. A failed build stops gdh with the compiler's errors. `eval` can't see plain C# objects: have the game expose a node or autoload whose methods return dictionaries and arrays, and call those.
+
 ## Choosing a mode
 
 | Situation | Use |

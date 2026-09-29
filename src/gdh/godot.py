@@ -3,6 +3,7 @@ import json
 import os
 import re
 import select
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -11,6 +12,10 @@ from contextlib import contextmanager
 from pathlib import Path
 
 HARNESS = Path(__file__).resolve().parent / "harness"
+
+
+class GdhError(Exception):
+    """A failure gdh reports in a sentence, without a traceback."""
 # Dialog programs Godot's OS.alert() runs on Linux.
 ALERT_PROGRAMS = ("zenity", "kdialog", "Xdialog", "xmessage")
 ALERT_SHIM = """#!/bin/sh
@@ -126,10 +131,43 @@ def start_xvfb(resolution, timeout=15):
     return proc, f":{number}"
 
 
+def csharp_project(project):
+    """The project's .csproj if it's a C# project, else None."""
+    found = sorted(Path(project).glob("*.csproj"))
+    return found[0] if found else None
+
+
+def godot_binary(project):
+    """GODOT if it's set. Otherwise Godot's .NET build (godot-mono) for a C#
+    project, which the standard build can't run, and godot for the rest."""
+    if os.environ.get("GODOT"):
+        return os.environ["GODOT"]
+    if csharp_project(project):
+        if shutil.which("godot-mono"):
+            return "godot-mono"
+        raise GdhError("This is a C# project, which needs Godot's .NET build. Put godot-mono on PATH or set GODOT.")
+    return "godot"
+
+
+def build_csharp(project):
+    """Build a C# project's assemblies with `dotnet build`: Godot loads them
+    from .godot/mono but never builds them when run from the command line, so
+    a stale build would run old code. Does nothing for a GDScript project."""
+    csproj = csharp_project(project)
+    if csproj is None:
+        return
+    if not shutil.which("dotnet"):
+        raise GdhError("This is a C# project, which needs the .NET SDK to build. Install it (dotnet) or pass --no-build.")
+    proc = subprocess.run(["dotnet", "build", str(csproj), "-nologo", "-v:q"], capture_output=True, text=True)
+    if proc.returncode != 0:
+        lines = [line for line in (proc.stdout + proc.stderr).splitlines() if "error" in line.lower()]
+        raise GdhError(f"dotnet build {csproj.name} failed:\n" + "\n".join(dict.fromkeys(lines[-20:] or [proc.stdout[-2000:]])))
+
+
 def godot_cmd(project, resolution, extra, game_args=()):
     gpu = ["--gpu-index", os.environ["GDH_GPU_INDEX"]] if "GDH_GPU_INDEX" in os.environ else []
     return [
-        os.environ.get("GODOT", "godot"),
+        godot_binary(project),
         "--display-driver", "x11",
         "--rendering-driver", "vulkan",
         *gpu,

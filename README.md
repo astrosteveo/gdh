@@ -11,6 +11,13 @@ Linux only for now.
 - Xvfb (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
 - A Vulkan driver for your GPU
 - [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+ and Pillow)
+- For a C# project: Godot's .NET build as `godot-mono`, and the .NET SDK (`dotnet`)
+
+## C# projects
+
+A project with a `.csproj` is a C# project. Before `capture`, `live start` and `import`, gdh builds its assemblies with `dotnet build`, since Godot run from the command line loads them but never builds them. It runs `godot-mono` unless `GODOT` names another binary. A failed build stops gdh with the compiler's errors. `--no-build` skips the build.
+
+C# objects are invisible to `eval` unless the game hands them over as Godot values, so give the project a node or autoload with methods that return dictionaries and arrays.
 
 ## Install
 
@@ -82,7 +89,7 @@ Environment variables:
 
 | Variable | Meaning |
 |---|---|
-| `GODOT` | Path to the Godot binary. Default: `godot`. |
+| `GODOT` | Path to the Godot binary. Default: `godot-mono` for a C# project, `godot` otherwise. |
 | `GDH_GPU_INDEX` | Vulkan device index to render on. Default: Godot picks one. |
 
 ## Drive a running game

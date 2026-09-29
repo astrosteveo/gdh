@@ -1,8 +1,9 @@
 """gdh: run Godot scenes off-screen on the real GPU and collect what they render.
 
 Godot runs under Xvfb with the Vulkan driver, so windows never reach the
-user's desktop. Environment: GODOT (binary, default "godot"), GDH_GPU_INDEX
-(Vulkan device index; default lets Godot choose).
+user's desktop. Environment: GODOT (the binary; default godot-mono for a C#
+project and godot otherwise), GDH_GPU_INDEX (Vulkan device index; default
+lets Godot choose). A C# project is built with `dotnet build` first.
 
 Arguments after `--` go to the game (capture and live start), where
 OS.get_cmdline_user_args() returns exactly them.
@@ -12,6 +13,7 @@ import sys
 
 from gdh import live
 from gdh.capture import cmd_capture, cmd_import
+from gdh.godot import GdhError
 
 
 def main():
@@ -28,10 +30,12 @@ def main():
     cap.add_argument("--resolution", default="1280x720")
     cap.add_argument("--timeout", type=int, default=120, help="Seconds per scene")
     cap.add_argument("--tiles", action="store_true", help="Also save normal.png as 2x2 tiles at 2x zoom")
+    cap.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     cap.set_defaults(func=cmd_capture, game_args=[])
 
     imp = sub.add_parser("import", help="Import project assets headlessly")
     imp.add_argument("--project", required=True)
+    imp.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     imp.set_defaults(func=cmd_import)
 
     live.add_parsers(sub)
@@ -48,7 +52,7 @@ def main():
         args.game_args = game_args
     try:
         sys.exit(args.func(args))
-    except live.LiveError as e:
+    except GdhError as e:
         sys.stdout.flush()
         print(f"gdh: {e}", file=sys.stderr)
         sys.exit(1)

@@ -1,0 +1,46 @@
+{
+  "skill_name": "gdh",
+  "evals": [
+    {
+      "id": 0,
+      "name": "office-visual-check",
+      "prompt": "Something looks off in my home office scene, res://blind/scene_06.tscn, in the Godot project at {P}, but I can't put my finger on it. Take a look and tell me what's wrong. Don't change any files.",
+      "expected_output": "Finds the camera rolled about 6 degrees, the coffee mug scaled far too large, and the front cardboard box shaded smooth (bad normals).",
+      "files": [],
+      "assertions": [
+        "Identifies that the camera is rolled, so the room or horizon is tilted",
+        "Identifies the coffee mug as far too large for the room",
+        "Identifies the front cardboard box's shading as wrong (smooth or blobby shading, bad normals)",
+        "Backs the findings with rendered images of the scene saved in outputs/",
+        "Leaves every project file unchanged"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "arena-speed-check",
+      "prompt": "In my Godot project at {P}, the scene res://live/arena.tscn has a player that should move right at 120 pixels per second while ui_right (the right arrow) is held, and the Go button should count each click. Check that both work and show me proof.",
+      "expected_output": "Measures the player moving at 80 px/s, not 120, in a running game, reports that as a bug, and confirms button clicks are counted.",
+      "files": [],
+      "assertions": [
+        "Reports the player's speed as wrong: about 80 px/s instead of 120",
+        "Measures the speed in the running game (a frame count or time plus a position change), not only by reading the code",
+        "Confirms Go button clicks are counted by clicking it in the running game",
+        "Includes at least one screenshot of the running game in outputs/",
+        "Leaves no Godot or Xvfb process from the run running"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "inventory-ship-check",
+      "prompt": "Check my inventory screen, res://blind/scene_08.tscn in the Godot project at {P}, before I ship it. Anything wrong with it?",
+      "expected_output": "Finds the raw translation key ITEM_IRON_SWORD shown as the item name, and the shield icon offset in its slot.",
+      "files": [],
+      "assertions": [
+        "Identifies the item name showing the raw key ITEM_IRON_SWORD instead of a display name",
+        "Identifies the shield icon as offset or misaligned in its slot",
+        "Backs the findings with rendered images of the screen saved in outputs/",
+        "Presents no false problem as definite"
+      ]
+    }
+  ]
+}

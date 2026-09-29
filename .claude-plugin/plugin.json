@@ -1,0 +1,8 @@
+{
+  "name": "gdh",
+  "version": "0.1.0",
+  "description": "Lets Claude see and drive Godot 4 games on Linux: off-screen GPU screenshots, debug views, defect probes and frame-by-frame play with scripted input.",
+  "author": {
+    "name": "Steven Mosley"
+  }
+}

@@ -24,6 +24,23 @@ This puts `gdh` on your `PATH`. After pulling changes, run `uv tool install --re
 
 To run it from the repo without installing, use `uv run gdh ...`.
 
+## Claude Code plugin
+
+The repo is also a Claude Code plugin. Its `gdh` skill teaches Claude when and how to use the tool: which mode to pick, how to read the views and crops, how to drive a live session, and what to report. To try it without installing:
+
+```sh
+claude --plugin-dir /path/to/gdh
+```
+
+To install it from GitHub once the repo is published, where `OWNER` is the GitHub account:
+
+```
+/plugin marketplace add OWNER/gdh
+/plugin install gdh@gdh
+```
+
+The skill runs gdh from the plugin's own copy of this repo, so `uv` is the only extra install.
+
 ## Capture a scene
 
 ```sh
@@ -93,6 +110,7 @@ After capturing, `gdh` checks the scene's data for likely defects. Examples are 
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, and live control |
 | `docs/` | Live control, probes, and test reports |
+| `skills/gdh/`, `.claude-plugin/` | The Claude Code skill and plugin manifests |
 
 ## License
 

@@ -102,11 +102,20 @@ def start_xvfb(resolution, timeout=15):
         pass_fds=[write_fd], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL, start_new_session=True)
     os.close(write_fd)
+    # Xvfb writes the number and its newline separately, and dies if the pipe
+    # is closed between the two, so read up to the newline.
+    data = b""
+    deadline = time.monotonic() + timeout
     try:
-        ready, _, _ = select.select([read_fd], [], [], timeout)
-        number = os.read(read_fd, 64).decode().strip() if ready else ""
+        while b"\n" not in data:
+            ready, _, _ = select.select([read_fd], [], [], max(deadline - time.monotonic(), 0))
+            chunk = os.read(read_fd, 64) if ready else b""
+            if not chunk:
+                break
+            data += chunk
     finally:
         os.close(read_fd)
+    number = data.decode().strip() if data.endswith(b"\n") else ""
     if not number:
         kill_groups(proc.pid)
         raise RuntimeError("Xvfb didn't start. Is it installed (Arch: xorg-server-xvfb, Debian/Ubuntu: xvfb)?")

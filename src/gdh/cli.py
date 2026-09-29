@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """gdh: run Godot scenes off-screen on the real GPU and collect what they render.
 
 Godot runs under Xvfb with the Vulkan driver, so windows never reach the
@@ -11,21 +10,37 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
-try:
-    from PIL import Image
-except ImportError:
-    Image = None
+from PIL import Image
 
-ROOT = Path(__file__).resolve().parent.parent
-CAPTURE_SCRIPT = ROOT / "harness" / "capture.gd"
-SHIMS = ROOT / "harness" / "shims"
+CAPTURE_SCRIPT = Path(__file__).resolve().parent / "harness" / "capture.gd"
+# Dialog programs Godot's OS.alert() runs on Linux.
+ALERT_PROGRAMS = ("zenity", "kdialog", "Xdialog", "xmessage")
+ALERT_SHIM = """#!/bin/sh
+# Stands in for a dialog program Godot calls from OS.alert(), so the alert
+# lands in the log instead of opening a window on the user's desktop.
+echo "GODOT ALERT ($(basename "$0")): $*" >&2
+exit 0
+"""
 # Crops are upscaled (nearest neighbor, at most 4x) to about this long side.
 CROP_LONG_SIDE = 640
 
 
-def godot_env():
+@contextmanager
+def alert_shims():
+    """A temporary directory of stand-ins for the dialog programs."""
+    with tempfile.TemporaryDirectory(prefix="gdh-shims-") as tmp:
+        for name in ALERT_PROGRAMS:
+            path = Path(tmp) / name
+            path.write_text(ALERT_SHIM)
+            path.chmod(0o755)
+        yield tmp
+
+
+def godot_env(shims):
     env = dict(os.environ)
     # Keep Godot and anything it spawns off the user's session. xvfb-run sets
     # its own DISPLAY. Wayland clients fall back to "wayland-0" when
@@ -35,7 +50,7 @@ def godot_env():
     env["GDK_BACKEND"] = "x11"
     env["QT_QPA_PLATFORM"] = "xcb"
     # OS.alert() runs zenity/kdialog/etc. The shims log the message instead.
-    env["PATH"] = f"{SHIMS}{os.pathsep}{env.get('PATH', '')}"
+    env["PATH"] = f"{shims}{os.pathsep}{env.get('PATH', '')}"
     return env
 
 
@@ -55,7 +70,7 @@ def godot_cmd(project, resolution, extra):
     ]
 
 
-def capture_one(project, scene, out_dir, args):
+def capture_one(project, scene, out_dir, args, shims):
     out_dir.mkdir(parents=True, exist_ok=True)
     # Clear outputs from earlier runs so nothing stale is mistaken for new.
     for old in [*out_dir.glob("*.png"), out_dir / "report.json"]:
@@ -69,7 +84,7 @@ def capture_one(project, scene, out_dir, args):
     with open(log_path, "w") as log:
         try:
             proc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT,
-                                  env=godot_env(), timeout=args.timeout)
+                                  env=godot_env(shims), timeout=args.timeout)
             code = proc.returncode
         except subprocess.TimeoutExpired:
             code = "timeout"
@@ -93,9 +108,6 @@ def capture_one(project, scene, out_dir, args):
 def make_crops(out_dir, report, tiles):
     """Save a zoomed crop for each finding with a screen rect, plus optional
     2x2 tiles of normal.png. Crop paths go into the report."""
-    if Image is None:
-        print("  note: install Pillow to get crops", file=sys.stderr)
-        return
     crops = out_dir / "crops"
     viewport = report.get("viewport_size") or report.get("resolution")
     for i, finding in enumerate(report.get("findings", []), 1):
@@ -147,16 +159,18 @@ def cmd_capture(args):
     project = Path(args.project).resolve()
     out_root = Path(args.out).resolve()
     ok = True
-    for scene in args.scene:
-        out_dir = out_root if len(args.scene) == 1 else out_root / scene_out_name(scene)
-        ok &= capture_one(project, scene, out_dir, args)
+    with alert_shims() as shims:
+        for scene in args.scene:
+            out_dir = out_root if len(args.scene) == 1 else out_root / scene_out_name(scene)
+            ok &= capture_one(project, scene, out_dir, args, shims)
     return 0 if ok else 1
 
 
 def cmd_import(args):
     project = Path(args.project).resolve()
     cmd = [os.environ.get("GODOT", "godot"), "--headless", "--import", "--path", str(project)]
-    return subprocess.run(cmd, env=godot_env()).returncode
+    with alert_shims() as shims:
+        return subprocess.run(cmd, env=godot_env(shims)).returncode
 
 
 def main():
@@ -181,7 +195,3 @@ def main():
 
     args = parser.parse_args()
     sys.exit(args.func(args))
-
-
-if __name__ == "__main__":
-    main()

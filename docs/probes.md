@@ -1,6 +1,6 @@
 # Probes
 
-`harness/probes.gd` checks the running scene's data for likely defects. `capture.gd` runs it after the images are saved. Its findings go into `report.json` under `findings`. For each finding that has a screen rect, `gdh` saves a zoomed crop in `crops/`.
+`src/gdh/harness/probes.gd` checks the running scene's data for likely defects. `capture.gd` runs it after the images are saved. Its findings go into `report.json` under `findings`. For each finding that has a screen rect, `gdh` saves a zoomed crop in `crops/`.
 
 Each finding has these fields:
 

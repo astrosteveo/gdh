@@ -1,3 +1,5 @@
 .godot/
 __pycache__/
 captures/
+.venv/
+dist/

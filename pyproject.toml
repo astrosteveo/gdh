@@ -1,0 +1,19 @@
+[project]
+name = "gdh"
+version = "0.1.0"
+description = "Render Godot scenes off-screen on the real GPU and check them for visual defects"
+readme = "README.md"
+authors = [
+    { name = "Steven Mosley", email = "34114851+astrosteveo@users.noreply.github.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pillow>=12.3.0",
+]
+
+[project.scripts]
+gdh = "gdh.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"

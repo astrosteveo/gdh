@@ -1,5 +1,0 @@
-#!/bin/sh
-# Stands in for the dialog programs Godot calls from OS.alert(), so alerts
-# land in the log instead of blocking on a window the user can see.
-echo "GODOT ALERT ($(basename "$0")): $*" >&2
-exit 0

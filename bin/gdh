@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+"""gdh: run Godot scenes off-screen on the real GPU and collect what they render.
+
+Godot runs under Xvfb with the Vulkan driver, so windows never reach the
+user's desktop. Environment: GODOT (binary, default "godot"), GDH_GPU_INDEX
+(Vulkan device index; default lets Godot choose).
+"""
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+
+ROOT = Path(__file__).resolve().parent.parent
+CAPTURE_SCRIPT = ROOT / "harness" / "capture.gd"
+SHIMS = ROOT / "harness" / "shims"
+# Crops are upscaled (nearest neighbor, at most 4x) to about this long side.
+CROP_LONG_SIDE = 640
+
+
+def godot_env():
+    env = dict(os.environ)
+    # Keep Godot and anything it spawns off the user's session. xvfb-run sets
+    # its own DISPLAY. Wayland clients fall back to "wayland-0" when
+    # WAYLAND_DISPLAY is unset, so point it at a socket that doesn't exist.
+    env.pop("DISPLAY", None)
+    env["WAYLAND_DISPLAY"] = "gdh-no-wayland"
+    env["GDK_BACKEND"] = "x11"
+    env["QT_QPA_PLATFORM"] = "xcb"
+    # OS.alert() runs zenity/kdialog/etc. The shims log the message instead.
+    env["PATH"] = f"{SHIMS}{os.pathsep}{env.get('PATH', '')}"
+    return env
+
+
+def godot_cmd(project, resolution, extra):
+    width, height = resolution.split("x")
+    gpu = ["--gpu-index", os.environ["GDH_GPU_INDEX"]] if "GDH_GPU_INDEX" in os.environ else []
+    return [
+        "xvfb-run", "-a", "-s", f"-screen 0 {width}x{height}x24",
+        os.environ.get("GODOT", "godot"),
+        "--display-driver", "x11",
+        "--rendering-driver", "vulkan",
+        *gpu,
+        "--audio-driver", "Dummy",
+        "--resolution", resolution,
+        "--path", str(project),
+        *extra,
+    ]
+
+
+def capture_one(project, scene, out_dir, args):
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # Clear outputs from earlier runs so nothing stale is mistaken for new.
+    for old in [*out_dir.glob("*.png"), out_dir / "report.json"]:
+        old.unlink(missing_ok=True)
+    shutil.rmtree(out_dir / "crops", ignore_errors=True)
+    user_args = ["--scene", scene, "--out", str(out_dir), "--warmup", str(args.warmup)]
+    if args.modes:
+        user_args += ["--modes", args.modes]
+    cmd = godot_cmd(project, args.resolution, ["--script", str(CAPTURE_SCRIPT), "--", *user_args])
+    log_path = out_dir / "godot.log"
+    with open(log_path, "w") as log:
+        try:
+            proc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT,
+                                  env=godot_env(), timeout=args.timeout)
+            code = proc.returncode
+        except subprocess.TimeoutExpired:
+            code = "timeout"
+    report_path = out_dir / "report.json"
+    report = json.loads(report_path.read_text()) if report_path.exists() else {}
+    if report:
+        make_crops(out_dir, report, args.tiles)
+        report_path.write_text(json.dumps(report, indent=2))
+    pngs = sorted(p.name for p in out_dir.glob("*.png"))
+    errors = len(report.get("errors", []))
+    findings = report.get("findings", [])
+    warnings = sum(f["severity"] == "warning" for f in findings)
+    print(f"{scene}: exit={code} adapter={report.get('adapter', '?')} errors={errors} "
+          f"warnings={warnings} findings={len(findings)} images={','.join(pngs) or 'none'} -> {out_dir}")
+    for f in findings:
+        crop = f"  [{f['crop']}]" if f.get("crop") else ""
+        print(f"  {f['severity']}: {f['probe']} {f['node']}: {f['message']}{crop}")
+    return code == 0
+
+
+def make_crops(out_dir, report, tiles):
+    """Save a zoomed crop for each finding with a screen rect, plus optional
+    2x2 tiles of normal.png. Crop paths go into the report."""
+    if Image is None:
+        print("  note: install Pillow to get crops", file=sys.stderr)
+        return
+    crops = out_dir / "crops"
+    viewport = report.get("viewport_size") or report.get("resolution")
+    for i, finding in enumerate(report.get("findings", []), 1):
+        rect = finding.get("screen_rect")
+        src = out_dir / f"{finding.get('view', 'normal')}.png"
+        if not src.exists():
+            src = out_dir / "normal.png"
+        if not rect or not viewport or not src.exists():
+            continue
+        img = Image.open(src)
+        sx, sy = img.width / viewport[0], img.height / viewport[1]
+        x, y, w, h = rect
+        pad = max(24, 0.25 * max(w, h))
+        box = (max(0, round((x - pad) * sx)), max(0, round((y - pad) * sy)),
+               min(img.width, round((x + w + pad) * sx)), min(img.height, round((y + h + pad) * sy)))
+        crop = img.crop(box)
+        crops.mkdir(exist_ok=True)
+        name = f"{i:02d}-{finding['probe']}.png"
+        zoom(crop, CROP_LONG_SIDE).save(crops / name)
+        finding["crop"] = f"crops/{name}"
+    normal = out_dir / "normal.png"
+    if tiles and normal.exists():
+        img = Image.open(normal)
+        crops.mkdir(exist_ok=True)
+        half_w, half_h = img.width // 2, img.height // 2
+        for row in range(2):
+            for col in range(2):
+                tile = img.crop((col * half_w, row * half_h, (col + 1) * half_w, (row + 1) * half_h))
+                zoom(tile, img.width).save(crops / f"tile-{row}{col}.png")
+
+
+def zoom(img, long_side):
+    """Scale so the long side is about long_side. Upscaling uses nearest
+    neighbor so it adds no blur of its own."""
+    factor = long_side / max(img.size)
+    if factor > 1:
+        factor = min(factor, 4.0)
+        return img.resize((round(img.width * factor), round(img.height * factor)), Image.NEAREST)
+    if factor < 1:
+        return img.resize((round(img.width * factor), round(img.height * factor)), Image.LANCZOS)
+    return img
+
+
+def scene_out_name(scene):
+    return scene.removeprefix("res://").removesuffix(".tscn").removesuffix(".scn").replace("/", "__")
+
+
+def cmd_capture(args):
+    project = Path(args.project).resolve()
+    out_root = Path(args.out).resolve()
+    ok = True
+    for scene in args.scene:
+        out_dir = out_root if len(args.scene) == 1 else out_root / scene_out_name(scene)
+        ok &= capture_one(project, scene, out_dir, args)
+    return 0 if ok else 1
+
+
+def cmd_import(args):
+    project = Path(args.project).resolve()
+    cmd = [os.environ.get("GODOT", "godot"), "--headless", "--import", "--path", str(project)]
+    return subprocess.run(cmd, env=godot_env()).returncode
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="gdh", description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    cap = sub.add_parser("capture", help="Render scenes and save one PNG per debug view")
+    cap.add_argument("--project", required=True, help="Godot project directory")
+    cap.add_argument("--scene", required=True, action="append", help="res:// path; repeatable")
+    cap.add_argument("--out", required=True, help="Output directory")
+    cap.add_argument("--modes", help="Comma list: normal,unshaded,lighting,normals,wireframe,overdraw")
+    cap.add_argument("--warmup", type=int, default=30, help="Frames to render before capturing")
+    cap.add_argument("--resolution", default="1280x720")
+    cap.add_argument("--timeout", type=int, default=120, help="Seconds per scene")
+    cap.add_argument("--tiles", action="store_true", help="Also save normal.png as 2x2 tiles at 2x zoom")
+    cap.set_defaults(func=cmd_capture)
+
+    imp = sub.add_parser("import", help="Import project assets headlessly")
+    imp.add_argument("--project", required=True)
+    imp.set_defaults(func=cmd_import)
+
+    args = parser.parse_args()
+    sys.exit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()

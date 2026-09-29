@@ -1,0 +1,741 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://blind/assets/textures/concrete.png" id="1_concrete"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/brick_red.png" id="2_brick_red"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/crate.png" id="3_crate"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/cardboard.png" id="4_cardboard"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/wood_planks.png" id="5_wood_plank"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/shutter.png" id="6_shutter"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.05, 0.05, 0.06, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.55, 0.58, 0.65, 1)
+ambient_light_energy = 0.55
+tonemap_mode = 2
+ssao_enabled = true
+ssao_radius = 1.2
+ssao_intensity = 1.5
+
+[sub_resource type="StandardMaterial3D" id="mat_concrete"]
+albedo_color = Color(0.62, 0.62, 0.6, 1)
+albedo_texture = ExtResource("1_concrete")
+roughness = 0.9
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.25, 0.25, 0.25)
+
+[sub_resource type="StandardMaterial3D" id="mat_wall"]
+albedo_color = Color(0.8, 0.8, 0.8, 1)
+albedo_texture = ExtResource("2_brick_red")
+roughness = 0.95
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.33, 0.33, 0.33)
+
+[sub_resource type="StandardMaterial3D" id="mat_ceiling"]
+albedo_color = Color(0.25, 0.26, 0.28, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_rack_upright"]
+albedo_color = Color(0.95, 0.45, 0.08, 1)
+roughness = 0.5
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="mat_rack_beam"]
+albedo_color = Color(0.1, 0.25, 0.6, 1)
+roughness = 0.5
+metallic = 0.3
+
+[sub_resource type="StandardMaterial3D" id="mat_rack_deck"]
+albedo_color = Color(0.55, 0.55, 0.55, 1)
+roughness = 0.6
+metallic = 0.5
+
+[sub_resource type="StandardMaterial3D" id="mat_crate"]
+albedo_texture = ExtResource("3_crate")
+roughness = 0.85
+uv1_triplanar = true
+uv1_scale = Vector3(1, 1, 1)
+uv1_offset = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_cardboard"]
+albedo_texture = ExtResource("4_cardboard")
+roughness = 0.9
+uv1_triplanar = true
+uv1_scale = Vector3(1, 1, 1)
+uv1_offset = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_pallet"]
+albedo_color = Color(0.9, 0.8, 0.7, 1)
+albedo_texture = ExtResource("5_wood_plank")
+roughness = 0.9
+uv1_triplanar = true
+uv1_scale = Vector3(1.5, 1.5, 1.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_drum"]
+albedo_color = Color(0.1, 0.3, 0.75, 1)
+roughness = 0.4
+metallic = 0.6
+
+[sub_resource type="StandardMaterial3D" id="mat_drum_red"]
+albedo_color = Color(0.7, 0.12, 0.1, 1)
+roughness = 0.4
+metallic = 0.6
+
+[sub_resource type="StandardMaterial3D" id="mat_floor_line"]
+albedo_color = Color(0.95, 0.78, 0.1, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_lamp_shade"]
+albedo_color = Color(0.2, 0.22, 0.2, 1)
+roughness = 0.4
+metallic = 0.7
+cull_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="mat_bulb"]
+albedo_color = Color(1, 0.95, 0.8, 1)
+emission_enabled = true
+emission = Color(1, 0.92, 0.75, 1)
+emission_energy_multiplier = 6.0
+
+[sub_resource type="StandardMaterial3D" id="mat_door"]
+albedo_color = Color(0.8, 0.82, 0.85, 1)
+albedo_texture = ExtResource("6_shutter")
+roughness = 0.5
+metallic = 0.5
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(1, 1, 1)
+
+[sub_resource type="BoxMesh" id="box"]
+
+[sub_resource type="CylinderMesh" id="drum"]
+top_radius = 0.3
+bottom_radius = 0.3
+height = 0.9
+radial_segments = 32
+
+[sub_resource type="CylinderMesh" id="shade"]
+top_radius = 0.12
+bottom_radius = 0.45
+height = 0.3
+radial_segments = 32
+cap_top = true
+cap_bottom = false
+
+[sub_resource type="SphereMesh" id="bulb"]
+radius = 0.12
+height = 0.24
+
+[sub_resource type="CylinderMesh" id="cord"]
+top_radius = 0.015
+bottom_radius = 0.015
+height = 1.6
+radial_segments = 8
+
+[sub_resource type="PlaneMesh" id="floor"]
+size = Vector2(16, 14)
+
+[sub_resource type="PlaneMesh" id="line"]
+size = Vector2(1, 1)
+
+[node name="Warehouse" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.83205, -0.0704312, 0.550211, 0, 0.991906, 0.126972, -0.5547, -0.105647, 0.825316, 3.6, 2.3, 4.2)
+fov = 68
+current = true
+
+[node name="Building" type="Node3D" parent="."]
+
+[node name="Floor" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("floor")
+surface_material_override/0 = SubResource("mat_concrete")
+
+[node name="WallBack" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(16.5, 0, 0, 0, 6, 0, 0, 0, 0.5, 0, 3, -6.25)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wall")
+
+[node name="WallLeft" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(0.5, 0, 0, 0, 6, 0, 0, 0, 13, -8.25, 3, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wall")
+
+[node name="WallRight" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(0.5, 0, 0, 0, 6, 0, 0, 0, 13, 8.25, 3, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wall")
+
+[node name="Ceiling" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(17, 0, 0, 0, 0.3, 0, 0, 0, 14, 0, 6.15, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_ceiling")
+
+[node name="DoorBack" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(2.6, 0, 0, 0, 3.2, 0, 0, 0, 0.06, 4.8, 1.6, -5.98)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_door")
+
+[node name="DoorFrameL" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(0.12, 0, 0, 0, 3.3, 0, 0, 0, 0.14, 3.45, 1.65, -5.94)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="DoorFrameR" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(0.12, 0, 0, 0, 3.3, 0, 0, 0, 0.14, 6.15, 1.65, -5.94)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="DoorFrameTop" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(2.82, 0, 0, 0, 0.14, 0, 0, 0, 0.14, 4.8, 3.3, -5.94)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="LineA" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(13, 0, 0, 0, 1, 0, 0, 0, 0.12, 0, 0.004, -3.6)
+mesh = SubResource("line")
+surface_material_override/0 = SubResource("mat_floor_line")
+
+[node name="LineB" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(0.12, 0, 0, 0, 1, 0, 0, 0, 7.4, -6.4, 0.004, 0.2)
+mesh = SubResource("line")
+surface_material_override/0 = SubResource("mat_floor_line")
+
+[node name="LineC" type="MeshInstance3D" parent="Building"]
+transform = Transform3D(0.12, 0, 0, 0, 1, 0, 0, 0, 4, 3, 0.004, 1.5)
+mesh = SubResource("line")
+surface_material_override/0 = SubResource("mat_floor_line")
+
+[node name="RackA" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.4, 0, -5.35)
+
+[node name="Upright00" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, -2, 1.5, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright01" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, -2, 1.5, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright10" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 0, 1.5, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright11" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 0, 1.5, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright20" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 2, 1.5, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright21" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 2, 1.5, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Beam00" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 0.15, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Beam01" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 0.15, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Deck0" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.02, 0, 0, 0, 0.9, 0, 0.21, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_deck")
+
+[node name="Beam10" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 1.15, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Beam11" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 1.15, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Deck1" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.02, 0, 0, 0, 0.9, 0, 1.21, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_deck")
+
+[node name="Beam20" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 2.15, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Beam21" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 2.15, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Deck2" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(4, 0, 0, 0, 0.02, 0, 0, 0, 0.9, 0, 2.21, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_deck")
+
+[node name="RackB" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 0, -5.35)
+
+[node name="Upright00" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, -2, 1.5, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright01" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, -2, 1.5, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright10" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 0, 1.5, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright11" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 0, 1.5, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright20" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 2, 1.5, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Upright21" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.08, 0, 0, 0, 3, 0, 0, 0, 0.08, 2, 1.5, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_upright")
+
+[node name="Beam00" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 0.15, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Beam01" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 0.15, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Deck0" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.02, 0, 0, 0, 0.9, 0, 0.21, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_deck")
+
+[node name="Beam10" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 1.15, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Beam11" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 1.15, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Deck1" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.02, 0, 0, 0, 0.9, 0, 1.21, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_deck")
+
+[node name="Beam20" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 2.15, -0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Beam21" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.1, 0, 0, 0, 0.06, 0, 2.15, 0.45)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_beam")
+
+[node name="Deck2" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(4, 0, 0, 0, 0.02, 0, 0, 0, 0.9, 0, 2.21, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_rack_deck")
+
+[node name="Crate1" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, -1.3, 0.62, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate2" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.698295, 0, 0.0488295, 0, 0.7, 0, -0.0488295, 0, 0.698295, -0.3, 0.57, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate3" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.798904, 0, -0.0418688, 0, 0.8, 0, 0.0418688, 0, 0.798904, 0.8, 0.62, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate4" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, 1.5, 1.52, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate5" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.697336, 0, 0.061009, 0, 0.7, 0, -0.061009, 0, 0.697336, -1.2, 1.57, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate6" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, 0.2, 1.62, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate7" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.596713, 0, -0.0627171, 0, 0.6, 0, 0.0627171, 0, 0.596713, -0.7, 2.52, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate8" type="MeshInstance3D" parent="RackA"]
+transform = Transform3D(0.699574, 0, 0.0244296, 0, 0.7, 0, -0.0244296, 0, 0.699574, 0.9, 2.57, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate9" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.699574, 0, 0.0244296, 0, 0.7, 0, -0.0244296, 0, 0.699574, -1.4, 0.57, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate10" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, -0.4, 0.62, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate11" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.748173, 0, -0.0523174, 0, 0.75, 0, 0.0523174, 0, 0.748173, 1.3, 0.595, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate12" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.8, 0, 0, 0, 0.8, 0, 0, 0, 0.8, -1, 1.62, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate13" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.595528, 0, 0.0731216, 0, 0.6, 0, -0.0731216, 0, 0.595528, 0.6, 1.52, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate14" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5, 1.5, 1.47, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate15" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.798904, 0, 0.0418688, 0, 0.8, 0, -0.0418688, 0, 0.798904, -0.2, 2.62, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate16" type="MeshInstance3D" parent="RackB"]
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, 1.2, 2.52, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="PalletA" type="Node3D" parent="."]
+transform = Transform3D(0.990268, 0, 0.139173, 0, 1, 0, -0.139173, 0, 0.990268, -2.2, 0, -1.6)
+
+[node name="Runner0" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, -0.5, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Runner1" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Runner2" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0.5, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Top" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(1.2, 0, 0, 0, 0.05, 0, 0, 0, 1, 0, 0.125, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Crate17" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(0.55, 0, 0, 0, 0.55, 0, 0, 0, 0.55, -0.28, 0.425, -0.2)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate18" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(0.549246, 0, 0.0287848, 0, 0.55, 0, -0.0287848, 0, 0.549246, 0.3, 0.425, -0.2)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate19" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(0.498097, 0, -0.0435779, 0, 0.5, 0, 0.0435779, 0, 0.498097, 0, 0.4, 0.25)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate20" type="MeshInstance3D" parent="PalletA"]
+transform = Transform3D(0.492404, 0, 0.0868241, 0, 0.5, 0, -0.0868241, 0, 0.492404, -0.25, 0.95, -0.2)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="PalletB" type="Node3D" parent="."]
+transform = Transform3D(0.978148, 0, -0.207912, 0, 1, 0, 0.207912, 0, 0.978148, 0.9, 0, -1.2)
+
+[node name="Runner0" type="MeshInstance3D" parent="PalletB"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, -0.5, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Runner1" type="MeshInstance3D" parent="PalletB"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Runner2" type="MeshInstance3D" parent="PalletB"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0.5, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Top" type="MeshInstance3D" parent="PalletB"]
+transform = Transform3D(1.2, 0, 0, 0, 0.05, 0, 0, 0, 1, 0, 0.125, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Crate21" type="MeshInstance3D" parent="PalletB"]
+transform = Transform3D(0.9, 0, 0, 0, 0.9, 0, 0, 0, 0.9, 0, 0.6, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate22" type="MeshInstance3D" parent="PalletB"]
+transform = Transform3D(0.582177, 0, 0.145153, 0, 0.6, 0, -0.145153, 0, 0.582177, 0.05, 1.35, 0.02)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="PalletC" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -5.6, 0, -0.8)
+
+[node name="Runner0" type="MeshInstance3D" parent="PalletC"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, -0.5, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Runner1" type="MeshInstance3D" parent="PalletC"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Runner2" type="MeshInstance3D" parent="PalletC"]
+transform = Transform3D(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1, 0.5, 0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Top" type="MeshInstance3D" parent="PalletC"]
+transform = Transform3D(1.2, 0, 0, 0, 0.05, 0, 0, 0, 1, 0, 0.125, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pallet")
+
+[node name="Crate23" type="MeshInstance3D" parent="PalletC"]
+transform = Transform3D(0.796956, 0, 0.0697246, 0, 0.8, 0, -0.0697246, 0, 0.796956, -0.2, 0.55, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Crate24" type="MeshInstance3D" parent="PalletC"]
+transform = Transform3D(0.445621, 0, -0.0626279, 0, 0.45, 0, 0.0626279, 0, 0.445621, 0.35, 0.375, 0.1)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Drum1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.8, 0.45, -3.8)
+mesh = SubResource("drum")
+surface_material_override/0 = SubResource("mat_drum")
+
+[node name="Drum2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 0.45, -3.4)
+mesh = SubResource("drum")
+surface_material_override/0 = SubResource("mat_drum")
+
+[node name="Drum3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.2, 0.45, -4.5)
+mesh = SubResource("drum")
+surface_material_override/0 = SubResource("mat_drum_red")
+
+[node name="Drum4" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 0.45, -4.6)
+mesh = SubResource("drum")
+surface_material_override/0 = SubResource("mat_drum")
+
+[node name="Crate25" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.516831, 0, 0.188111, 0, 0.55, 0, -0.188111, 0, 0.516831, 3.9, 0.275, -1.9)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate26" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.443163, 0, -0.0781417, 0, 0.45, 0, 0.0781417, 0, 0.443163, 4.6, 0.225, -2.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Crate27" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.327661, 0, 0.229431, 0, 0.4, 0, -0.229431, 0, 0.327661, 3.92, 0.75, -1.92)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Lamps" type="Node3D" parent="."]
+
+[node name="Lamp1" type="Node3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 4.6, -2.5)
+
+[node name="Cord" type="MeshInstance3D" parent="Lamps/Lamp1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("cord")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Shade" type="MeshInstance3D" parent="Lamps/Lamp1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("shade")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/Lamp1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+mesh = SubResource("bulb")
+surface_material_override/0 = SubResource("mat_bulb")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Lamps/Lamp1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 2.2
+shadow_enabled = true
+omni_range = 9.0
+omni_attenuation = 0.8
+
+[node name="Lamp2" type="Node3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 4.6, -2.5)
+
+[node name="Cord" type="MeshInstance3D" parent="Lamps/Lamp2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("cord")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Shade" type="MeshInstance3D" parent="Lamps/Lamp2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("shade")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/Lamp2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+mesh = SubResource("bulb")
+surface_material_override/0 = SubResource("mat_bulb")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Lamps/Lamp2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 2.2
+shadow_enabled = true
+omni_range = 9.0
+omni_attenuation = 0.8
+
+[node name="Lamp3" type="Node3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.5, 4.6, -2.5)
+
+[node name="Cord" type="MeshInstance3D" parent="Lamps/Lamp3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("cord")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Shade" type="MeshInstance3D" parent="Lamps/Lamp3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("shade")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/Lamp3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+mesh = SubResource("bulb")
+surface_material_override/0 = SubResource("mat_bulb")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Lamps/Lamp3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 2.2
+shadow_enabled = true
+omni_range = 9.0
+omni_attenuation = 0.8
+
+[node name="Lamp4" type="Node3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 4.6, 2.5)
+
+[node name="Cord" type="MeshInstance3D" parent="Lamps/Lamp4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("cord")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Shade" type="MeshInstance3D" parent="Lamps/Lamp4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("shade")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/Lamp4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+mesh = SubResource("bulb")
+surface_material_override/0 = SubResource("mat_bulb")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Lamps/Lamp4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 2.2
+shadow_enabled = true
+omni_range = 9.0
+omni_attenuation = 0.8
+
+[node name="Lamp5" type="Node3D" parent="Lamps"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 4.6, 2.5)
+
+[node name="Cord" type="MeshInstance3D" parent="Lamps/Lamp5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("cord")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Shade" type="MeshInstance3D" parent="Lamps/Lamp5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("shade")
+surface_material_override/0 = SubResource("mat_lamp_shade")
+cast_shadow = 0
+
+[node name="Bulb" type="MeshInstance3D" parent="Lamps/Lamp5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, 0)
+mesh = SubResource("bulb")
+surface_material_override/0 = SubResource("mat_bulb")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Lamps/Lamp5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.35, 0)
+light_color = Color(1, 0.9, 0.75, 1)
+light_energy = 2.2
+shadow_enabled = true
+omni_range = 9.0
+omni_attenuation = 0.8

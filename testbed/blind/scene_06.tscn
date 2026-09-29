@@ -1,0 +1,919 @@
+[gd_scene format=3]
+
+[ext_resource type="Mesh" path="res://blind/assets/models/storage_box.obj" id="1_storage_bo"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/wood_planks.png" id="2_wood_plank"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/wallpaper.png" id="3_wallpaper"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/wood_dark.png" id="4_wood_dark"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/cardboard.png" id="5_cardboard"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.6, 0.7, 0.85, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.7, 0.72, 0.78, 1)
+ambient_light_energy = 0.5
+tonemap_mode = 2
+ssao_enabled = true
+
+[sub_resource type="StandardMaterial3D" id="mat_floor"]
+albedo_color = Color(0.95, 0.85, 0.75, 1)
+albedo_texture = ExtResource("2_wood_plank")
+roughness = 0.7
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.6, 0.6, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="mat_wallpaper"]
+albedo_texture = ExtResource("3_wallpaper")
+roughness = 0.9
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.8, 0.8, 0.8)
+
+[sub_resource type="StandardMaterial3D" id="mat_ceiling"]
+albedo_color = Color(0.92, 0.91, 0.88, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_trim"]
+albedo_color = Color(0.93, 0.92, 0.88, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="mat_desk"]
+albedo_texture = ExtResource("4_wood_dark")
+roughness = 0.55
+uv1_triplanar = true
+uv1_scale = Vector3(1.2, 1.2, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="mat_black_plastic"]
+albedo_color = Color(0.05, 0.05, 0.06, 1)
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="mat_screen"]
+albedo_color = Color(0.1, 0.2, 0.35, 1)
+emission_enabled = true
+emission = Color(0.25, 0.45, 0.75, 1)
+emission_energy_multiplier = 1.2
+
+[sub_resource type="StandardMaterial3D" id="mat_grey_plastic"]
+albedo_color = Color(0.7, 0.7, 0.72, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="mat_mug"]
+albedo_color = Color(0.85, 0.3, 0.2, 1)
+roughness = 0.35
+
+[sub_resource type="StandardMaterial3D" id="mat_chair_fabric"]
+albedo_color = Color(0.15, 0.2, 0.3, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_metal"]
+albedo_color = Color(0.6, 0.6, 0.62, 1)
+roughness = 0.3
+metallic = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_cardboard"]
+albedo_texture = ExtResource("5_cardboard")
+roughness = 0.9
+uv1_triplanar = true
+uv1_scale = Vector3(1, 1, 1)
+uv1_offset = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_cardboard_box"]
+albedo_texture = ExtResource("5_cardboard")
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_window"]
+albedo_color = Color(0.75, 0.85, 1, 1)
+emission_enabled = true
+emission = Color(0.75, 0.85, 1, 1)
+emission_energy_multiplier = 1.3
+
+[sub_resource type="StandardMaterial3D" id="mat_pot"]
+albedo_color = Color(0.7, 0.36, 0.22, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_plant"]
+albedo_color = Color(0.2, 0.45, 0.18, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_rug"]
+albedo_color = Color(0.55, 0.52, 0.45, 1)
+roughness = 1
+
+[sub_resource type="StandardMaterial3D" id="mat_lamp"]
+albedo_color = Color(0.12, 0.35, 0.3, 1)
+roughness = 0.4
+metallic = 0.5
+
+[sub_resource type="StandardMaterial3D" id="mat_bulb"]
+albedo_color = Color(1, 0.95, 0.8, 1)
+emission_enabled = true
+emission = Color(1, 0.9, 0.7, 1)
+emission_energy_multiplier = 5.0
+
+[sub_resource type="StandardMaterial3D" id="mat_book_0"]
+albedo_color = Color(0.6, 0.1, 0.1, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_book_1"]
+albedo_color = Color(0.1, 0.25, 0.5, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_book_2"]
+albedo_color = Color(0.15, 0.4, 0.2, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_book_3"]
+albedo_color = Color(0.75, 0.6, 0.2, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_book_4"]
+albedo_color = Color(0.35, 0.2, 0.4, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_book_5"]
+albedo_color = Color(0.8, 0.78, 0.7, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_book_6"]
+albedo_color = Color(0.2, 0.2, 0.22, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_art_0"]
+albedo_color = Color(0.85, 0.55, 0.3, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_art_1"]
+albedo_color = Color(0.3, 0.5, 0.7, 1)
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_art_2"]
+albedo_color = Color(0.9, 0.85, 0.6, 1)
+roughness = 0.8
+
+[sub_resource type="BoxMesh" id="box"]
+
+[sub_resource type="CylinderMesh" id="cyl"]
+top_radius = 0.5
+bottom_radius = 0.5
+height = 1.0
+radial_segments = 24
+
+[sub_resource type="CylinderMesh" id="shade"]
+top_radius = 0.05
+bottom_radius = 0.12
+height = 0.14
+radial_segments = 24
+cap_bottom = false
+
+[sub_resource type="SphereMesh" id="sphere"]
+radius = 0.5
+height = 1.0
+
+[sub_resource type="CylinderMesh" id="mug"]
+top_radius = 0.04
+bottom_radius = 0.038
+height = 0.1
+radial_segments = 24
+
+[sub_resource type="TorusMesh" id="mug_handle"]
+inner_radius = 0.018
+outer_radius = 0.03
+rings = 16
+ring_segments = 8
+
+[sub_resource type="PlaneMesh" id="rug"]
+size = Vector2(2.2, 1.6)
+
+[node name="Study" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.885748, -0.180988, 0.427427, 0.102409, 0.974356, 0.200357, -0.452728, -0.133693, 0.881569, 1.3, 1.5, 1.1)
+fov = 68
+current = true
+
+[node name="Room" type="Node3D" parent="."]
+
+[node name="Floor" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(6.4, 0, 0, 0, 0.1, 0, 0, 0, 6.4, 0, -0.05, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_floor")
+
+[node name="Ceiling" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(6.4, 0, 0, 0, 0.1, 0, 0, 0, 6.4, 0, 2.85, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_ceiling")
+
+[node name="WallLeft" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.2, 0, 0, 0, 2.8, 0, 0, 0, 6.4, -3.1, 1.4, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wallpaper")
+
+[node name="WallRight" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.2, 0, 0, 0, 2.8, 0, 0, 0, 6.4, 3.1, 1.4, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wallpaper")
+
+[node name="WallBackA" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(3.8, 0, 0, 0, 2.8, 0, 0, 0, 0.2, -1.3, 1.4, -3.1)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wallpaper")
+
+[node name="WallBackB" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1.3, 0, 0, 0, 2.8, 0, 0, 0, 0.2, 2.45, 1.4, -3.1)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wallpaper")
+
+[node name="WallBackC" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1.2, 0, 0, 0, 1, 0, 0, 0, 0.2, 1.2, 0.5, -3.1)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wallpaper")
+
+[node name="WallBackD" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1.2, 0, 0, 0, 0.6, 0, 0, 0, 0.2, 1.2, 2.5, -3.1)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wallpaper")
+
+[node name="WindowPane" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 0.02, 1.2, 1.6, -3.15)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_window")
+cast_shadow = 0
+
+[node name="WindowSill" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1.4, 0, 0, 0, 0.05, 0, 0, 0, 0.16, 1.2, 0.98, -2.96)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="WindowFrameTop" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(1.3, 0, 0, 0, 0.06, 0, 0, 0, 0.06, 1.2, 2.22, -3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="WindowFrameL" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.06, 0, 0, 0, 1.3, 0, 0, 0, 0.06, 0.58, 1.6, -3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="WindowFrameR" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.06, 0, 0, 0, 1.3, 0, 0, 0, 0.06, 1.82, 1.6, -3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="WindowMullion" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.04, 0, 0, 0, 1.2, 0, 0, 0, 0.04, 1.2, 1.6, -3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="BaseboardBack" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(6, 0, 0, 0, 0.12, 0, 0, 0, 0.02, 0, 0.06, -2.99)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="BaseboardLeft" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.02, 0, 0, 0, 0.12, 0, 0, 0, 6, -2.99, 0.06, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="BaseboardRight" type="MeshInstance3D" parent="Room"]
+transform = Transform3D(0.02, 0, 0, 0, 0.12, 0, 0, 0, 6, 2.99, 0.06, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_trim")
+
+[node name="Desk" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.9, 0, -2.55)
+
+[node name="Top" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(1.6, 0, 0, 0, 0.04, 0, 0, 0, 0.7, 0, 0.74, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Leg0" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.05, 0, 0, 0, 0.72, 0, 0, 0, 0.05, -0.75, 0.36, -0.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Leg1" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.05, 0, 0, 0, 0.72, 0, 0, 0, 0.05, 0.75, 0.36, -0.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Leg2" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.05, 0, 0, 0, 0.72, 0, 0, 0, 0.05, -0.75, 0.36, 0.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Leg3" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.05, 0, 0, 0, 0.72, 0, 0, 0, 0.05, 0.75, 0.36, 0.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Drawer" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.5, 0, 0, 0, 0.22, 0, 0, 0, 0.64, 0.5, 0.6, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="MonitorStand" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.22, 0, 0, 0, 0.02, 0, 0, 0, 0.16, 0, 0.77, -0.15)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="MonitorNeck" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.04, 0, 0, 0, 0.26, 0, 0, 0, 0.03, 0, 0.9, -0.18)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Monitor" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.62, 0, 0, 0, 0.38, 0, 0, 0, 0.03, 0, 1.12, -0.15)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Screen" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.58, 0, 0, 0, 0.34, 0, 0, 0, 0.002, 0, 1.12, -0.134)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_screen")
+
+[node name="Keyboard" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.44, 0, 0, 0, 0.02, 0, 0, 0, 0.14, -0.02, 0.77, 0.13)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_grey_plastic")
+
+[node name="Mouse" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.06, 0, 0, 0, 0.03, 0, 0, 0, 0.1, 0.3, 0.77, 0.14)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_grey_plastic")
+
+[node name="Mug" type="Node3D" parent="Desk"]
+transform = Transform3D(6.9282, 0, 4, 0, 8, 0, -4, 0, 6.9282, -0.52, 0.76, 0.12)
+
+[node name="Body" type="MeshInstance3D" parent="Desk/Mug"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("mug")
+surface_material_override/0 = SubResource("mat_mug")
+
+[node name="Handle" type="MeshInstance3D" parent="Desk/Mug"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.045, 0.05, 0)
+mesh = SubResource("mug_handle")
+surface_material_override/0 = SubResource("mat_mug")
+
+[node name="Book0" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.23895, 0, -0.0158826, 0, 0.035, 0, 0.0224226, 0, 0.169256, 0.6, 0.7875, -0.12)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_0")
+
+[node name="Book1" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.239663, 0, 0.00900458, 0, 0.035, 0, -0.0127123, 0, 0.169761, 0.6, 0.8225, -0.12)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book2" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.239829, 0, 0.00640733, 0, 0.035, 0, -0.00904564, 0, 0.169879, 0.6, 0.8575, -0.12)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_2")
+
+[node name="Book3" type="MeshInstance3D" parent="Desk"]
+transform = Transform3D(0.239996, 0, -0.000992157, 0, 0.035, 0, 0.00140069, 0, 0.169997, 0.6, 0.8925, -0.12)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="DeskLamp" type="Node3D" parent="Desk"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.62, 0.76, -0.2)
+
+[node name="Base" type="MeshInstance3D" parent="Desk/DeskLamp"]
+transform = Transform3D(0.14, 0, 0, 0, 0.02, 0, 0, 0, 0.14, 0, 0.01, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_lamp")
+
+[node name="Arm" type="MeshInstance3D" parent="Desk/DeskLamp"]
+transform = Transform3D(0.02, 0, 0, 0, 0.38, 0, 0, 0, 0.02, 0, 0.2, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_lamp")
+
+[node name="Shade" type="MeshInstance3D" parent="Desk/DeskLamp"]
+transform = Transform3D(0.707107, 0.40558, 0.579228, 0, 0.819152, -0.573576, -0.707107, 0.40558, 0.579228, 0.06, 0.38, 0.05)
+mesh = SubResource("shade")
+surface_material_override/0 = SubResource("mat_lamp")
+cast_shadow = 0
+
+[node name="Bulb" type="MeshInstance3D" parent="Desk/DeskLamp"]
+transform = Transform3D(0.05, 0, 0, 0, 0.05, 0, 0, 0, 0.05, 0.08, 0.34, 0.07)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_bulb")
+cast_shadow = 0
+
+[node name="LampLight" type="SpotLight3D" parent="Desk/DeskLamp"]
+transform = Transform3D(0.939693, -0.321394, 0.116978, 0, 0.34202, 0.939693, -0.34202, -0.883022, 0.321394, 0.08, 0.32, 0.07)
+light_color = Color(1, 0.88, 0.7, 1)
+light_energy = 2.0
+spot_range = 2.0
+spot_angle = 40.0
+
+[node name="Chair" type="Node3D" parent="."]
+transform = Transform3D(0.978148, 0, 0.207912, 0, 1, 0, -0.207912, 0, 0.978148, -0.8, 0, -1.65)
+
+[node name="Spoke0" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.3, 0, 0, 0, 0.04, 0, 0, 0, 0.05, 0.14, 0.07, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Wheel0" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.06, 0, 0, 0, 0.06, 0, 0, 0, 0.06, 0.28, 0.03, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Spoke1" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.0927051, 0, -0.0475528, 0, 0.04, 0, 0.285317, 0, 0.0154508, 0.0432624, 0.07, 0.133148)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Wheel1" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.06, 0, 0, 0, 0.06, 0, 0, 0, 0.06, 0.0865248, 0.03, 0.266296)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Spoke2" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(-0.242705, 0, -0.0293893, 0, 0.04, 0, 0.176336, 0, -0.0404508, -0.113262, 0.07, 0.0822899)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Wheel2" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.06, 0, 0, 0, 0.06, 0, 0, 0, 0.06, -0.226525, 0.03, 0.16458)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Spoke3" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(-0.242705, 0, 0.0293893, 0, 0.04, 0, -0.176336, 0, -0.0404508, -0.113262, 0.07, -0.0822899)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Wheel3" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.06, 0, 0, 0, 0.06, 0, 0, 0, 0.06, -0.226525, 0.03, -0.16458)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Spoke4" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.0927051, 0, 0.0475528, 0, 0.04, 0, -0.285317, 0, 0.0154508, 0.0432624, 0.07, -0.133148)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Wheel4" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.06, 0, 0, 0, 0.06, 0, 0, 0, 0.06, 0.0865248, 0.03, -0.266296)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="Pole" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.05, 0, 0, 0, 0.38, 0, 0, 0, 0.05, 0, 0.27, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_metal")
+
+[node name="Seat" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.5, 0, 0, 0, 0.08, 0, 0, 0, 0.48, 0, 0.49, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_chair_fabric")
+
+[node name="Back" type="MeshInstance3D" parent="Chair"]
+transform = Transform3D(0.46, 0, 0, 0, 0.546987, 0.00627171, 0, -0.0574907, 0.0596713, 0, 0.85, 0.24)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_chair_fabric")
+
+[node name="Bookshelf" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -2.8, 0, -0.4)
+
+[node name="SideA" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.03, 0, 0, 0, 2, 0, 0, 0, 0.34, -0.46, 1, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="SideB" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.03, 0, 0, 0, 2, 0, 0, 0, 0.34, 0.46, 1, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="BackPanel" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.9, 0, 0, 0, 2, 0, 0, 0, 0.02, 0, 1, -0.16)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Shelf0" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.9, 0, 0, 0, 0.03, 0, 0, 0, 0.32, 0, 0.04, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Book0" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0364804, 0, 0, 0, 0.335116, 0, 0, 0, 0.22, -0.38176, 0.222558, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book1" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0355074, 0, 0, 0, 0.303306, 0, 0, 0, 0.22, -0.341766, 0.206653, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_0")
+
+[node name="Book2" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0538125, 0, 0, 0, 0.26787, 0, 0, 0, 0.22, -0.213106, 0.188935, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_0")
+
+[node name="Book3" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0431057, 0, 0, 0, 0.359445, 0, 0, 0, 0.22, -0.160647, 0.234722, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book4" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0484767, 0, 0, 0, 0.244088, 0, 0, 0, 0.22, -0.110856, 0.177044, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book5" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0508175, 0, 0, 0, 0.317858, 0, 0, 0, 0.22, -0.0572085, 0.213929, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_0")
+
+[node name="Book6" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0346444, 0, 0, 0, 0.338101, 0, 0, 0, 0.22, -0.0104776, 0.224051, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_0")
+
+[node name="Book7" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0435938, 0, 0, 0, 0.30624, 0, 0, 0, 0.22, 0.0326415, 0.20812, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book8" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0345329, 0, 0, 0, 0.319813, 0, 0, 0, 0.22, 0.0757049, 0.214906, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book9" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.037046, 0, 0, 0, 0.333631, 0, 0, 0, 0.22, 0.115494, 0.221816, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book10" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.056819, 0, 0, 0, 0.330575, 0, 0, 0, 0.22, 0.166427, 0.220288, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book11" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0596646, 0, 0, 0, 0.248511, 0, 0, 0, 0.22, 0.228669, 0.179256, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book12" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0548105, 0, 0, 0, 0.26413, 0, 0, 0, 0.22, 0.289906, 0.187065, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book13" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0422881, 0, 0, 0, 0.283826, 0, 0, 0, 0.22, 0.342455, 0.196913, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Shelf1" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.9, 0, 0, 0, 0.03, 0, 0, 0, 0.32, 0, 0.5, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Book14" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0395386, 0, 0, 0, 0.298134, 0, 0, 0, 0.22, -0.380231, 0.664067, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book15" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0327979, 0, 0, 0, 0.326171, 0, 0, 0, 0.22, -0.340063, 0.678086, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book16" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.030085, 0, 0, 0, 0.248414, 0, 0, 0, 0.22, -0.304621, 0.639207, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book17" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.036661, 0, 0, 0, 0.313068, 0, 0, 0, 0.22, -0.267248, 0.671534, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book18" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0333813, 0, 0, 0, 0.320361, 0, 0, 0, 0.22, -0.228227, 0.675181, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book19" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0578122, 0, 0, 0, 0.281594, 0, 0, 0, 0.22, -0.17863, 0.655797, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_2")
+
+[node name="Book20" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.037373, 0, 0, 0, 0.260243, 0, 0, 0, 0.22, -0.127038, 0.645122, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book21" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0533106, 0, 0, 0, 0.284985, 0, 0, 0, 0.22, -0.0776959, 0.657493, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_5")
+
+[node name="Book22" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0455899, 0, 0, 0, 0.318958, 0, 0, 0, 0.22, -0.0242457, 0.674479, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book23" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0588429, 0, 0, 0, 0.310862, 0, 0, 0, 0.22, 0.0319707, 0.670431, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book24" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.045184, 0, 0, 0, 0.320032, 0, 0, 0, 0.22, 0.0879842, 0.675016, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book25" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0348688, 0, 0, 0, 0.24832, 0, 0, 0, 0.22, 0.132011, 0.63916, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book26" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0522424, 0, 0, 0, 0.246892, 0, 0, 0, 0.22, 0.179566, 0.638446, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book27" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0377393, 0, 0, 0, 0.274785, 0, 0, 0, 0.22, 0.228557, 0.652392, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book28" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0418358, 0, 0, 0, 0.344446, 0, 0, 0, 0.22, 0.272345, 0.687223, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book29" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0595034, 0, 0, 0, 0.329502, 0, 0, 0, 0.22, 0.327014, 0.679751, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_2")
+
+[node name="Shelf2" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.9, 0, 0, 0, 0.03, 0, 0, 0, 0.32, 0, 0.96, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Book30" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0341877, 0, 0, 0, 0.31803, 0, 0, 0, 0.22, -0.382906, 1.13402, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book31" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.030849, 0, 0, 0, 0.265451, 0, 0, 0, 0.22, -0.346388, 1.10773, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book32" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0346152, 0, 0, 0, 0.284251, 0, 0, 0, 0.22, -0.309656, 1.11713, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book33" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0474342, 0, 0, 0, 0.341921, 0, 0, 0, 0.22, -0.264631, 1.14596, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book34" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0476524, 0, 0, 0, 0.256717, 0, 0, 0, 0.22, -0.213088, 1.10336, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book35" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0478106, 0, 0, 0, 0.317263, 0, 0, 0, 0.22, -0.0813563, 1.13363, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book36" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.042633, 0, 0, 0, 0.321978, 0, 0, 0, 0.22, -0.0321345, 1.13599, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Book37" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0328182, 0, 0, 0, 0.243038, 0, 0, 0, 0.22, 0.0895911, 1.09652, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book38" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0321567, 0, 0, 0, 0.254289, 0, 0, 0, 0.22, 0.126079, 1.10214, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_2")
+
+[node name="Book39" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0461598, 0, 0, 0, 0.278913, 0, 0, 0, 0.22, 0.169237, 1.11446, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book40" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.048636, 0, 0, 0, 0.261789, 0, 0, 0, 0.22, 0.220635, 1.10589, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book41" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0513263, 0, 0, 0, 0.344864, 0, 0, 0, 0.22, 0.354616, 1.14743, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_6")
+
+[node name="Shelf3" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.9, 0, 0, 0, 0.03, 0, 0, 0, 0.32, 0, 1.42, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Book42" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0578757, 0, 0, 0, 0.286518, 0, 0, 0, 0.22, -0.371062, 1.57826, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book43" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0529176, 0, 0, 0, 0.261036, 0, 0, 0, 0.22, -0.311665, 1.56552, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_2")
+
+[node name="Book44" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0589201, 0, 0, 0, 0.312622, 0, 0, 0, 0.22, -0.251747, 1.59131, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_1")
+
+[node name="Book45" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0416661, 0, 0, 0, 0.277129, 0, 0, 0, 0.22, -0.197454, 1.57356, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_2")
+
+[node name="Book46" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0545281, 0, 0, 0, 0.336369, 0, 0, 0, 0.22, -0.145356, 1.60318, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book47" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0329569, 0, 0, 0, 0.312142, 0, 0, 0, 0.22, -0.097614, 1.59107, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_5")
+
+[node name="Book48" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0397177, 0, 0, 0, 0.302022, 0, 0, 0, 0.22, -0.0572767, 1.58601, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_4")
+
+[node name="Book49" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0544406, 0, 0, 0, 0.357222, 0, 0, 0, 0.22, 0.0738025, 1.61361, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_2")
+
+[node name="Book50" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0497388, 0, 0, 0, 0.290433, 0, 0, 0, 0.22, 0.129892, 1.58022, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_5")
+
+[node name="Book51" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0322, 0, 0, 0, 0.33772, 0, 0, 0, 0.22, 0.174862, 1.60386, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book52" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0451513, 0, 0, 0, 0.353646, 0, 0, 0, 0.22, 0.217537, 1.61182, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_5")
+
+[node name="Book53" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0432791, 0, 0, 0, 0.302091, 0, 0, 0, 0.22, 0.265752, 1.58605, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_3")
+
+[node name="Book54" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0321106, 0, 0, 0, 0.242994, 0, 0, 0, 0.22, 0.307447, 1.5565, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_0")
+
+[node name="Book55" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.0374117, 0, 0, 0, 0.324502, 0, 0, 0, 0.22, 0.346208, 1.59725, 0.01)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_book_5")
+
+[node name="Shelf4" type="MeshInstance3D" parent="Bookshelf"]
+transform = Transform3D(0.9, 0, 0, 0, 0.03, 0, 0, 0, 0.32, 0, 1.98, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_desk")
+
+[node name="Storage" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.25, 0, -2.45)
+
+[node name="BoxA" type="MeshInstance3D" parent="Storage"]
+transform = Transform3D(0.913545, 0, 0.406737, 0, 1, 0, -0.406737, 0, 0.913545, -0.55, 0, 0.55)
+mesh = ExtResource("1_storage_bo")
+surface_material_override/0 = SubResource("mat_cardboard_box")
+
+[node name="BoxB" type="MeshInstance3D" parent="Storage"]
+transform = Transform3D(0.546987, 0, 0.0470378, 0, 0.5, 0, -0.0574907, 0, 0.447535, 0.05, 0.25, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="BoxC" type="MeshInstance3D" parent="Storage"]
+transform = Transform3D(0.443163, 0, -0.0659863, 0, 0.38, 0, 0.0781417, 0, 0.374227, 0.02, 0.69, 0.02)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_cardboard")
+
+[node name="Rug" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.5, 0.004, -1.2)
+mesh = SubResource("rug")
+surface_material_override/0 = SubResource("mat_rug")
+
+[node name="Plant" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.55, 0, -2.55)
+
+[node name="Pot" type="MeshInstance3D" parent="Plant"]
+transform = Transform3D(0.3, 0, 0, 0, 0.36, 0, 0, 0, 0.3, 0, 0.18, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_pot")
+
+[node name="Leaves0" type="MeshInstance3D" parent="Plant"]
+transform = Transform3D(0.3, 0, 0, 0, 0.34, 0, 0, 0, 0.3, -0.0175093, 0.779166, -0.0242546)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_plant")
+
+[node name="Leaves1" type="MeshInstance3D" parent="Plant"]
+transform = Transform3D(0.3, 0, 0, 0, 0.34, 0, 0, 0, 0.3, -0.0414003, 0.579724, 0.0995204)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_plant")
+
+[node name="Leaves2" type="MeshInstance3D" parent="Plant"]
+transform = Transform3D(0.3, 0, 0, 0, 0.34, 0, 0, 0, 0.3, 0.0370403, 0.513101, -0.0785166)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_plant")
+
+[node name="Leaves3" type="MeshInstance3D" parent="Plant"]
+transform = Transform3D(0.3, 0, 0, 0, 0.34, 0, 0, 0, 0.3, -0.0304734, 0.711607, -0.0681825)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_plant")
+
+[node name="Leaves4" type="MeshInstance3D" parent="Plant"]
+transform = Transform3D(0.3, 0, 0, 0, 0.34, 0, 0, 0, 0.3, -0.0120623, 0.721409, 0.0286844)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_plant")
+
+[node name="FrameBorder0" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.03, 0, 0, 0, 0.51, 0, 0, 0, 0.66, 2.98, 1.6, -1.5)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="FrameArt0" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.01, 0, 0, 0, 0.45, 0, 0, 0, 0.6, 2.965, 1.6, -1.5)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_art_0")
+
+[node name="FrameBorder1" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.03, 0, 0, 0, 0.61, 0, 0, 0, 0.46, 2.98, 1.6, -0.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="FrameArt1" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.01, 0, 0, 0, 0.55, 0, 0, 0, 0.4, 2.965, 1.6, -0.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_art_1")
+
+[node name="FrameBorder2" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.03, 0, 0, 0, 0.41, 0, 0, 0, 0.41, 2.98, 1.6, 0.6)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_black_plastic")
+
+[node name="FrameArt2" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.01, 0, 0, 0, 0.35, 0, 0, 0, 0.35, 2.965, 1.6, 0.6)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_art_2")
+
+[node name="CeilingLamp" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, -0.5)
+
+[node name="Fixture" type="MeshInstance3D" parent="CeilingLamp"]
+transform = Transform3D(0.4, 0, 0, 0, 0.06, 0, 0, 0, 0.4, 0, -0.03, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_trim")
+cast_shadow = 0
+
+[node name="Glow" type="MeshInstance3D" parent="CeilingLamp"]
+transform = Transform3D(0.34, 0, 0, 0, 0.01, 0, 0, 0, 0.34, 0, -0.065, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_bulb")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="CeilingLamp"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.3, 0)
+light_color = Color(1, 0.95, 0.88, 1)
+light_energy = 1.6
+omni_range = 7.0
+shadow_enabled = true
+
+[node name="WindowLight" type="SpotLight3D" parent="."]
+transform = Transform3D(-0.939793, -0.215363, 0.265343, 0, 0.776441, 0.63019, -0.341743, 0.592249, -0.729694, 1.2, 1.9, -2.7)
+light_color = Color(0.85, 0.9, 1, 1)
+light_energy = 1.5
+spot_range = 6.0
+spot_angle = 45.0
+shadow_enabled = true

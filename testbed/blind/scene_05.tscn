@@ -1,0 +1,447 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://blind/assets/scripts/stone_wall.gd" id="1_stone_wall"]
+[ext_resource type="Shader" path="res://blind/assets/shaders/canal_water.gdshader" id="2_canal_wate"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/flagstones.png" id="3_flagstones"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/stone_blocks.png" id="4_stone_bloc"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/rock.png" id="5_rock"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/wood_dark.png" id="6_wood_dark"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/barrel_staves.png" id="7_barrel_sta"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/crate.png" id="8_crate"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.1, 0.11, 0.14, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.35, 0.38, 0.5, 1)
+ambient_light_energy = 0.35
+tonemap_mode = 2
+ssao_enabled = true
+
+[sub_resource type="StandardMaterial3D" id="mat_floor"]
+albedo_texture = ExtResource("3_flagstones")
+roughness = 0.9
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.4, 0.4, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="mat_stone"]
+albedo_color = Color(0.85, 0.85, 0.9, 1)
+albedo_texture = ExtResource("4_stone_bloc")
+roughness = 0.95
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.5, 0.5, 0.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_stone_wall"]
+albedo_color = Color(0.85, 0.85, 0.9, 1)
+albedo_texture = ExtResource("4_stone_bloc")
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_pillar"]
+albedo_texture = ExtResource("5_rock")
+roughness = 0.9
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.6, 0.6, 0.6)
+
+[sub_resource type="StandardMaterial3D" id="mat_iron"]
+albedo_color = Color(0.1, 0.1, 0.11, 1)
+roughness = 0.45
+metallic = 0.85
+
+[sub_resource type="StandardMaterial3D" id="mat_wood"]
+albedo_texture = ExtResource("6_wood_dark")
+roughness = 0.8
+uv1_triplanar = true
+uv1_scale = Vector3(1.5, 1.5, 1.5)
+
+[sub_resource type="StandardMaterial3D" id="mat_gold"]
+albedo_color = Color(0.9, 0.7, 0.25, 1)
+roughness = 0.3
+metallic = 1
+
+[sub_resource type="StandardMaterial3D" id="mat_fire"]
+albedo_color = Color(1, 0.5, 0.1, 1)
+shading_mode = 0
+emission_enabled = true
+emission = Color(1, 0.45, 0.08, 1)
+emission_energy_multiplier = 4.0
+
+[sub_resource type="StandardMaterial3D" id="mat_barrel"]
+albedo_texture = ExtResource("7_barrel_sta")
+roughness = 0.8
+
+[sub_resource type="FastNoiseLite" id="ripples"]
+frequency = 0.02
+
+[sub_resource type="NoiseTexture2D" id="ripple_tex"]
+width = 256
+height = 256
+seamless = true
+noise = SubResource("ripples")
+
+[sub_resource type="ShaderMaterial" id="mat_water"]
+render_priority = 0
+shader = ExtResource("2_canal_wate")
+shader_parameter/ripple_noise = SubResource("ripple_tex")
+
+[sub_resource type="BoxMesh" id="box"]
+
+[sub_resource type="CylinderMesh" id="cyl"]
+top_radius = 0.5
+bottom_radius = 0.5
+height = 1.0
+radial_segments = 16
+
+[sub_resource type="SphereMesh" id="sphere"]
+radius = 0.5
+height = 1.0
+
+[sub_resource type="CylinderMesh" id="barrel"]
+top_radius = 0.36
+bottom_radius = 0.36
+height = 1.0
+radial_segments = 20
+
+[sub_resource type="PlaneMesh" id="water"]
+size = Vector2(1.2, 26)
+
+[sub_resource type="TorusMesh" id="ring"]
+inner_radius = 0.06
+outer_radius = 0.09
+
+[sub_resource type="StandardMaterial3D" id="mat_crate"]
+albedo_texture = ExtResource("8_crate")
+roughness = 0.85
+uv1_triplanar = true
+uv1_scale = Vector3(1, 1, 1)
+uv1_offset = Vector3(0.5, 0.5, 0.5)
+
+[node name="DungeonCorridor" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.998153, -0.000527327, -0.0607548, 0, 0.999962, -0.00867926, 0.0607571, 0.00866323, 0.998115, -1, 1.7, 5)
+fov = 70
+current = true
+
+[node name="Structure" type="Node3D" parent="."]
+
+[node name="WalkwayLeft" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1.9, 0, 0, 0, 0.2, 0, 0, 0, 26, -1.55, -0.1, -7)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_floor")
+
+[node name="WalkwayRight" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1.9, 0, 0, 0, 0.2, 0, 0, 0, 26, 1.55, -0.1, -7)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_floor")
+
+[node name="CanalBed" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1.2, 0, 0, 0, 0.1, 0, 0, 0, 26, 0, -0.65, -7)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_stone")
+
+[node name="CanalSideL" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.04, 0, 0, 0, 0.6, 0, 0, 0, 26, -0.62, -0.4, -7)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_stone")
+
+[node name="CanalSideR" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.04, 0, 0, 0, 0.6, 0, 0, 0, 26, 0.62, -0.4, -7)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_stone")
+
+[node name="Water" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.28, -7)
+mesh = SubResource("water")
+surface_material_override/0 = SubResource("mat_water")
+
+[node name="WallLeft" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.4, 0, 0, 0, 26, -2.75, 2, -7)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_stone")
+
+[node name="WallRightEntry" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.4, 0, 0, 0, 4, 2.75, 2, 4)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_stone")
+
+[node name="WallRight" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 2.5, -0.2, -20)
+material_override = SubResource("mat_stone_wall")
+script = ExtResource("1_stone_wall")
+length = 22.0
+height = 4.4
+columns = 11
+rows = 4
+
+[node name="WallEnd" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(5.5, 0, 0, 0, 4.4, 0, 0, 0, 0.5, 0, 2, -20.25)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_stone")
+
+[node name="Ceiling" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(6, 0, 0, 0, 0.3, 0, 0, 0, 26.5, 0, 4.25, -7)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_stone")
+
+[node name="PillarL0" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, -2.35, 1.95, 2)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarR0" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, 2.35, 1.95, 2)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="Arch0" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(5, 0, 0, 0, 0.35, 0, 0, 0, 0.7, 0, 3.95, 2)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarL1" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, -2.35, 1.95, -3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarR1" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, 2.35, 1.95, -3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="Arch1" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(5, 0, 0, 0, 0.35, 0, 0, 0, 0.7, 0, 3.95, -3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarL2" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, -2.35, 1.95, -8)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarR2" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, 2.35, 1.95, -8)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="Arch2" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(5, 0, 0, 0, 0.35, 0, 0, 0, 0.7, 0, 3.95, -8)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarL3" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, -2.35, 1.95, -13)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarR3" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, 2.35, 1.95, -13)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="Arch3" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(5, 0, 0, 0, 0.35, 0, 0, 0, 0.7, 0, 3.95, -13)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarL4" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, -2.35, 1.95, -18)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="PillarR4" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(0.5, 0, 0, 0, 4.3, 0, 0, 0, 0.7, 2.35, 1.95, -18)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="Arch4" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(5, 0, 0, 0, 0.35, 0, 0, 0, 0.7, 0, 3.95, -18)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_pillar")
+
+[node name="Door" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1.6, 0, 0, 0, 2.6, 0, 0, 0, 0.1, 0, 1.3, -19.97)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wood")
+
+[node name="DoorBandA" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1.64, 0, 0, 0, 0.1, 0, 0, 0, 0.04, 0, 0.6, -19.9)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_iron")
+
+[node name="DoorBandB" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1.64, 0, 0, 0, 0.1, 0, 0, 0, 0.04, 0, 2, -19.9)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_iron")
+
+[node name="DoorRing" type="MeshInstance3D" parent="Structure"]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0.5, 1.2, -19.88)
+mesh = SubResource("ring")
+surface_material_override/0 = SubResource("mat_iron")
+
+[node name="Torches" type="Node3D" parent="."]
+
+[node name="Torch1" type="Node3D" parent="Torches"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2.2, -0.5)
+
+[node name="Bracket" type="MeshInstance3D" parent="Torches/Torch1"]
+transform = Transform3D(0.16, 0, 0, 0, 0.08, 0, 0, 0, 0.08, 0.08, 0, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_iron")
+
+[node name="Handle" type="MeshInstance3D" parent="Torches/Torch1"]
+transform = Transform3D(0.0563816, 0.153909, 0, -0.0205212, 0.422862, 0, 0, 0, 0.06, 0.2, 0.12, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_wood")
+
+[node name="Flame" type="MeshInstance3D" parent="Torches/Torch1"]
+transform = Transform3D(0.14, 0, 0, 0, 0.26, 0, 0, 0, 0.14, 0.28, 0.42, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_fire")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Torches/Torch1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.5, 0)
+light_color = Color(1, 0.58, 0.25, 1)
+light_energy = 1.6
+omni_range = 6.0
+shadow_enabled = true
+
+[node name="Torch2" type="Node3D" parent="Torches"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 2.2, -10.5)
+
+[node name="Bracket" type="MeshInstance3D" parent="Torches/Torch2"]
+transform = Transform3D(0.16, 0, 0, 0, 0.08, 0, 0, 0, 0.08, 0.08, 0, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_iron")
+
+[node name="Handle" type="MeshInstance3D" parent="Torches/Torch2"]
+transform = Transform3D(0.0563816, 0.153909, 0, -0.0205212, 0.422862, 0, 0, 0, 0.06, 0.2, 0.12, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_wood")
+
+[node name="Flame" type="MeshInstance3D" parent="Torches/Torch2"]
+transform = Transform3D(0.14, 0, 0, 0, 0.26, 0, 0, 0, 0.14, 0.28, 0.42, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_fire")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Torches/Torch2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.5, 0)
+light_color = Color(1, 0.58, 0.25, 1)
+light_energy = 1.6
+omni_range = 6.0
+shadow_enabled = true
+
+[node name="Torch3" type="Node3D" parent="Torches"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.5, 2.2, -5.5)
+
+[node name="Bracket" type="MeshInstance3D" parent="Torches/Torch3"]
+transform = Transform3D(0.16, 0, 0, 0, 0.08, 0, 0, 0, 0.08, 0.08, 0, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_iron")
+
+[node name="Handle" type="MeshInstance3D" parent="Torches/Torch3"]
+transform = Transform3D(0.0563816, 0.153909, 0, -0.0205212, 0.422862, 0, 0, 0, 0.06, 0.2, 0.12, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_wood")
+
+[node name="Flame" type="MeshInstance3D" parent="Torches/Torch3"]
+transform = Transform3D(0.14, 0, 0, 0, 0.26, 0, 0, 0, 0.14, 0.28, 0.42, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_fire")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Torches/Torch3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.5, 0)
+light_color = Color(1, 0.58, 0.25, 1)
+light_energy = 1.6
+omni_range = 6.0
+shadow_enabled = true
+
+[node name="Torch4" type="Node3D" parent="Torches"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2.5, 2.2, -15.5)
+
+[node name="Bracket" type="MeshInstance3D" parent="Torches/Torch4"]
+transform = Transform3D(0.16, 0, 0, 0, 0.08, 0, 0, 0, 0.08, 0.08, 0, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_iron")
+
+[node name="Handle" type="MeshInstance3D" parent="Torches/Torch4"]
+transform = Transform3D(0.0563816, 0.153909, 0, -0.0205212, 0.422862, 0, 0, 0, 0.06, 0.2, 0.12, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_wood")
+
+[node name="Flame" type="MeshInstance3D" parent="Torches/Torch4"]
+transform = Transform3D(0.14, 0, 0, 0, 0.26, 0, 0, 0, 0.14, 0.28, 0.42, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_fire")
+cast_shadow = 0
+
+[node name="Light" type="OmniLight3D" parent="Torches/Torch4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.45, 0.5, 0)
+light_color = Color(1, 0.58, 0.25, 1)
+light_energy = 1.6
+omni_range = 6.0
+shadow_enabled = true
+
+[node name="Props" type="Node3D" parent="."]
+
+[node name="Chest" type="Node3D" parent="Props"]
+transform = Transform3D(0.939693, 0, 0.34202, 0, 1, 0, -0.34202, 0, 0.939693, -1.5, 0, -18.6)
+
+[node name="Base" type="MeshInstance3D" parent="Props/Chest"]
+transform = Transform3D(1, 0, 0, 0, 0.56, 0, 0, 0, 0.6, 0, 0.28, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_wood")
+
+[node name="Lid" type="MeshInstance3D" parent="Props/Chest"]
+transform = Transform3D(0, -1, 0, 0.6, 0, 0, 0, 0, 0.6, 0, 0.56, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_wood")
+
+[node name="BandL" type="MeshInstance3D" parent="Props/Chest"]
+transform = Transform3D(0.06, 0, 0, 0, 0.6, 0, 0, 0, 0.62, -0.35, 0.3, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="BandR" type="MeshInstance3D" parent="Props/Chest"]
+transform = Transform3D(0.06, 0, 0, 0, 0.6, 0, 0, 0, 0.62, 0.35, 0.3, 0)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Lock" type="MeshInstance3D" parent="Props/Chest"]
+transform = Transform3D(0.12, 0, 0, 0, 0.14, 0, 0, 0, 0.04, 0, 0.45, 0.31)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_gold")
+
+[node name="Barrel1" type="Node3D" parent="Props"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.7, 0, -1.2)
+
+[node name="Body" type="MeshInstance3D" parent="Props/Barrel1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("barrel")
+surface_material_override/0 = SubResource("mat_barrel")
+
+[node name="Barrel2" type="Node3D" parent="Props"]
+transform = Transform3D(0.642788, 0, 0.766044, 0, 1, 0, -0.766044, 0, 0.642788, 1.55, 0, -2)
+
+[node name="Body" type="MeshInstance3D" parent="Props/Barrel2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("barrel")
+surface_material_override/0 = SubResource("mat_barrel")
+
+[node name="Crate" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.684703, 0, 0.145538, 0, 0.7, 0, -0.145538, 0, 0.684703, -1.8, 0.35, -8.8)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")
+
+[node name="Bucket" type="MeshInstance3D" parent="Props"]
+transform = Transform3D(0.3, 0, 0, 0, 0.4, 0, 0, 0, 0.3, -1.2, 0.2, -9.3)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_wood")

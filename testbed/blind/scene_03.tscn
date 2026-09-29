@@ -1,0 +1,1241 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://blind/assets/textures/grass.png" id="1_grass"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/dirt.png" id="2_dirt"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/bark.png" id="3_bark"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/rock.png" id="4_rock"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/bush_leaves.png" id="5_bush_leave"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/grass_tuft.png" id="6_grass_tuft"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/canvas.png" id="7_canvas"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/wood_dark.png" id="8_wood_dark"]
+[ext_resource type="Texture2D" path="res://blind/assets/textures/crate.png" id="9_crate"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.3, 0.5, 0.8, 1)
+sky_horizon_color = Color(0.72, 0.8, 0.86, 1)
+ground_bottom_color = Color(0.18, 0.22, 0.14, 1)
+ground_horizon_color = Color(0.72, 0.8, 0.86, 1)
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 0.9
+tonemap_mode = 2
+fog_enabled = true
+fog_density = 0.004
+fog_light_color = Color(0.7, 0.78, 0.85, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_grass"]
+albedo_texture = ExtResource("1_grass")
+roughness = 1
+uv1_triplanar = true
+uv1_world_triplanar = true
+uv1_scale = Vector3(0.25, 0.25, 0.25)
+
+[sub_resource type="StandardMaterial3D" id="mat_dirt"]
+albedo_texture = ExtResource("2_dirt")
+roughness = 1
+
+[sub_resource type="StandardMaterial3D" id="mat_bark"]
+albedo_texture = ExtResource("3_bark")
+roughness = 0.95
+uv1_scale = Vector3(1, 2, 1)
+
+[sub_resource type="StandardMaterial3D" id="mat_pine"]
+albedo_color = Color(0.13, 0.3, 0.16, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_leaf"]
+albedo_color = Color(0.25, 0.45, 0.15, 1)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_rock"]
+albedo_texture = ExtResource("4_rock")
+roughness = 0.9
+uv1_triplanar = true
+uv1_scale = Vector3(0.8, 0.8, 0.8)
+
+[sub_resource type="StandardMaterial3D" id="mat_bush"]
+albedo_texture = ExtResource("5_bush_leave")
+roughness = 0.95
+cull_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="mat_grass_tuft"]
+albedo_texture = ExtResource("6_grass_tuft")
+roughness = 1
+cull_mode = 2
+transparency = 2
+alpha_scissor_threshold = 0.5
+
+[sub_resource type="StandardMaterial3D" id="mat_tent"]
+albedo_color = Color(0.9, 0.62, 0.35, 1)
+albedo_texture = ExtResource("7_canvas")
+roughness = 0.9
+cull_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="mat_log"]
+albedo_texture = ExtResource("3_bark")
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_log_end"]
+albedo_color = Color(0.62, 0.48, 0.3, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="mat_fire"]
+albedo_color = Color(1, 0.5, 0.1, 1)
+shading_mode = 0
+emission_enabled = true
+emission = Color(1, 0.45, 0.08, 1)
+emission_energy_multiplier = 4.0
+
+[sub_resource type="StandardMaterial3D" id="mat_ash"]
+albedo_color = Color(0.12, 0.11, 0.1, 1)
+roughness = 1
+
+[sub_resource type="StandardMaterial3D" id="mat_pole"]
+albedo_texture = ExtResource("8_wood_dark")
+roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_pot"]
+albedo_color = Color(0.1, 0.1, 0.11, 1)
+roughness = 0.4
+metallic = 0.8
+
+[sub_resource type="BoxMesh" id="box"]
+
+[sub_resource type="CylinderMesh" id="cyl"]
+top_radius = 0.5
+bottom_radius = 0.5
+height = 1.0
+radial_segments = 16
+
+[sub_resource type="CylinderMesh" id="trunk"]
+top_radius = 0.14
+bottom_radius = 0.22
+height = 1.0
+radial_segments = 12
+
+[sub_resource type="CylinderMesh" id="cone"]
+top_radius = 0.0
+bottom_radius = 0.5
+height = 1.0
+radial_segments = 14
+
+[sub_resource type="SphereMesh" id="sphere"]
+radius = 0.5
+height = 1.0
+radial_segments = 16
+rings = 8
+
+[sub_resource type="SphereMesh" id="rock"]
+radius = 0.5
+height = 1.0
+radial_segments = 9
+rings = 5
+
+[sub_resource type="QuadMesh" id="card"]
+size = Vector2(1, 1)
+center_offset = Vector3(0, 0.5, 0)
+
+[sub_resource type="PrismMesh" id="tent"]
+size = Vector3(2.4, 1.6, 2.8)
+
+[sub_resource type="PlaneMesh" id="ground"]
+size = Vector2(200, 200)
+
+[sub_resource type="PlaneMesh" id="path"]
+size = Vector2(1.6, 14)
+
+[sub_resource type="CylinderMesh" id="patch"]
+top_radius = 2.4
+bottom_radius = 2.4
+height = 0.01
+radial_segments = 32
+
+[sub_resource type="CylinderMesh" id="ash"]
+top_radius = 0.45
+bottom_radius = 0.5
+height = 0.04
+radial_segments = 20
+
+[sub_resource type="StandardMaterial3D" id="mat_crate"]
+albedo_texture = ExtResource("9_crate")
+roughness = 0.85
+uv1_triplanar = true
+uv1_scale = Vector3(1, 1, 1)
+uv1_offset = Vector3(0.5, 0.5, 0.5)
+
+[node name="ForestClearing" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.766044, -0.430109, 0.477684, 0, 0.743145, 0.669131, -0.642788, -0.512584, 0.569282, 0, 30, 0)
+light_energy = 1.25
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+directional_shadow_max_distance = 60.0
+shadow_bias = 0.0
+shadow_normal_bias = 0.0
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(0.995037, -0.0080741, 0.0991756, 0, 0.996702, 0.0811437, -0.0995037, -0.080741, 0.991756, 0.5, 1.8, 9)
+fov = 65
+current = true
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("ground")
+surface_material_override/0 = SubResource("mat_grass")
+
+[node name="Path" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.978148, 0, 0.207912, 0, 1, 0, -0.207912, 0, 0.978148, 1.6, 0.004, 6)
+mesh = SubResource("path")
+surface_material_override/0 = SubResource("mat_dirt")
+
+[node name="CampGround" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0.005, -0.5)
+mesh = SubResource("patch")
+surface_material_override/0 = SubResource("mat_dirt")
+
+[node name="Trees" type="Node3D" parent="."]
+
+[node name="Tree1" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.95557, 0, 0.294764, 0, 1, 0, -0.294764, 0, -0.95557, -6.5, 0, -6)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree1"]
+transform = Transform3D(1.2, 0, 0, 0, 4, 0, 0, 0, 1.2, 0, 2, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree1"]
+transform = Transform3D(4.48, 0, 0, 0, 2.72, 0, 0, 0, 4.48, 0, 3.92, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree1"]
+transform = Transform3D(3.36, 0, 0, 0, 2.72, 0, 0, 0, 3.36, 0, 5.52, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree1"]
+transform = Transform3D(2.24, 0, 0, 0, 2.72, 0, 0, 0, 2.24, 0, 7.12, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree2" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.930302, 0, -0.366794, 0, 1, 0, 0.366794, 0, -0.930302, -3.5, 0, -9)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree2"]
+transform = Transform3D(1.2, 0, 0, 0, 4.5, 0, 0, 0, 1.2, 0, 2.25, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree2"]
+transform = Transform3D(5.04, 0, 0, 0, 3.06, 0, 0, 0, 5.04, 0, 4.41, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree2"]
+transform = Transform3D(3.78, 0, 0, 0, 3.06, 0, 0, 0, 3.78, 0, 6.21, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree2"]
+transform = Transform3D(2.52, 0, 0, 0, 3.06, 0, 0, 0, 2.52, 0, 8.01, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree3" type="Node3D" parent="Trees"]
+transform = Transform3D(0.888744, 0, -0.458404, 0, 1, 0, 0.458404, 0, 0.888744, 0.5, 0, -10)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree3"]
+transform = Transform3D(1.2, 0, 0, 0, 5, 0, 0, 0, 1.2, 0, 2.5, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree3"]
+transform = Transform3D(5.6, 0, 0, 0, 3.4, 0, 0, 0, 5.6, 0, 4.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree3"]
+transform = Transform3D(4.2, 0, 0, 0, 3.4, 0, 0, 0, 4.2, 0, 6.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree3"]
+transform = Transform3D(2.8, 0, 0, 0, 3.4, 0, 0, 0, 2.8, 0, 8.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree4" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.9768, 0, 0.214155, 0, 1, 0, -0.214155, 0, -0.9768, 4, 0, -8)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree4"]
+transform = Transform3D(1.5, 0, 0, 0, 4.2, 0, 0, 0, 1.5, 0, 2.1, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="CrownA" type="MeshInstance3D" parent="Trees/Tree4"]
+transform = Transform3D(3.85, 0, 0, 0, 3.15, 0, 0, 0, 3.85, 0, 5.04, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="CrownB" type="MeshInstance3D" parent="Trees/Tree4"]
+transform = Transform3D(2.8, 0, 0, 0, 2.38, 0, 0, 0, 2.8, 1.26, 4.34, 0.7)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="CrownC" type="MeshInstance3D" parent="Trees/Tree4"]
+transform = Transform3D(2.94, 0, 0, 0, 2.38, 0, 0, 0, 2.94, -1.12, 4.48, -0.84)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="Tree5" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.998787, 0, -0.0492482, 0, 1, 0, 0.0492482, 0, -0.998787, 7.5, 0, -5)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree5"]
+transform = Transform3D(1.2, 0, 0, 0, 4.5, 0, 0, 0, 1.2, 0, 2.25, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree5"]
+transform = Transform3D(5.04, 0, 0, 0, 3.06, 0, 0, 0, 5.04, 0, 4.41, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree5"]
+transform = Transform3D(3.78, 0, 0, 0, 3.06, 0, 0, 0, 3.78, 0, 6.21, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree5"]
+transform = Transform3D(2.52, 0, 0, 0, 3.06, 0, 0, 0, 2.52, 0, 8.01, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree6" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.853018, 0, -0.521881, 0, 1, 0, 0.521881, 0, -0.853018, -9, 0, -2)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree6"]
+transform = Transform3D(1.5, 0, 0, 0, 4.5, 0, 0, 0, 1.5, 0, 2.25, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="CrownA" type="MeshInstance3D" parent="Trees/Tree6"]
+transform = Transform3D(4.125, 0, 0, 0, 3.375, 0, 0, 0, 4.125, 0, 5.4, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="CrownB" type="MeshInstance3D" parent="Trees/Tree6"]
+transform = Transform3D(3, 0, 0, 0, 2.55, 0, 0, 0, 3, 1.35, 4.65, 0.75)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="CrownC" type="MeshInstance3D" parent="Trees/Tree6"]
+transform = Transform3D(3.15, 0, 0, 0, 2.55, 0, 0, 0, 3.15, -1.2, 4.8, -0.9)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="Tree7" type="Node3D" parent="Trees"]
+transform = Transform3D(0.399106, 0, 0.916905, 0, 1, 0, -0.916905, 0, 0.399106, 9.5, 0, 0.5)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree7"]
+transform = Transform3D(1.2, 0, 0, 0, 4, 0, 0, 0, 1.2, 0, 2, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree7"]
+transform = Transform3D(4.48, 0, 0, 0, 2.72, 0, 0, 0, 4.48, 0, 3.92, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree7"]
+transform = Transform3D(3.36, 0, 0, 0, 2.72, 0, 0, 0, 3.36, 0, 5.52, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree7"]
+transform = Transform3D(2.24, 0, 0, 0, 2.72, 0, 0, 0, 2.24, 0, 7.12, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree8" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.997202, 0, -0.0747544, 0, 1, 0, 0.0747544, 0, -0.997202, -11, 0, 3)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree8"]
+transform = Transform3D(1.2, 0, 0, 0, 4.5, 0, 0, 0, 1.2, 0, 2.25, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree8"]
+transform = Transform3D(5.04, 0, 0, 0, 3.06, 0, 0, 0, 5.04, 0, 4.41, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree8"]
+transform = Transform3D(3.78, 0, 0, 0, 3.06, 0, 0, 0, 3.78, 0, 6.21, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree8"]
+transform = Transform3D(2.52, 0, 0, 0, 3.06, 0, 0, 0, 2.52, 0, 8.01, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree9" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.685084, 0, -0.728464, 0, 1, 0, 0.728464, 0, -0.685084, 11, 0, -9)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree9"]
+transform = Transform3D(1.2, 0, 0, 0, 5, 0, 0, 0, 1.2, 0, 2.5, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree9"]
+transform = Transform3D(5.6, 0, 0, 0, 3.4, 0, 0, 0, 5.6, 0, 4.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree9"]
+transform = Transform3D(4.2, 0, 0, 0, 3.4, 0, 0, 0, 4.2, 0, 6.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree9"]
+transform = Transform3D(2.8, 0, 0, 0, 3.4, 0, 0, 0, 2.8, 0, 8.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree10" type="Node3D" parent="Trees"]
+transform = Transform3D(0.266762, 0, -0.963762, 0, 1, 0, 0.963762, 0, 0.266762, -7, 0, -13)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree10"]
+transform = Transform3D(1.2, 0, 0, 0, 5, 0, 0, 0, 1.2, 0, 2.5, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree10"]
+transform = Transform3D(5.6, 0, 0, 0, 3.4, 0, 0, 0, 5.6, 0, 4.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree10"]
+transform = Transform3D(4.2, 0, 0, 0, 3.4, 0, 0, 0, 4.2, 0, 6.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree10"]
+transform = Transform3D(2.8, 0, 0, 0, 3.4, 0, 0, 0, 2.8, 0, 8.9, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree11" type="Node3D" parent="Trees"]
+transform = Transform3D(0.830164, 0, 0.55752, 0, 1, 0, -0.55752, 0, 0.830164, 5, 0, -14)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree11"]
+transform = Transform3D(1.2, 0, 0, 0, 5.5, 0, 0, 0, 1.2, 0, 2.75, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree11"]
+transform = Transform3D(6.16, 0, 0, 0, 3.74, 0, 0, 0, 6.16, 0, 5.39, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree11"]
+transform = Transform3D(4.62, 0, 0, 0, 3.74, 0, 0, 0, 4.62, 0, 7.59, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree11"]
+transform = Transform3D(3.08, 0, 0, 0, 3.74, 0, 0, 0, 3.08, 0, 9.79, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree12" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.32927, 0, 0.944236, 0, 1, 0, -0.944236, 0, -0.32927, -1, 0, -16)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree12"]
+transform = Transform3D(1.2, 0, 0, 0, 5.5, 0, 0, 0, 1.2, 0, 2.75, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree12"]
+transform = Transform3D(6.16, 0, 0, 0, 3.74, 0, 0, 0, 6.16, 0, 5.39, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree12"]
+transform = Transform3D(4.62, 0, 0, 0, 3.74, 0, 0, 0, 4.62, 0, 7.59, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree12"]
+transform = Transform3D(3.08, 0, 0, 0, 3.74, 0, 0, 0, 3.08, 0, 9.79, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree13" type="Node3D" parent="Trees"]
+transform = Transform3D(0.842063, 0, 0.539379, 0, 1, 0, -0.539379, 0, 0.842063, 13, 0, -3)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree13"]
+transform = Transform3D(1.5, 0, 0, 0, 4.8, 0, 0, 0, 1.5, 0, 2.4, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="CrownA" type="MeshInstance3D" parent="Trees/Tree13"]
+transform = Transform3D(4.4, 0, 0, 0, 3.6, 0, 0, 0, 4.4, 0, 5.76, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="CrownB" type="MeshInstance3D" parent="Trees/Tree13"]
+transform = Transform3D(3.2, 0, 0, 0, 2.72, 0, 0, 0, 3.2, 1.44, 4.96, 0.8)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="CrownC" type="MeshInstance3D" parent="Trees/Tree13"]
+transform = Transform3D(3.36, 0, 0, 0, 2.72, 0, 0, 0, 3.36, -1.28, 5.12, -0.96)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_leaf")
+
+[node name="Tree14" type="Node3D" parent="Trees"]
+transform = Transform3D(0.366047, 0, -0.930596, 0, 1, 0, 0.930596, 0, 0.366047, -13, 0, -8)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree14"]
+transform = Transform3D(1.2, 0, 0, 0, 4.5, 0, 0, 0, 1.2, 0, 2.25, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree14"]
+transform = Transform3D(5.04, 0, 0, 0, 3.06, 0, 0, 0, 5.04, 0, 4.41, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree14"]
+transform = Transform3D(3.78, 0, 0, 0, 3.06, 0, 0, 0, 3.78, 0, 6.21, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree14"]
+transform = Transform3D(2.52, 0, 0, 0, 3.06, 0, 0, 0, 2.52, 0, 8.01, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tree15" type="Node3D" parent="Trees"]
+transform = Transform3D(-0.347953, 0, -0.937512, 0, 1, 0, 0.937512, 0, -0.347953, 8.5, 0, -12)
+
+[node name="Trunk" type="MeshInstance3D" parent="Trees/Tree15"]
+transform = Transform3D(1.2, 0, 0, 0, 4.5, 0, 0, 0, 1.2, 0, 2.25, 0)
+mesh = SubResource("trunk")
+surface_material_override/0 = SubResource("mat_bark")
+
+[node name="Tier0" type="MeshInstance3D" parent="Trees/Tree15"]
+transform = Transform3D(5.04, 0, 0, 0, 3.06, 0, 0, 0, 5.04, 0, 4.41, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier1" type="MeshInstance3D" parent="Trees/Tree15"]
+transform = Transform3D(3.78, 0, 0, 0, 3.06, 0, 0, 0, 3.78, 0, 6.21, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Tier2" type="MeshInstance3D" parent="Trees/Tree15"]
+transform = Transform3D(2.52, 0, 0, 0, 3.06, 0, 0, 0, 2.52, 0, 8.01, 0)
+mesh = SubResource("cone")
+surface_material_override/0 = SubResource("mat_pine")
+
+[node name="Rocks" type="Node3D" parent="."]
+
+[node name="Rock1" type="MeshInstance3D" parent="Rocks"]
+transform = Transform3D(1.16268, 0.0128003, -0.0992018, 0, 0.710814, 0.14331, 0.130629, -0.113931, 0.882962, 3.2, 0.225, 1.5)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Rock2" type="MeshInstance3D" parent="Rocks"]
+transform = Transform3D(-0.368985, -0.0531891, -0.406223, 0, 0.394748, -0.0807602, 0.535117, -0.0366761, -0.280108, 3.9, 0.125, 2.1)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Rock3" type="MeshInstance3D" parent="Rocks"]
+transform = Transform3D(0.499639, 0.0188752, 0.584575, 0, 0.559544, -0.0282296, -0.760566, 0.0123997, 0.384025, -4.2, 0.175, 3.5)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Rock4" type="MeshInstance3D" parent="Rocks"]
+transform = Transform3D(-1.6632, 0.0310823, -0.227299, 0, 1.02513, 0.219036, 0.299774, 0.17245, -1.26109, 5.5, 0.325, -2.5)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Rock5" type="MeshInstance3D" parent="Rocks"]
+transform = Transform3D(0.47698, -0.113968, 0.919284, 0, 0.790564, 0.153141, -1.20933, -0.0449508, 0.36258, -5.8, 0.25, -3.2)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Bushes" type="Node3D" parent="."]
+
+[node name="Bush1" type="Node3D" parent="Bushes"]
+transform = Transform3D(1.69014, 0, 0.675148, 0, 1.3, 0, -0.675148, 0, 1.69014, -3.2, 0, 2.2)
+
+[node name="Card0" type="MeshInstance3D" parent="Bushes/Bush1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="Bushes/Bush1"]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card2" type="MeshInstance3D" parent="Bushes/Bush1"]
+transform = Transform3D(-0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, -0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Bush2" type="Node3D" parent="Bushes"]
+transform = Transform3D(2.09766, 0, 0.0991957, 0, 1.5, 0, -0.0991957, 0, 2.09766, 2.6, 0, -2.8)
+
+[node name="Card0" type="MeshInstance3D" parent="Bushes/Bush2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="Bushes/Bush2"]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card2" type="MeshInstance3D" parent="Bushes/Bush2"]
+transform = Transform3D(-0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, -0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Bush3" type="Node3D" parent="Bushes"]
+transform = Transform3D(1.2533, 0, 1.11877, 0, 1.2, 0, -1.11877, 0, 1.2533, -5.2, 0, 0.8)
+
+[node name="Card0" type="MeshInstance3D" parent="Bushes/Bush3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="Bushes/Bush3"]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card2" type="MeshInstance3D" parent="Bushes/Bush3"]
+transform = Transform3D(-0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, -0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Bush4" type="Node3D" parent="Bushes"]
+transform = Transform3D(1.18577, 0, 0.982623, 0, 1.1, 0, -0.982623, 0, 1.18577, 4.6, 0, 3.8)
+
+[node name="Card0" type="MeshInstance3D" parent="Bushes/Bush4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="Bushes/Bush4"]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card2" type="MeshInstance3D" parent="Bushes/Bush4"]
+transform = Transform3D(-0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, -0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Bush5" type="Node3D" parent="Bushes"]
+transform = Transform3D(0.480191, 0, 1.90027, 0, 1.4, 0, -1.90027, 0, 0.480191, -2.2, 0, -4.4)
+
+[node name="Card0" type="MeshInstance3D" parent="Bushes/Bush5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="Bushes/Bush5"]
+transform = Transform3D(0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, 0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="Card2" type="MeshInstance3D" parent="Bushes/Bush5"]
+transform = Transform3D(-0.5, 0, 0.866025, 0, 1, 0, -0.866025, 0, -0.5, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_bush")
+cast_shadow = 0
+
+[node name="GrassTufts" type="Node3D" parent="."]
+
+[node name="Tuft1" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.364723, 0, 0.364463, 0, 0.515612, 0, -0.364463, 0, 0.364723, -6.26863, 0, -0.18684)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft1"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft2" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.00220501, 0, 0.598919, 0, 0.598923, 0, -0.598919, 0, 0.00220501, -4.45904, 0, 1.59383)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft2"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft3" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.358468, 0, 0.19362, 0, 0.407416, 0, -0.19362, 0, 0.358468, 2.77601, 0, -4.67728)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft3"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft3"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft4" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.161551, 0, 0.420108, 0, 0.4501, 0, -0.420108, 0, 0.161551, -1.25731, 0, 3.53705)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft4"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft4"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft5" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.0370015, 0, 0.560608, 0, 0.561827, 0, -0.560608, 0, 0.0370015, 2.12255, 0, -3.29939)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft5"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft5"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft6" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.0656732, 0, 0.462861, 0, 0.467497, 0, -0.462861, 0, 0.0656732, 3.28565, 0, 0.512955)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft6"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft6"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft7" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.504028, 0, 0.0580814, 0, 0.507364, 0, -0.0580814, 0, 0.504028, 4.13058, 0, -0.0890593)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft7"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft7"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft8" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.429095, 0, 0.0591066, 0, 0.433146, 0, -0.0591066, 0, 0.429095, 0.214908, 0, -3.50463)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft8"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft8"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft9" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.404548, 0, 0.0758498, 0, 0.411597, 0, -0.0758498, 0, 0.404548, 5.69699, 0, -0.943055)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft9"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft9"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft10" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.123636, 0, 0.374541, 0, 0.39442, 0, -0.374541, 0, 0.123636, 1.98161, 0, 2.32681)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft10"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft10"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft11" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.509244, 0, 0.157263, 0, 0.532974, 0, -0.157263, 0, 0.509244, -5.06972, 0, -1.27653)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft11"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft11"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft12" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.447587, 0, 0.08284, 0, 0.455189, 0, -0.08284, 0, 0.447587, 3.46371, 0, 4.76908)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft12"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft12"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft13" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.0251457, 0, 0.550279, 0, 0.550853, 0, -0.550279, 0, 0.0251457, 0.443257, 0, 4.45717)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft13"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft13"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft14" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.424222, 0, 0.145773, 0, 0.448569, 0, -0.145773, 0, 0.424222, -2.81567, 0, 7.06228)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft14"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft14"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft15" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.589922, 0, 0.0937506, 0, 0.597325, 0, -0.0937506, 0, 0.589922, 3.03447, 0, -4.1196)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft15"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft15"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft16" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.151076, 0, 0.404977, 0, 0.432239, 0, -0.404977, 0, 0.151076, 0.421441, 0, 4.40671)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft16"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft16"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft17" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.490726, 0, 0.0699328, 0, 0.495684, 0, -0.0699328, 0, 0.490726, -1.39968, 0, 3.51354)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft17"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft17"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft18" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.386549, 0, 0.255399, 0, 0.463302, 0, -0.255399, 0, 0.386549, -0.248739, 0, 6.12042)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft18"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft18"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft19" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.351098, 0, 0.444749, 0, 0.566631, 0, -0.444749, 0, 0.351098, 4.40322, 0, -0.803415)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft19"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft19"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft20" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.0794816, 0, 0.548724, 0, 0.55445, 0, -0.548724, 0, 0.0794816, 0.945611, 0, 3.71432)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft20"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft20"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft21" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.232857, 0, 0.536769, 0, 0.585101, 0, -0.536769, 0, 0.232857, -0.485434, 0, 4.19203)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft21"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft21"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft22" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.0921633, 0, 0.492331, 0, 0.500884, 0, -0.492331, 0, 0.0921633, 1.89704, 0, 7.35884)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft22"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft22"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft23" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.58958, 0, 0.0358814, 0, 0.59067, 0, -0.0358814, 0, 0.58958, -3.39363, 0, 2.06147)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft23"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft23"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft24" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.511248, 0, 0.218365, 0, 0.555929, 0, -0.218365, 0, 0.511248, -0.050603, 0, 6.59498)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft24"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft24"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft25" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.510088, 0, 0.144235, 0, 0.530088, 0, -0.144235, 0, 0.510088, -3.93922, 0, -1.87424)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft25"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft25"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Tuft26" type="Node3D" parent="GrassTufts"]
+transform = Transform3D(0.359365, 0, 0.433519, 0, 0.5631, 0, -0.433519, 0, 0.359365, 3.01775, 0, 2.12147)
+
+[node name="Card0" type="MeshInstance3D" parent="GrassTufts/Tuft26"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Card1" type="MeshInstance3D" parent="GrassTufts/Tuft26"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0, 0)
+mesh = SubResource("card")
+surface_material_override/0 = SubResource("mat_grass_tuft")
+cast_shadow = 0
+
+[node name="Campfire" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0, -0.5)
+
+[node name="Ash" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("ash")
+surface_material_override/0 = SubResource("mat_ash")
+
+[node name="Stone0" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.26, 0, 0, 0, 0.2, 0, 0, 0, 0.22, 0.62, 0.07, 0)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone1" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.199172, 0, 0.141413, 0, 0.2, 0, -0.167125, 0, 0.16853, 0.474948, 0.07, 0.398528)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone2" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.0451485, 0, 0.216658, 0, 0.2, 0, -0.25605, 0, 0.0382026, 0.107662, 0.07, 0.610581)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone3" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(-0.13, 0, 0.190526, 0, 0.2, 0, -0.225167, 0, -0.11, -0.31, 0.07, 0.536936)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone4" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(-0.24432, 0, 0.0752444, 0, 0.2, 0, -0.0889252, 0, -0.206732, -0.582609, 0.07, 0.212052)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone5" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(-0.24432, 0, -0.0752444, 0, 0.2, 0, 0.0889252, 0, -0.206732, -0.582609, 0.07, -0.212052)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone6" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(-0.13, 0, -0.190526, 0, 0.2, 0, 0.225167, 0, -0.11, -0.31, 0.07, -0.536936)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone7" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.0451485, 0, -0.216658, 0, 0.2, 0, 0.25605, 0, 0.0382026, 0.107662, 0.07, -0.610581)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Stone8" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.199172, 0, -0.141413, 0, 0.2, 0, 0.167125, 0, 0.16853, 0.474948, 0.07, -0.398528)
+mesh = SubResource("rock")
+surface_material_override/0 = SubResource("mat_rock")
+
+[node name="Firewood0" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.0375577, -0.529769, 0, 0.0706358, 0.281683, 0, 0, 0, 0.08, 0.12, 0.18, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="Firewood1" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.0128455, -0.181192, -0.0751754, 0.0706358, 0.281683, 0, 0.0352927, -0.49782, 0.0273616, 0.0410424, 0.18, 0.112763)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="Firewood2" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(-0.0287709, 0.405826, -0.051423, 0.0706358, 0.281683, 0, 0.0241416, -0.340529, -0.0612836, -0.0919253, 0.18, 0.0771345)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="Firewood3" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(-0.0287709, 0.405826, 0.051423, 0.0706358, 0.281683, 0, -0.0241416, 0.340529, -0.0612836, -0.0919253, 0.18, -0.0771345)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="Firewood4" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.0128455, -0.181192, 0.0751754, 0.0706358, 0.281683, 0, -0.0352927, 0.49782, 0.0273616, 0.0410424, 0.18, -0.112763)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="FlameA" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.28, 0, 0, 0, 0.5, 0, 0, 0, 0.28, 0, 0.35, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_fire")
+cast_shadow = 0
+
+[node name="FlameB" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.2, 0, 0, 0, 0.34, 0, 0, 0, 0.2, 0.06, 0.28, 0.05)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_fire")
+cast_shadow = 0
+
+[node name="FireLight" type="OmniLight3D" parent="Campfire"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.7, 0)
+light_color = Color(1, 0.6, 0.25, 1)
+light_energy = 1.5
+omni_range = 5.0
+
+[node name="SpitPostA" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.05, 0, 0, 0, 1.1, 0, 0, 0, 0.05, -0.75, 0.55, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_pole")
+
+[node name="SpitPostB" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.05, 0, 0, 0, 1.1, 0, 0, 0, 0.05, 0.75, 0.55, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_pole")
+
+[node name="SpitBar" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0, -1.6, 0, 0.04, 0, 0, 0, 0, 0.04, 0, 1.08, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_pole")
+
+[node name="Pot" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.34, 0, 0, 0, 0.3, 0, 0, 0, 0.34, 0, 0.82, 0)
+mesh = SubResource("sphere")
+surface_material_override/0 = SubResource("mat_pot")
+
+[node name="PotHandle" type="MeshInstance3D" parent="Campfire"]
+transform = Transform3D(0.015, 0, 0, 0, 0.22, 0, 0, 0, 0.015, 0, 0.96, 0)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_pot")
+
+[node name="Tent" type="Node3D" parent="."]
+transform = Transform3D(0.882948, 0, 0.469472, 0, 1, 0, -0.469472, 0, 0.882948, -3.4, 0, -2.6)
+
+[node name="Canvas" type="MeshInstance3D" parent="Tent"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
+mesh = SubResource("tent")
+surface_material_override/0 = SubResource("mat_tent")
+
+[node name="PoleFront" type="MeshInstance3D" parent="Tent"]
+transform = Transform3D(0.05, 0, 0, 0, 1.7, 0, 0, 0, 0.05, 0, 0.85, 1.42)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_pole")
+
+[node name="PoleBack" type="MeshInstance3D" parent="Tent"]
+transform = Transform3D(0.05, 0, 0, 0, 1.7, 0, 0, 0, 0.05, 0, 0.85, -1.42)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_pole")
+
+[node name="LogSeatA" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, -1.47447, 0.229431, 0.4, 0, 0, 0, 1.03244, 0.327661, 1.1, 0.2, 0.7)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="LogSeatB" type="MeshInstance3D" parent="."]
+transform = Transform3D(0, -0.277837, -0.374227, 0.38, 0, 0, 0, -1.57569, 0.0659863, -0.9, 0.2, 1.5)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="Stump" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.55, 0, 0, 0, 0.5, 0, 0, 0, 0.55, 1.9, 0.25, -1.4)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log")
+
+[node name="StumpTop" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.5, 0, 0, 0, 0.005, 0, 0, 0, 0.5, 1.9, 0.502, -1.4)
+mesh = SubResource("cyl")
+surface_material_override/0 = SubResource("mat_log_end")
+
+[node name="SupplyCrate" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.570634, 0, 0.18541, 0, 0.6, 0, -0.18541, 0, 0.570634, -1.9, 0.3, -1.3)
+mesh = SubResource("box")
+surface_material_override/0 = SubResource("mat_crate")

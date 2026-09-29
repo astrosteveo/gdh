@@ -1,0 +1,269 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/cloud.png" id="1_cloud"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/tile_grass.png" id="2_tile_grass"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/tile_dirt.png" id="3_tile_dirt"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/tile_stone.png" id="4_tile_stone"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/bush.png" id="5_bush"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/flag.png" id="6_flag"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/coin.png" id="7_coin"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/hero.png" id="8_hero"]
+[ext_resource type="Texture2D" path="res://blind/assets/sprites/slime.png" id="9_slime"]
+
+[node name="LevelChunk" type="Node2D"]
+texture_filter = 1
+
+[node name="Sky" type="Polygon2D" parent="."]
+polygon = PackedVector2Array(0, 0, 1280, 0, 1280, 720, 0, 720)
+vertex_colors = PackedColorArray(0.36, 0.62, 0.95, 1, 0.36, 0.62, 0.95, 1, 0.72, 0.88, 1, 1, 0.72, 0.88, 1, 1)
+
+[node name="Clouds" type="Node2D" parent="."]
+
+[node name="Cloud1" type="Sprite2D" parent="Clouds"]
+texture = ExtResource("1_cloud")
+position = Vector2(170, 110)
+scale = Vector2(4, 4)
+
+[node name="Cloud2" type="Sprite2D" parent="Clouds"]
+texture = ExtResource("1_cloud")
+position = Vector2(560, 70)
+scale = Vector2(3, 3)
+
+[node name="Cloud3" type="Sprite2D" parent="Clouds"]
+texture = ExtResource("1_cloud")
+position = Vector2(930, 140)
+scale = Vector2(4, 4)
+
+[node name="Cloud4" type="Sprite2D" parent="Clouds"]
+texture = ExtResource("1_cloud")
+position = Vector2(1180, 60)
+scale = Vector2(3, 3)
+
+[node name="HillsFar" type="Polygon2D" parent="."]
+color = Color(0.55, 0.75, 0.6, 1)
+polygon = PackedVector2Array(0, 720, 0, 416, 16, 416, 32, 416, 48, 416, 64, 420, 80, 424, 96, 428, 112, 432, 128, 440, 144, 444, 160, 448, 176, 456, 192, 460, 208, 464, 224, 468, 240, 472, 256, 472, 272, 476, 288, 476, 304, 476, 320, 476, 336, 472, 352, 472, 368, 472, 384, 468, 400, 468, 416, 468, 432, 468, 448, 468, 464, 468, 480, 472, 496, 472, 512, 476, 528, 480, 544, 484, 560, 488, 576, 496, 592, 500, 608, 504, 624, 508, 640, 512, 656, 516, 672, 520, 688, 524, 704, 524, 720, 524, 736, 520, 752, 520, 768, 516, 784, 508, 800, 504, 816, 496, 832, 488, 848, 480, 864, 472, 880, 464, 896, 456, 912, 448, 928, 444, 944, 436, 960, 432, 976, 428, 992, 424, 1008, 420, 1024, 420, 1040, 420, 1056, 424, 1072, 424, 1088, 428, 1104, 432, 1120, 436, 1136, 440, 1152, 444, 1168, 452, 1184, 456, 1200, 456, 1216, 460, 1232, 464, 1248, 464, 1264, 464, 1280, 468, 1280, 720)
+
+[node name="HillsNear" type="Polygon2D" parent="."]
+color = Color(0.4, 0.66, 0.42, 1)
+polygon = PackedVector2Array(0, 720, 0, 540, 16, 544, 32, 548, 48, 552, 64, 552, 80, 552, 96, 548, 112, 548, 128, 548, 144, 544, 160, 544, 176, 544, 192, 544, 208, 548, 224, 552, 240, 556, 256, 560, 272, 564, 288, 568, 304, 572, 320, 576, 336, 576, 352, 572, 368, 568, 384, 564, 400, 556, 416, 548, 432, 540, 448, 532, 464, 520, 480, 512, 496, 508, 512, 504, 528, 500, 544, 500, 560, 500, 576, 504, 592, 508, 608, 512, 624, 520, 640, 524, 656, 532, 672, 536, 688, 540, 704, 544, 720, 544, 736, 544, 752, 544, 768, 540, 784, 540, 800, 540, 816, 536, 832, 540, 848, 540, 864, 544, 880, 548, 896, 552, 912, 556, 928, 564, 944, 568, 960, 572, 976, 576, 992, 580, 1008, 580, 1024, 580, 1040, 576, 1056, 568, 1072, 560, 1088, 552, 1104, 544, 1120, 536, 1136, 524, 1152, 516, 1168, 512, 1184, 508, 1200, 504, 1216, 504, 1232, 504, 1248, 508, 1264, 512, 1280, 516, 1280, 720)
+
+[node name="Tiles" type="Node2D" parent="."]
+texture_repeat = 2
+
+[node name="GroundTopA" type="Sprite2D" parent="Tiles"]
+texture = ExtResource("2_tile_grass")
+centered = false
+position = Vector2(0, 592)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 192, 16)
+
+[node name="GroundFillA" type="Sprite2D" parent="Tiles"]
+texture = ExtResource("3_tile_dirt")
+centered = false
+position = Vector2(0, 656)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 192, 16)
+
+[node name="GroundTopB" type="Sprite2D" parent="Tiles"]
+texture = ExtResource("2_tile_grass")
+centered = false
+position = Vector2(896, 592)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 96, 16)
+
+[node name="GroundFillB" type="Sprite2D" parent="Tiles"]
+texture = ExtResource("3_tile_dirt")
+centered = false
+position = Vector2(896, 656)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 96, 16)
+
+[node name="PlatformA" type="Sprite2D" parent="Tiles"]
+texture = ExtResource("4_tile_stone")
+centered = false
+position = Vector2(192, 400)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 16)
+
+[node name="PlatformB" type="Sprite2D" parent="Tiles"]
+texture = ExtResource("4_tile_stone")
+centered = false
+position = Vector2(512, 280)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 64, 16)
+
+[node name="StepA" type="Sprite2D" parent="Tiles"]
+texture = ExtResource("4_tile_stone")
+centered = false
+position = Vector2(640, 528)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 32, 16)
+
+[node name="PlatformC" type="Sprite2D" parent="."]
+texture = ExtResource("4_tile_stone")
+centered = false
+position = Vector2(960, 380)
+scale = Vector2(4, 4)
+region_enabled = true
+region_rect = Rect2(0, 0, 48, 16)
+
+[node name="Decor" type="Node2D" parent="."]
+
+[node name="Bush1" type="Sprite2D" parent="Decor"]
+texture = ExtResource("5_bush")
+centered = false
+position = Vector2(90, 556)
+scale = Vector2(3, 3)
+
+[node name="Bush2" type="Sprite2D" parent="Decor"]
+texture = ExtResource("5_bush")
+centered = false
+position = Vector2(470, 544)
+scale = Vector2(4, 4)
+
+[node name="Bush3" type="Sprite2D" parent="Decor"]
+texture = ExtResource("5_bush")
+centered = false
+position = Vector2(1140, 556)
+scale = Vector2(3, 3)
+
+[node name="GoalFlag" type="Sprite2D" parent="Decor"]
+texture = ExtResource("6_flag")
+centered = false
+position = Vector2(1180, 464)
+scale = Vector2(4, 4)
+
+[node name="Coins" type="Node2D" parent="."]
+
+[node name="Coin1" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(560, 216)
+scale = Vector2(4, 4)
+
+[node name="Coin2" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(608, 216)
+scale = Vector2(4, 4)
+
+[node name="Coin3" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(656, 216)
+scale = Vector2(4, 4)
+
+[node name="Coin4" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(704, 216)
+scale = Vector2(4, 4)
+
+[node name="Coin5" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(790, 440)
+scale = Vector2(4, 4)
+
+[node name="Coin6" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(840, 400)
+scale = Vector2(4, 4)
+
+[node name="Coin7" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(1010, 316)
+scale = Vector2(4, 4)
+
+[node name="Coin8" type="Sprite2D" parent="Coins"]
+texture = ExtResource("7_coin")
+position = Vector2(1060, 316)
+scale = Vector2(4, 4)
+
+[node name="Player" type="Sprite2D" parent="."]
+texture = ExtResource("8_hero")
+centered = false
+position = Vector2(256, 336)
+scale = Vector2(4, 4)
+
+[node name="Slime" type="Sprite2D" parent="."]
+texture = ExtResource("9_slime")
+centered = false
+position = Vector2(1000, 528)
+scale = Vector2(4, 4)
+flip_h = true
+texture_filter = 2
+
+[node name="Slime2" type="Sprite2D" parent="."]
+texture = ExtResource("9_slime")
+centered = false
+position = Vector2(380, 528)
+scale = Vector2(4, 4)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="CoinIcon" type="TextureRect" parent="HUD"]
+offset_left = 24
+offset_top = 22
+offset_right = 64
+offset_bottom = 62
+texture = ExtResource("7_coin")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="CoinCount" type="Label" parent="HUD"]
+offset_left = 72
+offset_top = 22
+offset_right = 372
+offset_bottom = 62
+text = "x 12"
+horizontal_alignment = 0
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.15, 1)
+theme_override_constants/outline_size = 8
+
+[node name="WorldLabel" type="Label" parent="HUD"]
+offset_left = 956
+offset_top = 22
+offset_right = 1256
+offset_bottom = 62
+text = "WORLD 1-2"
+horizontal_alignment = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.15, 1)
+theme_override_constants/outline_size = 8
+
+[node name="Life1" type="TextureRect" parent="HUD"]
+offset_left = 24
+offset_top = 70
+offset_right = 64
+offset_bottom = 110
+texture = ExtResource("8_hero")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="Life2" type="TextureRect" parent="HUD"]
+offset_left = 68
+offset_top = 70
+offset_right = 108
+offset_bottom = 110
+texture = ExtResource("8_hero")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1
+
+[node name="Life3" type="TextureRect" parent="HUD"]
+offset_left = 112
+offset_top = 70
+offset_right = 152
+offset_bottom = 110
+texture = ExtResource("8_hero")
+expand_mode = 1
+stretch_mode = 5
+texture_filter = 1

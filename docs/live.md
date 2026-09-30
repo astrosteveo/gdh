@@ -36,6 +36,7 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 | `--hold INPUT` | Press at the start, release at the end |
 | `--tap INPUT` | Press for one frame |
 | `--click X,Y` | Left click at screenshot pixel X,Y |
+| `--right-click X,Y` | Right click at screenshot pixel X,Y |
 
 Each option can be repeated.
 

@@ -235,11 +235,12 @@ def cmd_step(args):
         events += [input_event(token, True, 0), input_event(token, False, n)]
     for token in args.tap:
         events += [input_event(token, True, 0), input_event(token, False, 1)]
-    for point in args.click:
-        x, y = (float(v) for v in point.split(","))
-        events += [{"mouse_motion": [x, y], "at": 0},
-                   {"mouse_button": 1, "position": [x, y], "pressed": True, "at": 0},
-                   {"mouse_button": 1, "position": [x, y], "pressed": False, "at": 1}]
+    for button, points in ((1, args.click), (2, args.right_click)):
+        for point in points:
+            x, y = (float(v) for v in point.split(","))
+            events += [{"mouse_motion": [x, y], "at": 0},
+                       {"mouse_button": button, "position": [x, y], "pressed": True, "at": 0},
+                       {"mouse_button": button, "position": [x, y], "pressed": False, "at": 1}]
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
     result = report(request(session, "step", step_args, timeout=max(60, n)), args.json)
     if not args.json:
@@ -356,6 +357,7 @@ def add_parsers(sub):
                    help="Press at the start, release at the end")
     p.add_argument("--tap", action="append", default=[], metavar="INPUT", help="Press for one frame")
     p.add_argument("--click", action="append", default=[], metavar="X,Y", help="Left click at screenshot pixel X,Y")
+    p.add_argument("--right-click", action="append", default=[], metavar="X,Y", help="Right click at screenshot pixel X,Y")
     p.add_argument("--shot-every", type=int, default=0, metavar="K", help="Save a frame every K frames")
     p.add_argument("--shot", action="store_true", help="Save a frame after stepping")
 

@@ -38,7 +38,7 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 | `--click X,Y` | Left click at screenshot pixel X,Y |
 | `--right-click X,Y` | Right click at screenshot pixel X,Y |
 
-Each option can be repeated.
+Each option can be repeated. Events at the end of a step (a `--hold`'s release) reach the game before it's held again, so a node that tracks keys by their events (`_input`, `_unhandled_input`) sees them go, not only `Input.is_action_pressed`.
 
 ## Coordinates
 
@@ -60,6 +60,43 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 
 Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Every reply lists the engine errors raised since the previous reply, with repeats merged. Add `--json` to any command for the raw reply.
 
+## Companions
+
+A session can start other programs beside the game, such as a game server, and stop them with it:
+
+```sh
+gdh live start --project client --session vs \
+  --companion 'server=PORT={port} exec ./server --test-clock' \
+  --companion-ready 'server=http://127.0.0.1:{port}/health' \
+  -- --server ws://127.0.0.1:{server.port}/play
+```
+
+- **`--companion NAME=COMMAND`** runs COMMAND with `sh -c`, from the directory gdh was run in, in a process group of its own. It's repeatable, and companions start in order, each once the one before is ready, before the game.
+- **Ports:** gdh picks a free port for each companion. `{port}` in its command and ready check is its own port, also in `$GDH_PORT`. `{NAME.port}` is a companion's port anywhere, the game's arguments included. `--companion-port NAME=PORT` gives it a port of your choosing instead. A placeholder naming no companion stops the start.
+- **Ready:** `--companion-ready NAME=CHECK` says when it's ready. `tcp`, the default, waits for its port to take a connection. An `http://` or `https://` URL waits for a 2xx answer, and `none` doesn't wait. `--timeout` bounds the wait for each companion, and then for the game.
+- **Logs:** each companion's output is in `<out>/<NAME>.log`. A companion that exits before it's ready, or isn't ready in time, stops the start with the end of its log, and nothing is left running.
+- **Stopping:** `stop` quits the game first, so it can sign off, then stops every companion's process group. A watchdog also stops them if the game ends by itself (its idle timeout, a crash). While the session runs, a companion that has exited is noted, with the end of its log, on every command, and `status` shows each companion.
+
+## Several instances
+
+`--instances N` runs N instances of the game in one session, each under its own Xvfb, with its own output in `<out>/instance-K/`. `{instance}` in the game's arguments is each one's number, so they can be told apart (`-- --user pilot{instance}`).
+
+- **`step`, `run` and `pause` go to every instance at once**, so the instances step together: when each frame of one waits on another (two clients of a server on a test clock that ticks once every client has asked), they keep in step. The input of a step goes to `--instance K` (default 0), or to every instance with `--instance all`.
+- **`shot`, `probes`, `tree` and `eval` go to `--instance K`** (default 0), or to every instance with `--instance all`.
+- With one instance, every reply is the game's own. With more, a command sent to one instance gets that instance's reply, with `"instance": K`, and a command sent to several gets `{"ok": ..., "instances": [reply, ...]}`, with the first failure as its `"error"`. The CLI prefixes each instance's lines with `[K]`.
+- If any instance ends, the session has ended: the next command says which, and stops the rest.
+
+## Scripts: `gdh live pipe`
+
+A script that drives many steps can keep one `gdh live pipe --session NAME` open instead of starting gdh for each command. It reads requests from stdin, one JSON object a line, and answers each on stdout, one a line:
+
+```json
+{"cmd": "step", "args": {"frames": 10, "events": [{"action": "jump", "pressed": true, "at": 0}]}, "instance": 0}
+{"cmd": "eval", "args": {"expr": "get_node('Player').position"}, "instance": "all"}
+```
+
+The commands and their arguments are the raw protocol's (below), and `"instance"` follows the rules above. The replies are what `--json` prints. `quit` is refused: stop the session with `gdh live stop`, which stops its companions too. If the game ends, the pipe answers with how it ended and exits with status 1.
+
 ## Sessions
 
 - **Several games at once:** `--session NAME` runs more than one game side by side. The default name is `default`.
@@ -67,7 +104,7 @@ Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Ev
 - **Local only:** the game listens on 127.0.0.1.
 - **Idle timeout:** a game quits after 30 minutes without a request. Change this with `--idle-timeout SECONDS`, or set 0 to turn it off.
 - **Stopping:** `stop` asks the game to quit, then stops Xvfb and Godot if they're still running.
-- **Crashed games:** if a game dies, the next command says so, shows the end of its log and removes the session.
+- **Crashed games:** if a game dies, the next command says so, shows the end of its log, stops the session's other processes and removes the session.
 
 ## Protocol
 
@@ -78,7 +115,7 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-The commands are `status`, `step`, `shot`, `probes`, `tree`, `eval`, `run`, `pause` and `quit`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `eval`, `run`, `pause` and `quit`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
 - `{action, pressed, strength}`
 - `{key, pressed}`
 - `{mouse_button, position, pressed}`
@@ -94,3 +131,11 @@ The commands are `status`, `step`, `shot`, `probes`, `tree`, `eval`, `run`, `pau
 - button clicks at the positions `tree` reports, with no stretching and in both stretch modes
 - screenshots, the tree, error reporting and the unpause note
 - a bad scene, the idle timeout and cleanup after a crash
+
+`tests/test_companions.py` runs two instances of `testbed/live/lockstep.tscn` beside `testbed/live/barrier.py`, a companion every instance waits at each frame, as clients of a server on a test clock do. It checks:
+
+- that `{port}`, `{NAME.port}` and `{instance}` reach the companion and each instance
+- that the instances step together: 60 frames with no wait given up, where stepping them one after the other would stall every frame
+- input to the instance named, and a hold's release seen by a node that tracks its keys by their events
+- one instance's reply alone, a bad instance number, and `pipe`
+- `status`, an HTTP ready check, `stop` stopping the companion, the watchdog stopping it when the game ends by itself, a companion that fails to start, and a placeholder that names no companion

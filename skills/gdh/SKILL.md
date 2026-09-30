@@ -79,6 +79,7 @@ gdh live stop --session <name>
 - **Coordinates** are screenshot pixels everywhere. `tree` gives each node's `screen` position (`[x, y, w, h]` for Controls), so click at the center of what `tree` reports.
 - **`eval`** evaluates one Godot Expression, with the current scene as its base. `scene`, `tree`, `root`, every autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`...) are available. It can't assign with `=`. Use `set("prop", value)` or call a method instead.
 - **Errors.** Every reply lists the engine errors raised since the previous command. Read them after every step. They're often the real bug.
+- **Companions and instances.** `--companion 'NAME=COMMAND'` starts a program beside the game (a server, say) and stops it with the session; `{port}` in its command is a free port, and `{NAME.port}` passes it to the game's arguments (`-- --server ws://127.0.0.1:{server.port}`). `--companion-ready NAME=http://127.0.0.1:{port}/health` waits for it. `--instances N` runs N games that step together (`{instance}` in the game's arguments tells them apart); `step` input goes to `--instance K`, and `eval`, `shot` and `tree` take `--instance K` or `all`. A script that steps many times keeps one `gdh live pipe` open (docs/live.md).
 - **Nodes that run while held.** `status` lists nodes with process mode ALWAYS or WHEN_PAUSED. They keep running while the game is held, so account for them when measuring.
 
 ## Looking at images

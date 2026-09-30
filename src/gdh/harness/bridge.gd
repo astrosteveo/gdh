@@ -218,6 +218,9 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		for event in timeline.get(i, []):
 			Input.parse_input_event(event)
 		if i == frames:
+			# The step's last events (a --hold's release) go to the game now, while it still runs. Held, a paused
+			# node never sees them, so a game that tracks its keys by their events would keep them down.
+			Input.flush_buffered_events()
 			break
 		await _frame_done
 		if shot_every > 0 and (i + 1) % shot_every == 0:

@@ -101,7 +101,19 @@ gdh live eval "get_node('Player').position"
 gdh live stop
 ```
 
-`gdh live` starts the game off-screen, held at frame 0, and runs it an exact number of frames per `step`. Steps can inject actions, keys and clicks. Between commands you can save frames in any view, run the probes, inspect the scene tree and evaluate expressions. See [docs/live.md](docs/live.md).
+`gdh live` starts the game off-screen, held at frame 0, and runs it an exact number of frames per `step`. Steps can inject actions, keys and clicks. Between commands you can save frames in any view, run the probes, inspect the scene tree and evaluate expressions.
+
+A session can also start companion processes beside the game, such as a server, wait until they're ready, hand their ports to the game and stop them with it, and it can run several instances of the game that step together. A script can drive it over one pipe:
+
+```sh
+gdh live start --project path/to/game --instances 2 \
+  --companion 'server=exec ./server --port {port}' -- --connect 127.0.0.1:{server.port} --name player{instance}
+gdh live step 60 --hold move_right --instance 1
+gdh live eval "get_node('Player').position" --instance all
+gdh live pipe < requests.jsonl
+```
+
+See [docs/live.md](docs/live.md).
 
 ## Probes
 
@@ -117,6 +129,7 @@ After capturing, `gdh` checks the scene's data for likely defects. Examples are 
 |---|---|
 | `src/gdh/cli.py` | The `gdh` command |
 | `src/gdh/capture.py`, `live.py` | `gdh capture` and `gdh live` |
+| `src/gdh/companions.py`, `watchdog.py` | A live session's companion processes, and the watchdog that stops them when its game ends |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
 | `src/gdh/harness/probes.gd` | The probes |

@@ -18,7 +18,9 @@ const ErrorCollector := preload("errors.gd")
 const Probes := preload("probes.gd")
 
 # Frame rate caps. Held: rendering continues, so cap it to spare the GPU.
-# Running: about real time. Stepping: uncapped.
+# Running: about real time. Stepping, or answering a command: uncapped.
+# The bridge paces frames itself (_pace): under --fixed-fps Godot skips its
+# own frame limiter, so Engine.max_fps does nothing.
 const HELD_FPS := 20
 const TREE_MAX_NODES := 300
 
@@ -44,13 +46,13 @@ var _notes: Array[String] = []
 var _shot_count := 0
 var _game_frames := 0
 var _vsync_noted := false
+var _next_frame_us := 0
 
 
 func _ready() -> void:
 	process_mode = PROCESS_MODE_ALWAYS
 	process_priority = 1 << 30  # Run after every game node each frame.
 	get_tree().paused = true
-	Engine.max_fps = HELD_FPS
 	_last_request_ms = Time.get_ticks_msec()
 	_start.call_deferred()
 
@@ -98,6 +100,37 @@ func _process(_delta: float) -> void:
 	if idle_timeout_s > 0 and not _busy and Time.get_ticks_msec() - _last_request_ms > idle_timeout_s * 1000.0:
 		print("gdh bridge: no requests for %d s, quitting." % idle_timeout_s)
 		get_tree().quit()
+	_pace()
+
+
+## Sleeps out the rest of the frame: HELD_FPS while held, the tick rate (real
+## time) while running, and not at all while a command is under way (a step).
+## A request that comes in wakes it at once, so a script's commands never wait.
+func _pace() -> void:
+	var fps := 0 if _busy or not _queue.is_empty() else (HELD_FPS if _held else ticks_per_second)
+	if fps <= 0:
+		_next_frame_us = 0
+		return
+	var period := 1000000 / fps
+	var now := Time.get_ticks_usec()
+	_next_frame_us = now if _next_frame_us == 0 else _next_frame_us + period
+	if now - _next_frame_us > period:
+		_next_frame_us = now  # A frame that ran long (or a pause): no sleep, and count again from here.
+	while now < _next_frame_us and not _request_waiting():
+		OS.delay_usec(mini(_next_frame_us - now, 1000))
+		now = Time.get_ticks_usec()
+
+
+func _request_waiting() -> bool:
+	if _server.is_connection_available():
+		return true
+	for conn in _conns:
+		var peer: StreamPeerTCP = conn.peer
+		peer.poll()
+		# (A client that has hung up is dropped by _poll_network; asking it for bytes is an engine error.)
+		if peer.get_status() == StreamPeerTCP.STATUS_CONNECTED and peer.get_available_bytes() > 0:
+			return true
+	return false
 
 
 # --- Network --------------------------------------------------------------------
@@ -173,7 +206,6 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_eval(args)
 		"run":
 			_set_held(false)
-			Engine.max_fps = ticks_per_second
 			result = _status()
 		"pause":
 			_set_held(true)
@@ -197,7 +229,6 @@ func _handle(item: Dictionary) -> void:
 func _set_held(held: bool) -> void:
 	_held = held
 	get_tree().paused = held
-	Engine.max_fps = HELD_FPS if held else 0
 
 
 ## args: frames, events [{at, ...event}], shot_every, views.
@@ -231,8 +262,6 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			await RenderingServer.frame_post_draw
 			shots.append(_save_image("step-f%d" % (i + 1)))
 	_set_held(was_held)
-	if not was_held:
-		Engine.max_fps = ticks_per_second
 	return {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
 
 

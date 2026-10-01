@@ -41,7 +41,7 @@ weston composites on the GPU its EGL picks by default, and its log names it (`Us
 
 ### V-Sync and frame pacing
 
-gdh starts Godot with `--disable-vsync`. A display has a refresh rate (weston's is 60 Hz), and with V-Sync on, Present on Xwayland held Godot to about 53 frames a second however fast weston refreshed. That was true at 60, 240 and 1000 Hz alike. gdh paces frames itself: 20 a second while a live game is held, the tick rate while it runs, and as fast as the GPU draws while it steps.
+gdh starts Godot with `--disable-vsync`. A display has a refresh rate (weston's is 60 Hz), and with V-Sync on, Present on Xwayland held Godot to about 53 frames a second however fast weston refreshed. That was true at 60, 240 and 1000 Hz alike. gdh paces frames itself: 20 a second while a live game is held, the tick rate while it runs, and as fast as the GPU draws while it steps. Godot's own frame limiter (`Engine.max_fps`) is off under `--fixed-fps`, which `live` needs, so the bridge sleeps out each held or running frame itself, and a request wakes it at once.
 
 A game can still turn V-Sync on itself (`DisplayServer.window_set_vsync_mode`). On the GPU display its steps then run at about 60 frames a second, and the next `step` says so in a note.
 

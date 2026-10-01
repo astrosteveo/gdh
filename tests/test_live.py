@@ -136,6 +136,38 @@ def test_self_unpause_is_reported(arena):
     assert any("unpaused itself" in note for note in reply.get("notes", []))
 
 
+def test_held_game_draws_about_20_frames_a_second(arena):
+    # The bridge paces held frames itself: Godot skips its own limiter under --fixed-fps.
+    first = value("Engine.get_frames_drawn()")
+    time.sleep(2)
+    assert 20 <= value("Engine.get_frames_drawn()") - first <= 70  # about 45 in 2 s and the round trips
+
+
+def test_run_is_about_real_time(arena):
+    start = live("status")["result"]["frame"]
+    live("run")
+    time.sleep(2)
+    frames = live("pause")["result"]["frame"] - start
+    assert 90 <= frames <= 180  # about 130 at 60 ticks a second
+
+
+def test_commands_while_held_dont_wait_for_the_next_frame(arena):
+    # Held frames come 50 ms apart; a request wakes the bridge, so a script's many commands don't each wait.
+    import subprocess
+    import sys
+    requests = [{"cmd": "eval", "args": {"expr": "1"}}] * 40
+    started = time.monotonic()
+    proc = subprocess.run([sys.executable, "-m", "gdh", "live", "pipe", "--session", SESSION],
+                          input="".join(json.dumps(r) + "\n" for r in requests), capture_output=True, text=True)
+    elapsed = time.monotonic() - started
+    assert proc.returncode == 0 and len(proc.stdout.splitlines()) == 40
+    assert elapsed < 1.5  # 40 x 25 ms on average, were each to wait for its frame, would be 1 s more than this takes
+    # Waiting for requests raises no engine errors of its own, as clients come and go.
+    time.sleep(0.5)
+    replies = [json.loads(line) for line in proc.stdout.splitlines()] + [live("status")]
+    assert [e for r in replies for e in r.get("errors", [])] == []
+
+
 def test_bad_scene_fails_cleanly():
     proc = gdh("live", "start", "--project", TESTBED, "--scene", "res://missing.tscn",
                "--session", f"{SESSION}-bad", check=False)

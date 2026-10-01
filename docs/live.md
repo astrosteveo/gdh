@@ -20,6 +20,7 @@ Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/h
 - The game starts held at game frame 0. The scene's `_ready` has run, and no `_process` or `_physics_process` has.
 - `step N` runs exactly N frames, then holds again. Godot is launched with `--fixed-fps` set to the project's physics tick rate, so each frame is exactly one physics tick of game time, however long it takes to render.
 - The frame number in every reply counts game frames only. Frames rendered while held don't count.
+- Held, the game still draws 20 frames a second, so it barely loads the GPU, and a request wakes it at once. gdh paces these frames itself, since Godot's own limiter (`Engine.max_fps`) is off under `--fixed-fps`.
 - `run` lets the game run at about real time until `pause`.
 - Steps run as fast as the GPU draws, since gdh starts Godot with V-Sync off. A game that turns V-Sync on itself waits for the display's 60 Hz refresh on the GPU display, and the first `step` after it does says so in a note.
 - Holding uses `SceneTree.paused`. It has these side effects:

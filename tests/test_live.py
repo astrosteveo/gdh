@@ -95,6 +95,23 @@ def test_right_hold_stays_down_for_the_step(arena):
     assert value("right_held_frames") == after_held
 
 
+def test_a_drag_carries_its_motion_and_buttons(arena):
+    live("step", "2", "--move", "100,100")
+    drag = value("right_drag")
+    releases = value("right_releases")
+    live("step", "3", "--press", "mouse:right")
+    live("step", "3", "--move", "140,90")
+    live("step", "3", "--move", "150,90")
+    live("step", "2", "--release", "mouse:right")
+    live("step", "2", "--move", "300,300")  # (no button held: not a drag)
+    after = value("right_drag")
+    # Motion reaches the game in its window's pixels, so compare against the screenshot's scale.
+    scale = value("get_viewport().get_visible_rect().size.x") / value("get_viewport().get_texture().get_size().x")
+    assert after[0] - drag[0] == pytest.approx(50 * scale, abs=0.5)
+    assert after[1] - drag[1] == pytest.approx(-10 * scale, abs=0.5)
+    assert value("right_releases") == releases + 1
+
+
 def test_shots_and_step_recording(arena):
     shots = live("shot", "--view", "normal", "--view", "wireframe")["result"]["shots"]
     assert set(shots) == {"normal", "wireframe"}

@@ -379,9 +379,18 @@ def cmd_status(args):
     return 0
 
 
+MOUSE_BUTTONS = {"left": 1, "right": 2, "middle": 3}
+
+
 def input_event(token, pressed, at):
     if token.startswith("key:"):
         return {"key": token[4:], "pressed": pressed, "at": at}
+    if token.startswith("mouse:"):
+        name = token[6:]
+        if name not in MOUSE_BUTTONS:
+            raise SystemExit(f"gdh: unknown mouse button {name!r} (left, right or middle)")
+        # Where the pointer is: --move puts it there first.
+        return {"mouse_button": MOUSE_BUTTONS[name], "pressed": pressed, "at": at}
     return {"action": token, "pressed": pressed, "at": at}
 
 
@@ -389,6 +398,9 @@ def cmd_step(args):
     session = load_session(args.session)
     n = args.frames
     events = []
+    for point in args.move:
+        x, y = (float(v) for v in point.split(","))
+        events.append({"mouse_motion": [x, y], "at": 0})
     for token in args.press:
         events.append(input_event(token, True, 0))
     for token in args.release:
@@ -582,8 +594,11 @@ def add_parsers(sub):
     p = command("step", cmd_step, "Run every instance for a number of frames, then hold",
                 instance="Which instance gets the input: a number, or all (default 0). Every instance steps")
     p.add_argument("frames", type=int, nargs="?", default=1)
+    p.add_argument("--move", action="append", default=[], metavar="X,Y",
+                   help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
     p.add_argument("--press", action="append", default=[], metavar="INPUT",
-                   help="Press at the start and keep it pressed. INPUT is an action name or key:NAME")
+                   help="Press at the start and keep it pressed. INPUT is an action name, key:NAME, or mouse:left, "
+                        "mouse:right or mouse:middle (at the pointer)")
     p.add_argument("--release", action="append", default=[], metavar="INPUT", help="Release at the start")
     p.add_argument("--hold", action="append", default=[], metavar="INPUT",
                    help="Press at the start, release at the end")

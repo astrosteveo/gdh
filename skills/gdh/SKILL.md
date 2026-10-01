@@ -74,6 +74,7 @@ gdh live stop --session <name>
   - `--hold`: press for the whole step.
   - `--tap`: press for one frame.
   - `--click X,Y`: left click. `--right-click X,Y`: right click. `--left-hold X,Y` and `--right-hold X,Y`: press there for the whole step.
+  - `--move X,Y` moves the pointer; `mouse:left`, `mouse:right` and `mouse:middle` work with `--press`, `--release`, `--hold` and `--tap` at the pointer. A drag or a point-while-held is `--move` then `--press mouse:right`, steps with `--move`, then `--release mouse:right`.
 
   Input arrives the way a player's does, so `_input`, `is_action_just_pressed` and `is_action_pressed` all see it.
 - **Coordinates** are screenshot pixels everywhere. `tree` gives each node's `screen` position (`[x, y, w, h]` for Controls), so click at the center of what `tree` reports.

@@ -10,6 +10,7 @@ var input_events := 0
 var clicks := 0
 var right_held_frames := 0
 var right_releases := 0
+var right_drag := Vector2.ZERO
 
 @onready var player: Node2D = $Player
 @onready var stats: Label = $UI/Stats
@@ -40,3 +41,5 @@ func _input(event: InputEvent) -> void:
 		input_events += 1
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and not event.pressed:
 		right_releases += 1
+	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
+		right_drag += event.relative

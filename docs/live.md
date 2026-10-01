@@ -31,6 +31,7 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 
 | Option | Effect |
 |---|---|
+| `--move X,Y` | Move the pointer to screenshot pixel X,Y at the start of the step, before any press. With a button held, it's a drag: each move carries how far it went and the buttons down |
 | `--press INPUT` | Press at the start of the step, and keep it pressed after |
 | `--release INPUT` | Release at the start of the step |
 | `--hold INPUT` | Press at the start, release at the end |
@@ -39,6 +40,8 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 | `--right-click X,Y` | Right click at screenshot pixel X,Y |
 | `--left-hold X,Y` | Press the left button at X,Y at the start of the step, release it at the end |
 | `--right-hold X,Y` | Press the right button at X,Y at the start of the step, release it at the end (a held press: a context or marking menu) |
+
+An INPUT can also be `mouse:left`, `mouse:right` or `mouse:middle`, pressed where the pointer is: `--move 300,200 --press mouse:right`, then steps with `--move` to drag or point, then `--release mouse:right`.
 
 Each option can be repeated. Events at the end of a step (a `--hold`'s release) reach the game before it's held again, so a node that tracks keys by their events (`_input`, `_unhandled_input`) sees them go, not only `Input.is_action_pressed`.
 

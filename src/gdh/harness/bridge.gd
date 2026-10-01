@@ -366,6 +366,12 @@ func _describe(node: Node, scene: Node, depth: int, budget: Array) -> Dictionary
 	return d
 
 
+## Where the injected pointer is (window coordinates) and which buttons it holds: a motion carries how far it moved
+## and the buttons down, as a real one does, so a drag or a point-while-held reaches the game the way a player's does.
+var _mouse_at := Vector2.ZERO
+var _mouse_mask := 0
+
+
 func _make_event(spec: Dictionary) -> InputEvent:
 	var pressed: bool = spec.get("pressed", true)
 	if spec.has("action"):
@@ -386,14 +392,23 @@ func _make_event(spec: Dictionary) -> InputEvent:
 	if spec.has("mouse_button"):
 		var e := InputEventMouseButton.new()
 		e.button_index = int(spec.mouse_button)
-		e.position = Common.shot_to_window(get_tree(), Vector2(spec.position[0], spec.position[1]))
+		# Without a position, the button goes where the pointer is.
+		e.position = Common.shot_to_window(get_tree(), Vector2(spec.position[0], spec.position[1])) if spec.has("position") else _mouse_at
 		e.global_position = e.position
 		e.pressed = pressed
+		var bit := 1 << (e.button_index - 1)
+		_mouse_mask = (_mouse_mask | bit) if pressed else (_mouse_mask & ~bit)
+		e.button_mask = _mouse_mask
+		_mouse_at = e.position
 		return e
 	if spec.has("mouse_motion"):
 		var e := InputEventMouseMotion.new()
 		e.position = Common.shot_to_window(get_tree(), Vector2(spec.mouse_motion[0], spec.mouse_motion[1]))
 		e.global_position = e.position
+		e.relative = e.position - _mouse_at
+		e.screen_relative = e.relative
+		e.button_mask = _mouse_mask
+		_mouse_at = e.position
 		return e
 	return null
 

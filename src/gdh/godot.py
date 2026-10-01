@@ -43,8 +43,27 @@ def alert_shims():
         yield write_alert_shims(tmp)
 
 
-def godot_env(shims, display, harness_args=()):
+def user_data_home():
+    """Where a game run under gdh keeps user:// (its saves, settings, logs and caches): never the player's own, so a
+    test run can't rotate out their logs or touch their saves. GDH_USER_DATA names another directory, or "real" for
+    the player's own. Kept between runs, so a game's caches stay warm."""
+    chosen = os.environ.get("GDH_USER_DATA", "")
+    if chosen == "real":
+        return None
+    if chosen:
+        return os.path.abspath(os.path.expanduser(chosen))
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(base, "gdh", "user-data")
+
+
+def godot_env(shims, display, harness_args=(), game=True):
     env = dict(os.environ)
+    # A game's user:// lives under XDG_DATA_HOME on Linux: point it at gdh's own (the editor's import keeps the real
+    # one, where its settings and templates are).
+    home = user_data_home() if game else None
+    if home:
+        os.makedirs(home, exist_ok=True)
+        env["XDG_DATA_HOME"] = home
     # The harness's settings travel in the environment, so the command line
     # after `--` holds only the game's own arguments.
     env["GDH_ARGS"] = json.dumps([str(a) for a in harness_args])

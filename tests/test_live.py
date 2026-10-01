@@ -112,6 +112,12 @@ def test_a_drag_carries_its_motion_and_buttons(arena):
     assert value("right_releases") == releases + 1
 
 
+def test_the_game_keeps_its_user_data_apart_from_the_players(arena):
+    # user:// under gdh's own directory, never ~/.local/share/godot (the player's saves and logs).
+    from gdh.godot import user_data_home
+    assert value("OS.get_user_data_dir()").startswith(user_data_home() + "/")
+
+
 def test_shots_and_step_recording(arena):
     shots = live("shot", "--view", "normal", "--view", "wireframe")["result"]["shots"]
     assert set(shots) == {"normal", "wireframe"}

@@ -83,11 +83,11 @@ def cmd_import(args):
     cmd = [godot_binary(project), "--headless", "--import", "--path", str(project)]
     with alert_shims() as shims:
         # Headless needs no display. The bogus one keeps any child off the desktop.
-        code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display")).returncode
+        code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display", game=False)).returncode
         if code != 0:
             # Godot 4.7's editor sometimes aborts at the end of a headless import
             # ("Parameter "singleton" is null" in EditorNode::is_cmdline_mode, exit 134),
             # in the standard and .NET builds alike. The next run succeeds.
             print(f"gdh: Godot exited with code {code} while importing; importing again", file=sys.stderr)
-            code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display")).returncode
+            code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display", game=False)).returncode
         return code

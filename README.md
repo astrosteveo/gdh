@@ -138,6 +138,8 @@ gdh starts Godot with `--disable-vsync`, since it paces the frames itself: held 
 
 Godot's window is on its own display, never your session's. Each GPU display has a runtime directory of its own for weston's socket, so weston and Xwayland never see your Wayland session, and Godot is pointed at a Wayland display that doesn't exist, so it can't fall back to yours. Every display ends when its game does, and gdh stops and removes whatever is left (`gdh live stop`, or the session's watchdog when a game ends by itself).
 
+A game run under gdh also keeps its `user://` (saves, settings, logs, caches) in `~/.local/share/gdh/user-data`, never your own `~/.local/share/godot`, so a test run can't touch your saves or rotate out your logs. `GDH_USER_DATA=<dir>` picks another directory, `GDH_USER_DATA=real` uses yours ([docs/live.md](docs/live.md)).
+
 For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `xmessage` to a temporary directory and puts that directory first on `PATH`. When Godot pops up an alert, the stand-in writes the message to `godot.log` and no dialog opens.
 
 ## Layout

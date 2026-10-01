@@ -148,6 +148,7 @@ Options:
 | `--orbit DX,DY` | | Turn the 3D view as dragging with the middle button does (write `--orbit=DX,DY` for a negative DX) |
 | `--zoom STEPS` | | Zoom the 3D view as the mouse wheel does: out, or in when negative |
 | `--focus NODE` | | Center the 3D view on a node, as the View menu's Focus Selection does; in a 2D scene, frame it (Frame Selection) |
+| `--rebuild` | off | Build a C# project's code again with the scene open and give the editor the focus so it loads the new build; saves `viewport-rebuilt.png` |
 | `--save` | off | Save each scene through the editor after capturing it; the report says whether the file changed |
 | `--view X,Y,Z:X,Y,Z` | | Look from the first point at the second, through a camera gdh adds and previews (never saved) |
 | `--far` | the editor camera's | The `--view` camera's far plane |

@@ -110,6 +110,8 @@ def harness_args(args, out):
         harness += ["--set", spec]
     if args.save:
         harness += ["--save", "1"]
+    if args.rebuild:
+        harness += ["--rebuild", "1"]
     for key in ("select", "focus", "orbit", "zoom", "view", "far"):
         if getattr(args, key) is not None:
             harness += [f"--{key}", str(getattr(args, key))]
@@ -198,6 +200,12 @@ def report_scene(scene, folder):
         print(f"  {e['type']}: {e['message']}{count} at {e['where']}")
     for note in report.get("notes", []):
         print(f"  note: {note}")
+    if "rebuild" in report:
+        rb = report["rebuild"]
+        print(f"  rebuilt with the scene open: build exit {rb['build_exit']}, {len(rb['errors'])} errors after, "
+              f"nodes under the scene {rb['nodes_before']} before, {rb['nodes_after']} after")
+        for e in rb["errors"][:8]:
+            print(f"  {e['type']}: {e['message']} at {e['where']}")
     if "saved" in report:
         saved = report["saved"]
         print(f"  saved through the editor: the file {'changed' if saved['changed'] else 'came back byte for byte'}"
@@ -232,6 +240,9 @@ def add_parser(sub, add_display_option):
     p.add_argument("--far", type=float, help="The --view camera's far plane, in metres (default: the editor camera's)")
     p.add_argument("--timeout", type=int, default=300, help="Seconds to wait for the editor to start (default 300)")
     p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
+    p.add_argument("--rebuild", action="store_true",
+                   help="With a scene open, build a C# project's code again, give the editor the focus so it loads the new "
+                        "build (as coming back to its window does), and save viewport-rebuilt.png: errors land in the report")
     p.add_argument("--save", action="store_true",
                    help="Save each scene through the editor (File > Save Scene) after capturing it, as a person would; "
                         "the report says whether the file changed")

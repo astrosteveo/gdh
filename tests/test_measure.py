@@ -95,6 +95,18 @@ def test_black_hole_in_lit_area_is_a_nan_and_dark_black_is_not(tmp_path):
     assert r["nan_shapes"][0]["box"] == [10, 10, 20, 20]
 
 
+def test_a_crevice_that_fades_to_black_is_not_a_nan(tmp_path):
+    # Crushed shading inside a lit surface: black, ringed by dark pixels, then the light. A NaN's edge is hard.
+    a = grey(140, 60, 60)
+    a[20:32, 20:32] = 4
+    a[24:28, 24:28] = 0
+    r = m.black(save(tmp_path / "f.png", a))
+    assert r["black_px"] == 16 and r["nan_px"] == 0
+    a[24:28, 24:28] = 140
+    a[25:27, 25:27] = 0  # now a hard hole in the lit middle
+    assert m.black(save(tmp_path / "g.png", a))["nan_px"] == 4
+
+
 def test_mask_is_where_a_thing_draws_with_its_holes_filled(tmp_path):
     without = grey(10, 60, 40)
     with_ = without.copy()
@@ -255,7 +267,9 @@ def test_frame_times_and_passes(sessions):
     gdh("live", "frames", "--clear", "--session", name)
     gdh("live", "step", "30", "--session", name)
     t = gdh_json("live", "frames", "--session", name)
-    assert t["frames"] == 30 and t["gpu_ms"]["p50"] > 0 and t["gpu_ms"]["max"] >= t["gpu_ms"]["p99"]
+    # Timestamps come back a frame or two late, and not every frame: each measured frame is counted once.
+    assert t["game_frames"] == 30 and 10 <= t["frames"] <= 30
+    assert t["gpu_ms"]["p50"] > 0 and t["gpu_ms"]["max"] >= t["gpu_ms"]["p99"]
     assert "Render Opaque Pass" in t["passes"] and "Testbed Effect" in t["passes"]
     assert "Render 3D Scene" in t["groups"]
 
@@ -265,9 +279,18 @@ def test_frame_times_without_passes(sessions):
     gdh("live", "frames", "--clear", "--session", name)
     gdh("live", "step", "10", "--session", name)
     t = gdh_json("live", "frames", "--session", name)
-    assert t["frames"] == 10 and t["gpu_ms"]["p50"] > 0
+    assert t["game_frames"] == 10 and t["frames"] >= 3 and t["gpu_ms"]["p50"] > 0
     # The game's own timestamps come through; the renderer's need --gpu-passes.
     assert "Testbed Effect" in t["passes"] and "Render Opaque Pass" not in t["passes"] and "groups" not in t
+
+
+def test_frame_times_hold_while_every_frame_is_shot(sessions, tmp_path):
+    # Reading every frame back for a shot stalls the timestamps; the record must not fill with a repeated value.
+    name, _ = sessions("still", "--gpu-passes")
+    gdh("live", "frames", "--clear", "--session", name)
+    gdh("live", "record", "12", "--out", tmp_path / "shots", "--session", name)
+    record = gdh_json("live", "frames", "--session", name)
+    assert record["game_frames"] == 12 and record["frames"] <= 12
 
 
 def test_record_saves_every_frame(sessions, tmp_path):

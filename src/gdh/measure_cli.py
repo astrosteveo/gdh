@@ -5,7 +5,6 @@ prints the results.
 """
 import json
 import shutil
-import sys
 from pathlib import Path
 
 from gdh import measure as m
@@ -161,7 +160,8 @@ def emit(kind, out, as_json, save=None):
 
 
 def times_brief(out):
-    lines = [f"{out['frames']} frames"]
+    run = f" of {out['game_frames']} run" if "game_frames" in out else ""
+    lines = [f"{out['frames']} frames measured{run}"]
     for key in ("gpu_ms", "cpu_ms"):
         if key in out:
             s = out[key]
@@ -208,7 +208,7 @@ def cmd_measure(args):
 
 
 def fail_code(args, out):
-    """--fail-on: exit 1 when a black or crush measure found what it looks for."""
+    """--fail: exit 1 when a black or crush measure found what it looks for."""
     if not getattr(args, "fail", False):
         return 0
     if "nan_free" in out and not out["nan_free"]:
@@ -229,7 +229,7 @@ def add_image_options(p, kind):
         p.add_argument("--lights", default="bright",
                        help='Which pixels are lights: bright (luminance over 200), red, or a rule like "r>150,g<90,b<90"')
     if kind == "black":
-        p.add_argument("--ring", type=int, default=2, help="The ring round a black shape that's read, in pixels (2)")
+        p.add_argument("--ring", type=int, default=1, help="The ring round a black shape that's read, in pixels (1: its neighbours)")
         p.add_argument("--lit", type=float, default=24.0,
                        help="Luminance over which a ring pixel is lit (24 of 255); a shape whose ring is mostly lit is a hole")
         p.add_argument("--floor", type=int, default=0, help="The value every channel must be at or under to count as black (0)")
@@ -262,14 +262,16 @@ def add_parsers(sub):
     k.add_argument("with_", metavar="with")
     k.add_argument("--box", metavar="X0,Y0,X1,Y1")
     k.add_argument("--save", metavar="FILE.json")
-    k.set_defaults(func=cmd_measure, json=True)
+    k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
+    k.set_defaults(func=cmd_measure)
     k = kinds.add_parser("dissolve", help="Doubled and empty pixels between two layers drawn alone as masks")
     k.add_argument("a", help="The first layer alone (white where it draws)")
     k.add_argument("b", help="The second layer alone")
     k.add_argument("--region", action="append", required=True, metavar="PNG",
                    help="Where the layers draw when whole (white); repeat to intersect several")
     k.add_argument("--save", metavar="FILE.json")
-    k.set_defaults(func=cmd_measure, json=True)
+    k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
+    k.set_defaults(func=cmd_measure)
     k = kinds.add_parser("mask", help="Where something draws: two shots of one frame, with it and without, as a mask "
                                       "for --mask (holes filled)")
     k.add_argument("with_", metavar="with", help="The frame with it drawn")
@@ -277,6 +279,7 @@ def add_parsers(sub):
     k.add_argument("--out", required=True, metavar="PNG", help="Where the mask goes (white where it draws)")
     k.add_argument("--threshold", type=float, default=1.0, help="A difference over this in any channel counts (1)")
     k.add_argument("--no-fill", action="store_true", help="Don't fill the holes inside it")
+    k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
     k.set_defaults(func=cmd_measure)
     k = kinds.add_parser("times", help="Summarize a frame-time record (gdh live frames --save)")
     k.add_argument("record")
@@ -428,7 +431,7 @@ def add_shared_measure_options(p):
     p.add_argument("--save", metavar="FILE.json", help="Also write the result here")
     p.add_argument("--threshold", type=float, default=None, help="flicker 2, shimmer 8 (luminance 0-255)")
     p.add_argument("--lights", default="bright", help="jitter: bright, red, or a rule like r>150,g<90,b<90")
-    p.add_argument("--ring", type=int, default=2, help="black: the ring read round a shape (2 px)")
+    p.add_argument("--ring", type=int, default=1, help="black: the ring read round a shape (1 px)")
     p.add_argument("--lit", type=float, default=24.0, help="black: a lit ring pixel's luminance (24)")
     p.add_argument("--floor", type=int, default=0, help="black, crush: the floor per channel (0)")
     p.add_argument("--detail", type=float, default=6.0, help="crush: the floor's last steps (6)")

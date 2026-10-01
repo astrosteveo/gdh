@@ -420,7 +420,8 @@ def cmd_step(args):
                        {"mouse_button": button, "position": [x, y], "pressed": True, "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": False, "at": until}]
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
-    reply = call(session, "step", step_args, instance=args.instance, timeout=max(60, n))
+    # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
+    reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
     result = report(reply, args.json)
     if not args.json:
         for prefix, r in each(reply, result):

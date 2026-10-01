@@ -585,11 +585,12 @@ def shapes(mask, L, ring, lit, limit=20):
     return listed, int(sizes[holes].sum()), len(hole_order), count
 
 
-def black(path, region=None, ring=2, lit=24.0, floor=0):
+def black(path, region=None, ring=1, lit=24.0, floor=0):
     """Pure black from a NaN. A NaN draws black, with no error, and the glow, a blur or temporal anti-aliasing can
     spread it. Shadows go to black too, but fade into their dark surroundings; a NaN's black is a hole cut in
     something lit. So: black_px counts the pixels at or under `floor` in every channel (0: pure black), and
-    nan_px the black pixels in shapes more than half of whose surrounding ring (`ring` pixels wide) is over `lit`
+    nan_px the black pixels in shapes more than half of whose surrounding ring (`ring` pixels wide: 1, their
+    immediate neighbours, since a shadow fades into black while a NaN cuts a hard edge) is over `lit`
     (24 of 255) in luminance. nan_shapes lists those shapes, largest first."""
     a = rgb(path)
     L = luminance(a)
@@ -671,10 +672,12 @@ def spread(values):
 def times(record):
     """A frame-time record's summary: the GPU's and the CPU's render time per frame, and each render pass's GPU time,
     each as spread(). A record is gdh live frames' raw output: {"frames": [{"gpu": ms, "cpu": ms, "passes": {name:
-    ms}, "groups": {name: ms}}, ...]}. A pass missing from a frame counts as 0 there, so a pass that runs on some
+    ms}, "groups": {name: ms}}, ...], "game_frames": n}: the frames measured, and the game frames run. A pass missing from a frame counts as 0 there, so a pass that runs on some
     frames reads low at the median and true at the top."""
     frames = record["frames"] if isinstance(record, dict) else record
     out = {"frames": len(frames)}
+    if isinstance(record, dict) and "game_frames" in record:
+        out["game_frames"] = record["game_frames"]
     if not frames:
         return out
     out["gpu_ms"] = spread([f["gpu"] for f in frames])

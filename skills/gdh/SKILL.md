@@ -37,7 +37,7 @@ A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gd
 | Movement, input, animation, physics, timers, scene changes, UI interaction | `gdh live` |
 | A bug that shows up after doing something | `gdh live`: reproduce it step by step |
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
-| A thin effect's width, a NaN, crushed blacks, a dissolve | `gdh measure line`, `black`, `crush`, `dissolve` |
+| A thin effect's width, a point's size (stars, dust), a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
 | Frame time, or which render pass costs what | `gdh live start --gpu-passes`, then `gdh live frames` |
 | What the editor shows: tool scripts, `@tool` previews, scenes the user opens to edit | `gdh editor` |
 
@@ -116,6 +116,7 @@ gdh live record 90 --out <dir>/frames --session <name> [--hold ui_left]   # step
 gdh measure flicker <dir>/frames          # still camera: anything over 0 changes on its own
 gdh measure shimmer <dir>/frames          # moving camera: the second difference over time
 gdh measure line shot.png --from X,Y --to X,Y   # a thin line's width at half maximum, its peak
+gdh measure spots shot.png --radius 6     # each isolated point's width at half maximum, sigma and peak
 gdh measure black <dir>/frames --fail     # pure black cut into something lit: a NaN
 gdh measure crush shot.png --mask hull.png      # pixels at the tone mapper's floor in a region
 gdh measure mask with.png without.png --out hull.png   # where a thing draws (shots with it and without)

@@ -158,12 +158,13 @@ NODE is a path from the scene's root (`.` is the root). The editor's settings, d
 
 ## Measure what it draws
 
-`gdh measure` puts numbers on frames, any game's: flicker on a still camera, shimmer on a moving one (the second difference over time), a light's jitter, what one setting adds, a thin line's width and brightness, doubled or empty pixels in a dissolve, black from a NaN, crushed blacks, and frame times. A live session records the frames, or measures as it goes, and records each frame's GPU time and, with `--gpu-passes`, each render pass's.
+`gdh measure` puts numbers on frames, any game's: flicker on a still camera, shimmer on a moving one (the second difference over time), a light's jitter, what one setting adds, a thin line's width and brightness, the size of each point of light (stars, dust), doubled or empty pixels in a dissolve, black from a NaN, crushed blacks, and frame times. A live session records the frames, or measures as it goes, and records each frame's GPU time and, with `--gpu-passes`, each render pass's.
 
 ```sh
 gdh live record 120 --session s --out frames/still       # 120 frames, each saved
 gdh measure flicker frames/still                          # every pixel's change over them
 gdh measure line frame.png --from 400,120 --to 400,580    # a line's width at half its height
+gdh measure spots frame.png --radius 6                     # each star's or mote's width at half its peak, and sigma
 gdh live measure black --frames 60 --fail --session s     # black cut into something lit: a NaN
 gdh live start --project game --session s --gpu-passes    # time each render pass too
 gdh live frames --clear --session s && gdh live step 600 --session s && gdh live frames --session s

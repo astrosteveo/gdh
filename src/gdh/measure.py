@@ -1,5 +1,5 @@
-"""Measurements over rendered frames: flicker, shimmer, thin lines, dissolves, black from a NaN, crushed blacks,
-light jitter, what one setting adds, and frame times.
+"""Measurements over rendered frames: flicker, shimmer, thin lines, points' sizes, dissolves, black from a NaN, crushed
+blacks, light jitter, what one setting adds, and frame times.
 
 Every image measure works on PNG files: frames a capture or a live session saved, or any game's. Pixel values are
 luminance in Rec. 709's weights on the 0-255 sRGB values the files hold, computed in float32, so numbers taken from
@@ -405,6 +405,106 @@ def lines(path, segments, **kw):
         found = line_width(L, s["a"], s["b"], **kw)
         if found:
             out.append({**{k: v for k, v in s.items() if k not in ("a", "b")}, **found})
+    return out
+
+
+# --- Points: stars, motes, sparks ---------------------------------------------------------------------------------
+
+
+def max_filter(a, r):
+    """Each pixel's largest value within r pixels each way (a square), separably."""
+    out = a.copy()
+    for axis in (0, 1):
+        src = out.copy()
+        for d in range(1, r + 1):
+            for sign in (1, -1):
+                shifted = np.full_like(src, -np.inf)
+                if axis == 0:
+                    if sign > 0:
+                        shifted[d:] = src[:-d]
+                    else:
+                        shifted[:-d] = src[d:]
+                else:
+                    if sign > 0:
+                        shifted[:, d:] = src[:, :-d]
+                    else:
+                        shifted[:, :-d] = src[:, d:]
+                np.maximum(out, shifted, out=out)
+    return out
+
+
+def spot_size(L, x, y, r):
+    """One point's size, from the window r pixels round its peak at (x, y): the background (the median of the
+    window's rim), the peak above it, the full width at half maximum as the diameter of a disc of the same area
+    (the pixels at or over half the peak, sampled every quarter pixel, bilinear), and the Gaussian's sigma from the
+    second moment of the light above the background."""
+    win = L[y - r:y + r + 1, x - r:x + r + 1]
+    rim = np.concatenate([win[0], win[-1], win[1:-1, 0], win[1:-1, -1]])
+    bg = float(np.median(rim))
+    peak = float(L[y, x]) - bg
+    o = np.arange(-r, r + 0.01, 0.25)
+    gx, gy = np.meshgrid(x + o, y + o)
+    up = bilinear(L, gx, gy) - bg
+    area = float((up >= peak / 2).sum()) / 16
+    light = np.clip(win - bg, 0, None)
+    yy, xx = np.mgrid[-r:r + 1, -r:r + 1]
+    total = float(light.sum())
+    sigma = math.sqrt(float((light * (xx * xx + yy * yy)).sum()) / (2 * total)) if total > 0 else 0.0
+    return {"x": int(x), "y": int(y), "fwhm_px": round(2 * math.sqrt(area / math.pi), 2), "sigma_px": round(sigma, 3),
+            "peak_above_bg": round(peak, 1), "background": round(bg, 1)}
+
+
+def spots(path, region=None, radius=5, min_contrast=12.0, limit=2000):
+    """Isolated points of light in one image (stars, dust, sparks): each local peak that stands min_contrast above
+    the median of the window `radius` pixels round it, with nothing as bright within that window (so two points
+    close together, or the edge of something larger, aren't counted), and its size (spot_size). The brightest
+    `limit` points, at least radius + 2 pixels from the image's edge."""
+    L = lum(path)
+    h, w = L.shape
+    r = int(radius)
+    peaks = (L >= max_filter(L, r)) & (L > 0)
+    sel = region.select(L.shape) if region else None
+    if sel is not None:
+        peaks &= sel
+    peaks[:r + 2] = False
+    peaks[-(r + 2):] = False
+    peaks[:, :r + 2] = False
+    peaks[:, -(r + 2):] = False
+    ys, xs = np.nonzero(peaks)
+    order = np.argsort(-L[ys, xs], kind="stable")
+    found = []
+    taken = np.zeros_like(peaks)
+    for i in order:
+        y, x = int(ys[i]), int(xs[i])
+        if taken[y, x]:
+            continue  # (a flat top's other pixels)
+        win = L[y - r:y + r + 1, x - r:x + r + 1]
+        if (win >= L[y, x]).sum() > 4:
+            continue  # a plateau or a larger shape, not a point
+        s = spot_size(L, x, y, r)
+        if s["peak_above_bg"] < min_contrast:
+            continue
+        # Isolated: the window's rim falls to near the background (another point or an edge would hold it up).
+        rim = np.concatenate([win[0], win[-1], win[1:-1, 0], win[1:-1, -1]])
+        if float(rim.max()) - s["background"] > s["peak_above_bg"] * 0.25:
+            continue
+        taken[y - r:y + r + 1, x - r:x + r + 1] = True
+        found.append(s)
+        if len(found) >= limit:
+            break
+    return found
+
+
+def spots_summary(each):
+    """The spots' sizes over every frame: how many, and the spread of their widths, sigmas and peaks."""
+    out = {"spots": len(each)}
+    if not each:
+        return out
+    for key in ("fwhm_px", "sigma_px", "peak_above_bg"):
+        v = np.array([s[key] for s in each], dtype=np.float64)
+        out[key] = {"min": round(float(v.min()), 3), "p10": round(float(np.percentile(v, 10)), 3),
+                    "median": round(float(np.median(v)), 3), "p90": round(float(np.percentile(v, 90)), 3),
+                    "max": round(float(v.max()), 3)}
     return out
 
 

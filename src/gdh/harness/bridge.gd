@@ -31,6 +31,7 @@ var ready_file := ""
 var idle_timeout_s := 1800.0
 var warmup_frames := 10
 var ticks_per_second := 60
+var recorder: Node  # frames.gd: each game frame's render times
 
 var _server := TCPServer.new()
 var _conns: Array[Dictionary] = []
@@ -166,6 +167,8 @@ func _handle(item: Dictionary) -> void:
 			result = await _cmd_probes()
 		"tree":
 			result = _cmd_tree(args)
+		"frames":
+			result = recorder.command(args)
 		"eval":
 			result = _cmd_eval(args)
 		"run":

@@ -11,7 +11,7 @@ OS.get_cmdline_user_args() returns exactly them.
 import argparse
 import sys
 
-from gdh import live
+from gdh import live, measure_cli
 from gdh.capture import cmd_capture, cmd_import
 from gdh.godot import GdhError
 
@@ -39,6 +39,7 @@ def main():
     imp.set_defaults(func=cmd_import)
 
     live.add_parsers(sub)
+    measure_cli.add_parsers(sub)
 
     argv = sys.argv[1:]
     game_args = []

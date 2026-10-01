@@ -1,6 +1,6 @@
 ---
 name: gdh
-description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, and see what the Godot editor itself shows a scene as (tool scripts included). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
+description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, see what the Godot editor itself shows a scene as (tool scripts included), and measure what it draws (flicker, shimmer, line width, NaN and crushed pixels, frame time, per-pass GPU cost). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
 ---
 
 # gdh: seeing and driving a Godot game
@@ -36,7 +36,9 @@ A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gd
 | "Does this look right?", or checking a scene for defects | `gdh capture`, then read everything it produced |
 | Movement, input, animation, physics, timers, scene changes, UI interaction | `gdh live` |
 | A bug that shows up after doing something | `gdh live`: reproduce it step by step |
-| Flicker, popping or jitter over time | `gdh live step N --shot-every K` |
+| Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
+| A thin effect's width, a NaN, crushed blacks, a dissolve | `gdh measure line`, `black`, `crush`, `dissolve` |
+| Frame time, or which render pass costs what | `gdh live start --gpu-passes`, then `gdh live frames` |
 | What the editor shows: tool scripts, `@tool` previews, scenes the user opens to edit | `gdh editor` |
 
 ## The editor
@@ -104,6 +106,27 @@ gdh live stop --session <name>
 - **Frame pacing.** gdh starts Godot with V-Sync off: steps run as fast as the GPU goes. If the game turns V-Sync on itself, a step's notes say so, and steps then run at about 60 frames a second.
 - **Nodes that run while held.** `status` lists nodes with process mode ALWAYS or WHEN_PAUSED. They keep running while the game is held, so account for them when measuring.
 
+## Measuring
+
+Numbers settle what eyes can't: whether something flickers, swims, stays a pixel wide, or costs too much. Every measure reads PNGs (files or directories, in name order); see `${CLAUDE_PLUGIN_ROOT}/docs/measure.md` for each definition.
+
+```sh
+gdh live record 90 --out <dir>/frames --session <name> [--hold ui_left]   # step 90 frames, save each
+gdh measure flicker <dir>/frames          # still camera: anything over 0 changes on its own
+gdh measure shimmer <dir>/frames          # moving camera: the second difference over time
+gdh measure line shot.png --from X,Y --to X,Y   # a thin line's width at half maximum, its peak
+gdh measure black <dir>/frames --fail     # pure black cut into something lit: a NaN
+gdh measure crush shot.png --mask hull.png      # pixels at the tone mapper's floor in a region
+gdh measure mask with.png without.png --out hull.png   # where a thing draws (shots with it and without)
+gdh live measure shimmer --frames 60 --session <name>  # record and measure in one go
+gdh live start --project <dir> --session <name> --gpu-passes   # then:
+gdh live frames --clear --session <name>; gdh live step 600 --session <name>; gdh live frames --session <name>
+```
+
+- **Compare like with like.** Moving edges count in `shimmer`, so compare a shot against the same shot changed one way, never two different shots. `term WITHOUT WITH` measures what one setting adds from two runs of the same held frames.
+- **Frame times** count only frames the game ran, each measured frame once; the summary says how many were measured of the frames run. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. Under Xvfb the GPU idles between frames, so times read slower than in play: say which display ran, and compare runs with each other, alone on the GPU.
+- **`black` and `crush` have blind spots:** a black object on purpose in front of something lit reads as a NaN's hole, and which regions should hold detail is yours to choose (`--box`, `--mask`).
+
 ## Looking at images
 
 Read PNGs with the Read tool. This is where you catch what logs miss, so don't skip it.
@@ -161,3 +184,4 @@ jq '.classes[] | select(.name=="CharacterBody2D") | [.methods[].name, .propertie
 - `references/probes.md`: what each probe measures, its thresholds and its known blind spots
 - `${CLAUDE_PLUGIN_ROOT}/docs/live.md`: full live-control reference, including the raw JSON protocol for scripting many steps in one program
 - `${CLAUDE_PLUGIN_ROOT}/docs/editor.md`: how `gdh editor` drives the Godot editor, its report, and what it leaves alone
+- `${CLAUDE_PLUGIN_ROOT}/docs/measure.md`: every measure's definition, its options and its limits, and how frame times are recorded

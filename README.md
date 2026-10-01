@@ -11,7 +11,7 @@ Linux only for now.
 - A Vulkan driver for your GPU
 - weston and Xwayland, for the display the GPU presents to (Arch: `weston xorg-xwayland`, Debian/Ubuntu: `weston xwayland`). Tested with weston 15 and Xwayland 24.1. Older releases may not have what gdh uses (rootful Xwayland, weston's `--renderer=gl` on its headless backend), and then gdh falls back to Xvfb.
 - Xvfb, the fallback when that display can't start (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
-- [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+ and Pillow)
+- [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+, Pillow and NumPy)
 - For a C# project: Godot's .NET build as `godot-mono`, and the .NET SDK (`dotnet`)
 
 ## C# projects
@@ -156,6 +156,21 @@ Options:
 
 NODE is a path from the scene's root (`.` is the root). The editor's settings, data and caches live in `~/.local/share/gdh/editor-home` (`GDH_EDITOR_HOME` picks another), never your own, and the project's `.godot/editor` (its layout, recent scenes and each scene's camera) is put back as it was. See [docs/editor.md](docs/editor.md).
 
+## Measure what it draws
+
+`gdh measure` puts numbers on frames, any game's: flicker on a still camera, shimmer on a moving one (the second difference over time), a light's jitter, what one setting adds, a thin line's width and brightness, doubled or empty pixels in a dissolve, black from a NaN, crushed blacks, and frame times. A live session records the frames, or measures as it goes, and records each frame's GPU time and, with `--gpu-passes`, each render pass's.
+
+```sh
+gdh live record 120 --session s --out frames/still       # 120 frames, each saved
+gdh measure flicker frames/still                          # every pixel's change over them
+gdh measure line frame.png --from 400,120 --to 400,580    # a line's width at half its height
+gdh live measure black --frames 60 --fail --session s     # black cut into something lit: a NaN
+gdh live start --project game --session s --gpu-passes    # time each render pass too
+gdh live frames --clear --session s && gdh live step 600 --session s && gdh live frames --session s
+```
+
+See [docs/measure.md](docs/measure.md) for each measure's definition and limits.
+
 ## Probes
 
 After capturing, `gdh` checks the scene's data for likely defects. Examples are floating objects, a tilted camera, geometry cut off by the far plane, material values out of range, blurry pixel art, raw translation keys and misaligned UI items. It prints each finding and saves a zoomed crop of it. See [docs/probes.md](docs/probes.md) for the checks, their thresholds and test results.
@@ -187,6 +202,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/capture.py`, `live.py`, `editor.py` | `gdh capture`, `gdh live` and `gdh editor` |
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/companions.py`, `watchdog.py` | A live session's companion processes, and the watchdog that stops them when its game ends |
+| `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
 | `src/gdh/harness/editor.gd` | The editor's main loop for `gdh editor`: opens each scene and saves what the editor shows |
@@ -194,6 +210,12 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, live control, the editor and the displays, each on both displays |
 | `docs/` | Live control, the editor, probes, and test reports |
+
+| `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
+| `src/gdh/harness/probes.gd` | The probes |
+| `testbed/` | Godot project with test scenes |
+| `tests/` | `uv run pytest`: probe findings on the testbed, live control and the displays, each on both displays, and the measures |
+| `docs/` | Live control, measuring frames, probes, and test reports |
 | `skills/gdh/`, `.claude-plugin/` | The Claude Code skill and plugin manifests |
 
 ## License

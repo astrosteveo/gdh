@@ -35,6 +35,7 @@ var warmup_frames := 10
 var ticks_per_second := 60
 ## The display gdh started the game on: "gpu" or "xvfb".
 var display := ""
+var recorder: Node  # frames.gd: each game frame's render times
 
 var _server := TCPServer.new()
 var _conns: Array[Dictionary] = []
@@ -202,6 +203,8 @@ func _handle(item: Dictionary) -> void:
 			result = await _cmd_probes()
 		"tree":
 			result = _cmd_tree(args)
+		"frames":
+			result = recorder.command(args)
 		"eval":
 			result = _cmd_eval(args)
 		"run":

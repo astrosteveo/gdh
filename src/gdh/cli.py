@@ -15,7 +15,7 @@ the Godot editor itself and saves what it shows.
 import argparse
 import sys
 
-from gdh import editor, live
+from gdh import editor, live, measure_cli
 from gdh.capture import cmd_capture, cmd_import
 from gdh.display import default_choice
 from gdh.godot import GdhError
@@ -46,6 +46,7 @@ def main():
 
     live.add_parsers(sub)
     editor.add_parser(sub, live.add_display_option)
+    measure_cli.add_parsers(sub)
 
     argv = sys.argv[1:]
     game_args = []

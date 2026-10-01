@@ -235,7 +235,9 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
         user_args += ["--scene", args.scene]
     game_args = [companions.expand(a, ports, instance=index) for a in args.game_args]
     # --fixed-fps matching the tick rate makes every frame exactly one physics tick.
-    cmd = godot_cmd(project, args.resolution, ["--fixed-fps", str(ticks), "--script", str(LIVE_SCRIPT)], game_args)
+    # --gpu-profile makes the renderer capture a timestamp at each pass, which `frames` reads (harness/frames.gd).
+    profile = ["--gpu-profile"] if getattr(args, "gpu_passes", False) else []
+    cmd = godot_cmd(project, args.resolution, [*profile, "--fixed-fps", str(ticks), "--script", str(LIVE_SCRIPT)], game_args)
     out.mkdir(parents=True, exist_ok=True)
     log_path = out / "godot.log"
     display = open_display(args.display, args.resolution, out / "display.log")
@@ -443,7 +445,8 @@ def cmd_step(args):
                        {"mouse_button": button, "position": [x, y], "pressed": True, "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": False, "at": until}]
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
-    reply = call(session, "step", step_args, instance=args.instance, timeout=max(60, n))
+    # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
+    reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
     result = report(reply, args.json)
     if not args.json:
         for prefix, r in each(reply, result):
@@ -620,6 +623,9 @@ def add_parsers(sub):
                         "none, or an http(s) URL that answers 2xx")
     p.add_argument("--companion-port", action="append", default=[], metavar="NAME=PORT",
                    help="Give a companion this port instead of a free one")
+    p.add_argument("--gpu-passes", action="store_true",
+                   help="Have the renderer time each of its passes, for `frames` (Godot's --gpu-profile; it also "
+                        "prints a GPU profile to the log each second)")
 
     command("stop", cmd_stop, "Quit the game and its companions, and clean up")
     command("status", cmd_status, "Show frame, hold state and scene of each instance, and the companions")
@@ -663,3 +669,6 @@ def add_parsers(sub):
     command("run", cmd_run, "Let every instance run in real time")
     command("pause", cmd_pause, "Hold every instance")
     command("pipe", cmd_pipe, "Take requests as JSON lines on stdin and answer each on stdout (for scripts)")
+
+    from gdh import measure_cli
+    measure_cli.add_live_parsers(commands, command)

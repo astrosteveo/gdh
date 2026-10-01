@@ -107,6 +107,20 @@ def test_a_crevice_that_fades_to_black_is_not_a_nan(tmp_path):
     assert m.black(save(tmp_path / "g.png", a))["nan_px"] == 4
 
 
+def test_a_ring_pixel_between_two_shapes_counts_for_both(tmp_path):
+    # A black pixel half in the light and half in the dark is no hole (4 of its 8 neighbours lit), even when a second
+    # black pixel in the dark shares two of its dark neighbours.
+    a = grey(150)
+    a[11:14, :] = 3
+    a[10, 11:] = 3
+    a[10, 10] = 0
+    a[11, 12] = 0
+    r = m.black(save(tmp_path / "f.png", a))
+    assert r["black_px"] == 2 and r["black_shapes"] == 2 and r["nan_px"] == 0
+    a[10, 11] = 150  # now 5 of 8 lit: a hole
+    assert m.black(save(tmp_path / "g.png", a))["nan_px"] == 1
+
+
 def test_mask_is_where_a_thing_draws_with_its_holes_filled(tmp_path):
     without = grey(10, 60, 40)
     with_ = without.copy()

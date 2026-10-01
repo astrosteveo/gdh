@@ -527,10 +527,14 @@ def components(mask):
     return labels, int(comp.max())
 
 
-def spread_labels(labels, r):
-    """Each pixel's largest label within r pixels (a square), so a shape's ring knows whose it is."""
-    out = labels.copy()
+def ring_pixels(labels, r):
+    """Each shape's ring: the pixels off every shape within r pixels of it (a square), as (shape labels, flat pixel
+    indices), each pair once. A pixel between two shapes is in both rings, so a shape's ring never loses its dark
+    side to a neighbour."""
     h, w = labels.shape
+    off = labels == 0
+    owners, pixels = [], []
+    index = np.arange(h * w, dtype=np.int64).reshape(h, w)
     for dy in range(-r, r + 1):
         for dx in range(-r, r + 1):
             if dy == 0 and dx == 0:
@@ -539,8 +543,15 @@ def spread_labels(labels, r):
             yd = slice(max(-dy, 0), h + min(-dy, 0))
             xs = slice(max(dx, 0), w + min(dx, 0))
             xd = slice(max(-dx, 0), w + min(-dx, 0))
-            np.maximum(out[yd, xd], labels[ys, xs], out=out[yd, xd])
-    return out
+            # The pixel at (yd, xd) sees the shape at (ys, xs).
+            seen = labels[ys, xs]
+            hit = (seen > 0) & off[yd, xd]
+            owners.append(seen[hit].astype(np.int64))
+            pixels.append(index[yd, xd][hit])
+    owners = np.concatenate(owners)
+    pixels = np.concatenate(pixels)
+    pairs = np.unique(owners * (h * w) + pixels)
+    return pairs // (h * w), pairs % (h * w)
 
 
 def shapes(mask, L, ring, lit, limit=20):
@@ -551,12 +562,11 @@ def shapes(mask, L, ring, lit, limit=20):
     labels, count = components(mask)
     if count == 0:
         return [], 0, 0, 0
-    near = spread_labels(labels, ring)
-    around = (near > 0) & ~mask
-    owner = near[around]
+    owner, at = ring_pixels(labels, ring)
+    values = L.ravel()[at]
     ring_n = np.bincount(owner, minlength=count + 1)
-    ring_lit = np.bincount(owner, weights=(L[around] > lit), minlength=count + 1)
-    ring_sum = np.bincount(owner, weights=L[around], minlength=count + 1)
+    ring_lit = np.bincount(owner, weights=(values > lit), minlength=count + 1)
+    ring_sum = np.bincount(owner, weights=values, minlength=count + 1)
     sizes = np.bincount(labels.ravel(), minlength=count + 1)
     with np.errstate(invalid="ignore", divide="ignore"):
         lit_share = np.where(ring_n > 0, ring_lit / np.maximum(ring_n, 1), 0.0)

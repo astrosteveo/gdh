@@ -107,7 +107,7 @@ gdh live frames --clear --session <name>; gdh live step 600 --session <name>; gd
 ```
 
 - **Compare like with like.** Moving edges count in `shimmer`, so compare a shot against the same shot changed one way, never two different shots. `term WITHOUT WITH` measures what one setting adds from two runs of the same held frames.
-- **Frame times** count only frames the game ran, each measured frame once; the summary says how many were measured of the frames run. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. The GPU idles under Xvfb, so times read slower than in play: compare runs with each other, alone on the GPU.
+- **Frame times** count only frames the game ran, each measured frame once; the summary says how many were measured of the frames run. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. Under Xvfb the GPU idles between frames, so times read slower than in play: say which display ran, and compare runs with each other, alone on the GPU.
 - **`black` and `crush` have blind spots:** a black object on purpose in front of something lit reads as a NaN's hole, and which regions should hold detail is yours to choose (`--box`, `--mask`).
 
 ## Looking at images

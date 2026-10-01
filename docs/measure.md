@@ -26,7 +26,7 @@ Every image measure reads luminance: Rec. 709's weights (0.2126, 0.7152, 0.0722)
 | `mask WITH WITHOUT --out PNG` | Where something draws: the pixels where two shots of one held frame (with it, and with it hidden) differ by more than 1 in a channel, with the holes inside filled. | A region for the others: a hull's silhouette for `crush --mask`, say. |
 | `times RECORD` | A frame-time record's summary (below). | Reading a record `gdh live frames --save` kept. |
 
-`black` and `crush` have their limits. A black object drawn on purpose in front of something lit reads as a hole; give it a dark grey, or measure around it. A NaN on a surface lit under 24 slips past `--lit`. `crush` counts what's at the floor; deciding which regions should hold detail is the caller's.
+`black` and `crush` have their limits. A black object drawn on purpose in front of something lit reads as a hole; give it a dark grey, or measure around it. A NaN on a surface lit under 24 slips past `--lit`. With little or no anti-aliasing, the last pixel or two of a dark crevice can reach pure black right beside lit pixels and read as a hole too. A pixel between two black shapes counts in both their rings. `crush` counts what's at the floor; deciding which regions should hold detail is the caller's.
 
 ## Recording from a live session
 
@@ -45,7 +45,7 @@ Every image measure reads luminance: Rec. 709's weights (0.2126, 0.7152, 0.0722)
 - **A game's own passes:** call `RenderingDevice.capture_timestamp("Name")` where the pass starts (in a `CompositorEffect`'s `_render_callback`, say). It shows as a pass, with or without `--gpu-passes`.
 - **The summary** of each: the median, the 99th percentile and the worst, nearest rank (the smallest value with at least that share of frames at or under it), and the mean. A pass missing from a frame counts as 0 there.
 
-The GPU under gdh's Xvfb idles between frames and clocks down, so times read slower than in play; compare runs on the same machine, alone on the GPU.
+The GPU under gdh's display idles between frames and clocks down, so times read slower than in play; compare runs on the same machine, alone on the GPU.
 
 ## Tests
 

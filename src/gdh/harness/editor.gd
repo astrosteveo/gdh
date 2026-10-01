@@ -9,7 +9,9 @@ extends SceneTree
 ## the editor's redraws while nothing happens; --set <node>:<property>=<value> (repeatable, applied in memory, never
 ## saved); --select <node>; --focus <node> (the View menu's Focus Selection); --view <x,y,z>:<x,y,z> (look from the
 ## first point at the second, through a camera the harness adds and previews); --far <metres> for that camera;
-## --timeout <seconds> to wait for the editor.
+## --timeout <seconds> to wait for the editor; --rebuild to build a C# project's code again with the scene open, give the
+## editor the focus so it loads the new build, and save the viewport again; --save to save each scene through the editor (File → Save Scene) after
+## it's captured, as a person would, so a test can see what a save writes.
 
 const ErrorCollector := preload("errors.gd")
 
@@ -108,7 +110,10 @@ func _capture(scene: String, dir: String) -> void:
 		camera = await _view_camera(edited, _opts.view, notes)
 	else:
 		if _opts.has("focus"):
-			notes.append_array(await _focus(edited, _opts.focus))
+			if is_3d:
+				notes.append_array(await _focus(edited, _opts.focus))
+			else:
+				notes.append_array(await _frame_2d(edited, _opts.focus))
 		if is_3d and (_opts.has("orbit") or _opts.has("zoom")):
 			notes.append_array(await _navigate(_opts.get("orbit", ""), int(_opts.get("zoom", "0"))))
 	if _opts.has("select"):
@@ -138,6 +143,15 @@ func _capture(scene: String, dir: String) -> void:
 	report.errors = _errors.drain()
 	if camera != null:
 		_end_preview(camera)
+	if _opts.has("rebuild"):
+		report.rebuild = await _rebuild(dir)
+	if _opts.has("save"):
+		var path := ProjectSettings.globalize_path(scene)
+		var was := FileAccess.get_file_as_string(path)
+		EditorInterface.save_scene()
+		for i in 5:
+			await process_frame
+		report.saved = {"changed": FileAccess.get_file_as_string(path) != was, "errors": _errors.drain()}
 	_finish(report, dir)
 	EditorInterface.close_scene()
 	for i in 5:
@@ -236,6 +250,53 @@ func _viewport_surface() -> Control:
 		if child.get_class() == "Control":
 			return child
 	return null
+
+
+## Builds a C# project's code again while the scene is open (a new assembly, as an edit and a build make one), hands
+## the editor the focus as coming back to its window does (that's when it loads a new build), waits for it, and saves
+## the viewport again as viewport-rebuilt.png: what a person sees after building with the scene open.
+func _rebuild(dir: String) -> Dictionary:
+	var out := []
+	var before := _count(EditorInterface.get_edited_scene_root())
+	var project := ProjectSettings.globalize_path("res://")
+	var code := OS.execute("dotnet", ["build", project, "-nologo", "-v", "q", "-p:SourceRevisionId=gdh%d" % Time.get_ticks_usec()], out, true)
+	_errors.drain()
+	print("gdh: waiting for the editor to load the new build")
+	notification(NOTIFICATION_APPLICATION_FOCUS_IN)
+	get_root().propagate_notification(NOTIFICATION_APPLICATION_FOCUS_IN)
+	var until := Time.get_ticks_msec() + int(float(_opts.get("rebuild_wait", "10")) * 1000)
+	while Time.get_ticks_msec() < until:
+		await process_frame
+	print("gdh: done waiting for the new build")
+	await _drawn()
+	var viewport: Viewport = EditorInterface.get_editor_viewport_2d()
+	var edited := EditorInterface.get_edited_scene_root()
+	if edited is Node3D:
+		viewport = EditorInterface.get_editor_viewport_3d(0)
+	viewport.get_texture().get_image().save_png(dir.path_join("viewport-rebuilt.png"))
+	return {"build_exit": code, "errors": _errors.drain(), "nodes_before": before, "nodes_after": _count(edited) if edited else 0}
+
+
+## Frames a node in the 2D view, as the 2D View menu's Frame Selection does: centred, zoomed to fit.
+func _frame_2d(edited: Node, path: String) -> Array[String]:
+	var node := edited.get_node_or_null(NodePath(path))
+	if node == null:
+		return ["--focus: no node %s" % path]
+	await _select(node)
+	var editor: Node = EditorInterface.get_editor_viewport_2d()
+	while editor != null and editor.get_class() != "CanvasItemEditor":
+		editor = editor.get_parent()
+	if editor == null:
+		return ["--focus: no 2D editor"]
+	for button in editor.find_children("*", "MenuButton", true, false):
+		var popup: PopupMenu = button.get_popup()
+		for i in popup.item_count:
+			if popup.get_item_text(i) == "Frame Selection":
+				popup.id_pressed.emit(popup.get_item_id(i))
+				for f in 5:
+					await process_frame
+				return []
+	return ["--focus: the 2D view's View menu has no Frame Selection"]
 
 
 ## Selects a node, as clicking it in the Scene dock does: the inspector shows it, and the editor takes a few frames to

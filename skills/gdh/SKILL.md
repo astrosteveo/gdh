@@ -94,6 +94,7 @@ gdh live stop --session <name>
   - `--release`: release.
   - `--hold`: press for the whole step.
   - `--tap`: press for one frame.
+  - `--type TEXT`: type into the focused text field, a character a frame (click the field first; step at least as many frames as characters).
   - `--click X,Y`: left click. `--right-click X,Y`: right click. `--left-hold X,Y` and `--right-hold X,Y`: press there for the whole step.
   - `--move X,Y` moves the pointer; `mouse:left`, `mouse:right` and `mouse:middle` work with `--press`, `--release`, `--hold` and `--tap` at the pointer. A drag or a point-while-held is `--move` then `--press mouse:right`, steps with `--move`, then `--release mouse:right`.
 

@@ -35,3 +35,9 @@ process_mode = 2
 visible = false
 offset_right = 40.0
 offset_bottom = 40.0
+
+[node name="Field" type="LineEdit" parent="UI"]
+offset_left = 300.0
+offset_top = 100.0
+offset_right = 600.0
+offset_bottom = 140.0

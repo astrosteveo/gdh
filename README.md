@@ -105,7 +105,7 @@ gdh live eval "get_node('Player').position"
 gdh live stop
 ```
 
-`gdh live` starts the game off-screen, held at frame 0, and runs it an exact number of frames per `step`. Steps can inject actions, keys and clicks. Between commands you can save frames in any view, run the probes, inspect the scene tree and evaluate expressions.
+`gdh live` starts the game off-screen, held at frame 0, and runs it an exact number of frames per `step`. Steps can inject actions, keys, clicks, drags and typed text (`--type`). Between commands you can save frames in any view, run the probes, inspect the scene tree and evaluate expressions.
 
 A session can also start companion processes beside the game, such as a server, wait until they're ready, hand their ports to the game and stop them with it, and it can run several instances of the game that step together. A script can drive it over one pipe:
 

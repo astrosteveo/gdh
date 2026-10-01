@@ -436,6 +436,12 @@ def cmd_step(args):
         events += [input_event(token, True, 0), input_event(token, False, n)]
     for token in args.tap:
         events += [input_event(token, True, 0), input_event(token, False, 1)]
+    # Typed text: a character a frame, each pressed and let go as a key with its character, as a keyboard types.
+    if args.type is not None:
+        if len(args.type) > n:
+            raise SystemExit(f"gdh: --type needs a frame a character: step at least {len(args.type)} frames")
+        for i, ch in enumerate(args.type):
+            events += [{"text": ch, "pressed": True, "at": i}, {"text": ch, "pressed": False, "at": i}]
     # A click lets go after one frame; a hold at the end of the step, as --hold does.
     for button, points, until in ((1, args.click, 1), (2, args.right_click, 1),
                                   (1, args.left_hold, n), (2, args.right_hold, n)):
@@ -642,6 +648,7 @@ def add_parsers(sub):
     p.add_argument("--hold", action="append", default=[], metavar="INPUT",
                    help="Press at the start, release at the end")
     p.add_argument("--tap", action="append", default=[], metavar="INPUT", help="Press for one frame")
+    p.add_argument("--type", metavar="TEXT", help="Type TEXT into whatever has the keyboard's focus, a character a frame from the step's start")
     p.add_argument("--click", action="append", default=[], metavar="X,Y", help="Left click at screenshot pixel X,Y")
     p.add_argument("--right-click", action="append", default=[], metavar="X,Y", help="Right click at screenshot pixel X,Y")
     p.add_argument("--left-hold", action="append", default=[], metavar="X,Y",

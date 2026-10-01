@@ -108,6 +108,8 @@ def harness_args(args, out):
         harness += ["--scene", scene]
     for spec in args.set:
         harness += ["--set", spec]
+    if args.save:
+        harness += ["--save", "1"]
     for key in ("select", "focus", "orbit", "zoom", "view", "far"):
         if getattr(args, key) is not None:
             harness += [f"--{key}", str(getattr(args, key))]
@@ -196,6 +198,12 @@ def report_scene(scene, folder):
         print(f"  {e['type']}: {e['message']}{count} at {e['where']}")
     for note in report.get("notes", []):
         print(f"  note: {note}")
+    if "saved" in report:
+        saved = report["saved"]
+        print(f"  saved through the editor: the file {'changed' if saved['changed'] else 'came back byte for byte'}"
+              + (f", {len(saved['errors'])} errors while saving" if saved["errors"] else ""))
+        for e in saved["errors"][:5]:
+            print(f"  {e['type']}: {e['message']} at {e['where']}")
     return True
 
 
@@ -214,7 +222,8 @@ def add_parser(sub, add_display_option):
                         "(str_to_var), a res:// path as that resource, or plain text. NODE is relative to the scene's root: . is the root. Repeatable")
     p.add_argument("--select", metavar="NODE", help="Select a node, so the inspector shows it")
     p.add_argument("--focus", metavar="NODE",
-                   help="Center the 3D view on a node, as the View menu's Focus Selection does (it keeps its distance)")
+                   help="Center the 3D view on a node, as the View menu's Focus Selection does (it keeps its distance); in a 2D "
+                        "scene, frame it as the 2D View menu's Frame Selection does (centred and zoomed to fit)")
     p.add_argument("--orbit", metavar="DX,DY", help="Then turn the 3D view as dragging with the middle button DX,DY pixels does")
     p.add_argument("--zoom", type=int, metavar="STEPS",
                    help="Then zoom the 3D view as the mouse wheel does: STEPS out, or in when negative")
@@ -223,4 +232,7 @@ def add_parser(sub, add_display_option):
     p.add_argument("--far", type=float, help="The --view camera's far plane, in metres (default: the editor camera's)")
     p.add_argument("--timeout", type=int, default=300, help="Seconds to wait for the editor to start (default 300)")
     p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
+    p.add_argument("--save", action="store_true",
+                   help="Save each scene through the editor (File > Save Scene) after capturing it, as a person would; "
+                        "the report says whether the file changed")
     p.set_defaults(func=cmd_editor)

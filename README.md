@@ -147,7 +147,8 @@ Options:
 | `--idle` | `2` | Seconds to count the editor's redraws while nothing happens |
 | `--orbit DX,DY` | | Turn the 3D view as dragging with the middle button does (write `--orbit=DX,DY` for a negative DX) |
 | `--zoom STEPS` | | Zoom the 3D view as the mouse wheel does: out, or in when negative |
-| `--focus NODE` | | Center the 3D view on a node, as the View menu's Focus Selection does |
+| `--focus NODE` | | Center the 3D view on a node, as the View menu's Focus Selection does; in a 2D scene, frame it (Frame Selection) |
+| `--save` | off | Save each scene through the editor after capturing it; the report says whether the file changed |
 | `--view X,Y,Z:X,Y,Z` | | Look from the first point at the second, through a camera gdh adds and previews (never saved) |
 | `--far` | the editor camera's | The `--view` camera's far plane |
 | `--set NODE:PROPERTY=VALUE` | | Set a property before capturing, in memory only; repeatable. The value is read as Godot's syntax; a `res://` path is that resource, loaded; anything else is plain text |

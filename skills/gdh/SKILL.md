@@ -73,7 +73,7 @@ gdh live stop --session <name>
   - `--release`: release.
   - `--hold`: press for the whole step.
   - `--tap`: press for one frame.
-  - `--click X,Y`: left click. `--right-click X,Y`: right click.
+  - `--click X,Y`: left click. `--right-click X,Y`: right click. `--left-hold X,Y` and `--right-hold X,Y`: press there for the whole step.
 
   Input arrives the way a player's does, so `_input`, `is_action_just_pressed` and `is_action_pressed` all see it.
 - **Coordinates** are screenshot pixels everywhere. `tree` gives each node's `screen` position (`[x, y, w, h]` for Controls), so click at the center of what `tree` reports.

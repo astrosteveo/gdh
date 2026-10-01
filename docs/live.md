@@ -37,6 +37,8 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 | `--tap INPUT` | Press for one frame |
 | `--click X,Y` | Left click at screenshot pixel X,Y |
 | `--right-click X,Y` | Right click at screenshot pixel X,Y |
+| `--left-hold X,Y` | Press the left button at X,Y at the start of the step, release it at the end |
+| `--right-hold X,Y` | Press the right button at X,Y at the start of the step, release it at the end (a held press: a context or marking menu) |
 
 Each option can be repeated. Events at the end of a step (a `--hold`'s release) reach the game before it's held again, so a node that tracks keys by their events (`_input`, `_unhandled_input`) sees them go, not only `Input.is_action_pressed`.
 

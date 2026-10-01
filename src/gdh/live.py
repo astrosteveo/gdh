@@ -397,12 +397,14 @@ def cmd_step(args):
         events += [input_event(token, True, 0), input_event(token, False, n)]
     for token in args.tap:
         events += [input_event(token, True, 0), input_event(token, False, 1)]
-    for button, points in ((1, args.click), (2, args.right_click)):
+    # A click lets go after one frame; a hold at the end of the step, as --hold does.
+    for button, points, until in ((1, args.click, 1), (2, args.right_click, 1),
+                                  (1, args.left_hold, n), (2, args.right_hold, n)):
         for point in points:
             x, y = (float(v) for v in point.split(","))
             events += [{"mouse_motion": [x, y], "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": True, "at": 0},
-                       {"mouse_button": button, "position": [x, y], "pressed": False, "at": 1}]
+                       {"mouse_button": button, "position": [x, y], "pressed": False, "at": until}]
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
     reply = call(session, "step", step_args, instance=args.instance, timeout=max(60, n))
     result = report(reply, args.json)
@@ -588,6 +590,10 @@ def add_parsers(sub):
     p.add_argument("--tap", action="append", default=[], metavar="INPUT", help="Press for one frame")
     p.add_argument("--click", action="append", default=[], metavar="X,Y", help="Left click at screenshot pixel X,Y")
     p.add_argument("--right-click", action="append", default=[], metavar="X,Y", help="Right click at screenshot pixel X,Y")
+    p.add_argument("--left-hold", action="append", default=[], metavar="X,Y",
+                   help="Press the left button at screenshot pixel X,Y at the start, release it at the end")
+    p.add_argument("--right-hold", action="append", default=[], metavar="X,Y",
+                   help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
     p.add_argument("--shot-every", type=int, default=0, metavar="K", help="Save a frame every K frames")
     p.add_argument("--shot", action="store_true", help="Save a frame after stepping")
 

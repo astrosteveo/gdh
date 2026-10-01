@@ -84,6 +84,17 @@ def test_click_presses_button(arena):
     assert value("clicks") == before + 1
 
 
+def test_right_hold_stays_down_for_the_step(arena):
+    held, released = value("[right_held_frames, right_releases]")
+    live("step", "12", "--right-hold", "300,200")
+    after_held, after_released = value("[right_held_frames, right_releases]")
+    # Down for the whole step, and let go at its end: the game sees the release before it's held again.
+    assert after_held - held >= 11
+    assert after_released == released + 1
+    live("step", "5")
+    assert value("right_held_frames") == after_held
+
+
 def test_shots_and_step_recording(arena):
     shots = live("shot", "--view", "normal", "--view", "wireframe")["result"]["shots"]
     assert set(shots) == {"normal", "wireframe"}

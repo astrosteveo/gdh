@@ -9,12 +9,13 @@ for --display: auto, gpu or xvfb). A C# project is built with `dotnet build`
 first.
 
 Arguments after `--` go to the game (capture and live start), where
-OS.get_cmdline_user_args() returns exactly them.
+OS.get_cmdline_user_args() returns exactly them. `gdh editor` opens scenes in
+the Godot editor itself and saves what it shows.
 """
 import argparse
 import sys
 
-from gdh import live
+from gdh import editor, live
 from gdh.capture import cmd_capture, cmd_import
 from gdh.display import default_choice
 from gdh.godot import GdhError
@@ -44,6 +45,7 @@ def main():
     imp.set_defaults(func=cmd_import)
 
     live.add_parsers(sub)
+    editor.add_parser(sub, live.add_display_option)
 
     argv = sys.argv[1:]
     game_args = []

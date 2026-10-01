@@ -1,14 +1,15 @@
 ---
 name: gdh
-description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, and play the game frame by frame with scripted input. Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
+description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, and see what the Godot editor itself shows a scene as (tool scripts included). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
 ---
 
 # gdh: seeing and driving a Godot game
 
-`gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. It has two modes:
+`gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. It has three modes:
 
 - `gdh capture` renders a scene once. You get six views, the engine errors and the probe findings.
 - `gdh live` starts the game held at frame 0. You step it an exact number of frames with input, and you can look at it between steps.
+- `gdh editor` opens scenes in the Godot editor itself and saves what it shows: the 3D (or 2D) viewport, the whole editor window and a report. Use it to check what a user will see when they open a scene, above all a scene with tool scripts.
 
 Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges game feel (controls, pacing, fun). You cover whether the game renders correctly, runs without errors and behaves as specified.
 
@@ -36,6 +37,22 @@ A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gd
 | Movement, input, animation, physics, timers, scene changes, UI interaction | `gdh live` |
 | A bug that shows up after doing something | `gdh live`: reproduce it step by step |
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` |
+| What the editor shows: tool scripts, `@tool` previews, scenes the user opens to edit | `gdh editor` |
+
+## The editor
+
+```sh
+gdh editor --project <dir> --scene res://path/scene.tscn --out <dir>/captures/editor/<name>
+gdh editor --project <dir> --scene res://a.tscn --scene res://b.tscn --out <dir>   # several, one editor run
+```
+
+It runs `godot --editor` with gdh's harness as the main loop, so the project's tool scripts, plugins and importers run exactly as they do for the user, and nothing is installed into the project. It waits for the editor's first scan, opens each scene, and saves `viewport.png` (the first 3D viewport, or the 2D one), `editor.png` (the whole window: the Scene dock, the inspector, the viewport) and `report.json`: the errors raised while the scene opened and after, how long it took to open, how often the editor redrew over two idle seconds (`idle`: a tool script that writes to the scene every frame keeps the editor redrawing), what one redraw of the viewport costs on the CPU and the GPU (`redraw`), the editor camera, and the scene's nodes with how many each tool script made (`made_by_scripts`, never saved). `editor.json` has the startup's errors and `project_changes`: files the editor wrote in the project (often `project.godot`, rewritten in its own format). gdh lists them and never undoes them, so revert what the user didn't ask for.
+
+- **Framing.** The editor camera starts a few metres from the origin. `--orbit=DX,DY` drags it round with the middle button and `--zoom STEPS` turns the wheel (out; negative is in), as a person would. `--view X,Y,Z:X,Y,Z` looks from one point at another through a camera gdh adds (never saved) and previews, with the editor camera's lens or `--far M`. `--focus NODE` centers on a node (the View menu's Focus Selection; it keeps the distance).
+- **Changing what's shown.** `--set NODE:PROPERTY=VALUE` (in memory, never saved; Godot syntax, or plain text) and `--select NODE`, which shows it in the inspector. NODE is relative to the scene's root: `.` is the root.
+- **Nothing of the user's is touched.** The editor's settings, data and caches live in gdh's editor home (`GDH_EDITOR_HOME`, default `~/.local/share/gdh/editor-home`), and the project's `.godot/editor` (its layout, open scenes, each scene's camera) is put back as it was.
+- **The editor's own camera** reaches 4 km by default (View → Settings → View Z-Far), unlike most game cameras: something far off may be clipped in the editor and not in the game.
+- **A C# project** is built first, as for `capture` and `live`; the editor loads the build and runs its `[Tool]` scripts.
 
 ## Capture
 
@@ -143,3 +160,4 @@ jq '.classes[] | select(.name=="CharacterBody2D") | [.methods[].name, .propertie
 
 - `references/probes.md`: what each probe measures, its thresholds and its known blind spots
 - `${CLAUDE_PLUGIN_ROOT}/docs/live.md`: full live-control reference, including the raw JSON protocol for scripting many steps in one program
+- `${CLAUDE_PLUGIN_ROOT}/docs/editor.md`: how `gdh editor` drives the Godot editor, its report, and what it leaves alone

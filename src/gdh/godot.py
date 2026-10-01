@@ -1,8 +1,7 @@
-"""Launching Godot off-screen: Xvfb, the command line, environment and alert stand-ins."""
+"""Launching Godot off-screen: the command line, environment and alert stand-ins. The display is display.py's."""
 import json
 import os
 import re
-import select
 import shutil
 import signal
 import subprocess
@@ -95,42 +94,6 @@ def _group_alive(pgid):
     return True
 
 
-def start_xvfb(resolution, timeout=15):
-    """Start Xvfb on a free display, in a new process group.
-
-    -displayfd lets Xvfb pick the display number itself, so concurrent runs
-    never collide the way `xvfb-run -a` can. -terminate makes it exit when its
-    last client (Godot) disconnects. Returns (process, ":N"). Xvfb gets its own
-    session and process group, so it outlives the gdh command that started it.
-    """
-    width, height = resolution.split("x")
-    read_fd, write_fd = os.pipe()
-    proc = subprocess.Popen(
-        ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", f"{width}x{height}x24",
-         "-nolisten", "tcp", "-terminate"],
-        pass_fds=[write_fd], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL, start_new_session=True)
-    os.close(write_fd)
-    # Xvfb writes the number and its newline separately, and dies if the pipe
-    # is closed between the two, so read up to the newline.
-    data = b""
-    deadline = time.monotonic() + timeout
-    try:
-        while b"\n" not in data:
-            ready, _, _ = select.select([read_fd], [], [], max(deadline - time.monotonic(), 0))
-            chunk = os.read(read_fd, 64) if ready else b""
-            if not chunk:
-                break
-            data += chunk
-    finally:
-        os.close(read_fd)
-    number = data.decode().strip() if data.endswith(b"\n") else ""
-    if not number:
-        kill_groups(proc.pid)
-        raise RuntimeError("Xvfb didn't start. Is it installed (Arch: xorg-server-xvfb, Debian/Ubuntu: xvfb)?")
-    return proc, f":{number}"
-
-
 def csharp_project(project):
     """The project's .csproj if it's a C# project, else None."""
     found = sorted(Path(project).glob("*.csproj"))
@@ -172,6 +135,9 @@ def godot_cmd(project, resolution, extra, game_args=()):
         "--rendering-driver", "vulkan",
         *gpu,
         "--audio-driver", "Dummy",
+        # gdh paces the frames itself (held, running, stepping uncapped), so V-Sync
+        # mustn't hold them to the display's refresh. The game can still turn it on.
+        "--disable-vsync",
         "--resolution", resolution,
         "--path", str(project),
         *extra,

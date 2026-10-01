@@ -31,6 +31,8 @@ var ready_file := ""
 var idle_timeout_s := 1800.0
 var warmup_frames := 10
 var ticks_per_second := 60
+## The display gdh started the game on: "gpu" or "xvfb".
+var display := ""
 
 var _server := TCPServer.new()
 var _conns: Array[Dictionary] = []
@@ -41,6 +43,7 @@ var _last_request_ms := 0
 var _notes: Array[String] = []
 var _shot_count := 0
 var _game_frames := 0
+var _vsync_noted := false
 
 
 func _ready() -> void:
@@ -210,6 +213,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		if event == null:
 			return {"error": "Bad input event: %s" % JSON.stringify(spec)}
 		timeline.get_or_add(clampi(int(spec.get("at", 0)), 0, frames), []).append(event)
+	_note_vsync()
 	var was_held := _held
 	var start_frame := _game_frames
 	_set_held(false)
@@ -230,6 +234,16 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	if not was_held:
 		Engine.max_fps = ticks_per_second
 	return {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
+
+
+## gdh starts the game with V-Sync off, so steps run as fast as the GPU goes. On the GPU
+## display a game that turns it on itself waits for each frame's turn at the refresh rate.
+func _note_vsync() -> void:
+	if _vsync_noted or display != "gpu" or DisplayServer.window_get_vsync_mode() == DisplayServer.VSYNC_DISABLED:
+		return
+	_vsync_noted = true
+	_notes.append("The game turned V-Sync on, so each frame waits for the display's refresh: steps run at about 60 "
+			+ "frames a second, not as fast as the GPU can draw them.")
 
 
 func _cmd_shot(args: Dictionary) -> Dictionary:

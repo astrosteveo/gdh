@@ -17,7 +17,7 @@ SESSION = f"test-{os.getpid()}"
 
 
 @pytest.fixture(scope="module")
-def arena(tmp_path_factory):
+def arena(tmp_path_factory, display):
     out = tmp_path_factory.mktemp("live")
     gdh("live", "start", "--project", TESTBED, "--scene", "res://live/arena.tscn",
         "--session", SESSION, "--out", out, "--", "--level", "3", "--hard")

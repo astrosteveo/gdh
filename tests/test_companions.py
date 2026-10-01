@@ -23,7 +23,7 @@ def session_file(name):
 
 
 @pytest.fixture(scope="module")
-def pair(tmp_path_factory):
+def pair(tmp_path_factory, display):
     out = tmp_path_factory.mktemp("pair")
     gdh("live", "start", "--project", TESTBED, "--scene", "res://live/lockstep.tscn", "--session", SESSION,
         "--out", out, "--instances", "2", "--companion", f"barrier={sys.executable} {BARRIER} {{port}} 2",

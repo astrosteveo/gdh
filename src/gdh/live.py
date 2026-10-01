@@ -19,8 +19,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from gdh import companions
+from gdh.display import CHOICES, open_display, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
-                       start_xvfb, write_alert_shims)
+                       write_alert_shims)
 from gdh.images import crop_findings, save_tiles
 
 LIVE_SCRIPT = HARNESS / "live.gd"
@@ -64,6 +65,16 @@ def all_groups(session):
     return session.get("groups", [session["pid"]])
 
 
+def displays(session):
+    return [g["display"] for g in instances(session) if g.get("display")]
+
+
+def stop_all(session):
+    """Stop every process the session started, and remove its displays' runtime directories."""
+    kill_groups(*all_groups(session))
+    stop_displays(displays(session))
+
+
 def load_session(name):
     path = session_path(name)
     if not path.exists():
@@ -71,7 +82,7 @@ def load_session(name):
     session = json.loads(path.read_text())
     for i, instance in enumerate(instances(session)):
         if not pid_alive(instance["pid"]):
-            kill_groups(*all_groups(session))
+            stop_all(session)
             remove_session(session)
             which = f"Instance {i} of session '{name}'" if len(instances(session)) > 1 else f"Session '{name}'"
             raise LiveError(f"{which} has ended. Last lines of {instance['log']}:\n{log_tail(instance['log'])}")
@@ -180,6 +191,11 @@ def each(reply, result):
     return [(f"[{reply['instance']}] " if "instance" in reply else "", result)]
 
 
+def describe_display(instance):
+    display = instance.get("display")
+    return f"display {display['kind']} {display['name']}" if display else "display xvfb"
+
+
 def describe_status(status, prefix=""):
     seconds = status["frame"] / max(status.get("ticks_per_second", 60), 1)
     state = "held" if status["held"] else "running"
@@ -208,7 +224,7 @@ def print_tree(node, indent=0):
 # --- Starting -------------------------------------------------------------------
 
 def start_instance(project, args, index, count, out, shims, ports, ticks):
-    """Launch one instance of the game under its own Xvfb. Returns (record, process, ready file)."""
+    """Launch one instance of the game on a display of its own. Returns (record, process, ready file)."""
     name = args.session if count == 1 else f"{args.session}-{index}"
     ready = SESSION_DIR / f"{name}-ready.json"
     ready.unlink(missing_ok=True)
@@ -222,18 +238,23 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     cmd = godot_cmd(project, args.resolution, ["--fixed-fps", str(ticks), "--script", str(LIVE_SCRIPT)], game_args)
     out.mkdir(parents=True, exist_ok=True)
     log_path = out / "godot.log"
+    display = open_display(args.display, args.resolution, out / "display.log")
+    user_args += ["--display", display.kind]
     # The token goes in the environment, which only this user can read. The
     # command line is visible to everyone in the process list.
-    xvfb, display = start_xvfb(args.resolution)
-    env = godot_env(shims, display, user_args)
+    env = godot_env(shims, display.name, user_args)
     env["GDH_TOKEN"] = token
-    with open(log_path, "w") as log:
-        proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                env=env, start_new_session=True)
+    try:
+        with open(log_path, "w") as log:
+            proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                    env=env, start_new_session=True)
+    except BaseException:
+        display.stop()
+        raise
     # pid is Godot, the process that matters for liveness. groups are the
-    # process groups of Godot and Xvfb, which stop kills.
+    # process groups of Godot and its display, which stop kills.
     record = {"pid": proc.pid, "port": 0, "token": token, "out": str(out), "log": str(log_path),
-              "groups": [proc.pid, xvfb.pid]}
+              "groups": [proc.pid, *display.groups], "display": display.record()}
     return record, proc, ready
 
 
@@ -255,10 +276,10 @@ def wait_ready(record, proc, ready, deadline, label):
     return info
 
 
-def start_watchdog(watch, groups):
+def start_watchdog(watch, groups, remove):
     """A detached process that stops the session's other processes once any game ends (watchdog.py)."""
     proc = subprocess.Popen([sys.executable, "-m", "gdh.watchdog", "--watch", *map(str, watch),
-                             "--groups", *map(str, groups)],
+                             "--groups", *map(str, groups), "--remove", *remove],
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             start_new_session=True)
     return proc.pid
@@ -271,7 +292,7 @@ def cmd_start(args):
         old = json.loads(existing.read_text())
         if pid_alive(old["pid"]):
             raise LiveError(f"Session '{name}' is already running. Stop it with: gdh live stop --session {name}")
-        kill_groups(*all_groups(old))
+        stop_all(old)
         remove_session(old)
     if args.instances < 1:
         raise LiveError("--instances takes 1 or more.")
@@ -320,11 +341,13 @@ def cmd_start(args):
                  for i, (record, proc, ready) in enumerate(started)]
     except BaseException:
         kill_groups(*started_groups)
+        stop_displays([record["display"] for record, _, _ in started])
         remove_session(session)
         raise
     games = [record for record, _, _ in started]
     extra = [g for g in started_groups if g not in [r["pid"] for r in games]]
-    watchdog = start_watchdog([r["pid"] for r in games], extra)
+    watchdog = start_watchdog([r["pid"] for r in games], extra,
+                              [r["display"]["runtime_dir"] for r in games if r["display"].get("runtime_dir")])
     first = games[0]
     session.update({"pid": first["pid"], "port": first["port"], "token": first["token"], "log": first["log"],
                     "out": str(out), "project": str(project), "instances": games, "watchdog": watchdog,
@@ -336,8 +359,9 @@ def cmd_start(args):
         prefix = "" if len(games) == 1 else f"[{i}] "
         print(describe_status(info["status"], prefix))
         if len(games) > 1:
-            print(f"{prefix}pid {record['pid']}, output in {record['out']}")
-    print(f"session '{name}': pid {first['pid']}, output in {out}")
+            print(f"{prefix}pid {record['pid']}, {describe_display(record)}, output in {record['out']}")
+    print(f"session '{name}': pid {first['pid']}"
+          f"{', ' + describe_display(first) if len(games) == 1 else ''}, output in {out}")
     return 0
 
 
@@ -359,8 +383,8 @@ def cmd_stop(args):
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and any(pid_alive(g["pid"]) for g in games):
         time.sleep(0.2)
-    # Xvfb exits with Godot, but make sure every group is gone.
-    kill_groups(*all_groups(session))
+    # The display exits with Godot, but make sure every group is gone.
+    stop_all(session)
     remove_session(session)
     print(f"Stopped session '{args.session}'.")
     return 0
@@ -371,8 +395,9 @@ def cmd_status(args):
     reply = call(session, "status", instance="all")
     result = report(reply, args.json)
     if not args.json:
-        for prefix, status in each(reply, result):
+        for (prefix, status), instance in zip(each(reply, result), instances(session)):
             print(describe_status(status, prefix))
+            print(f"{prefix}  {describe_display(instance)}")
         for companion in session.get("companions", []):
             state = "running" if pid_alive(companion["pid"]) else "exited"
             print(f"companion '{companion['name']}': {state}, pid {companion['pid']}, port {companion['port']}")
@@ -550,6 +575,13 @@ def session_alive(session):
     return all(pid_alive(g["pid"]) for g in instances(session))
 
 
+def add_display_option(parser):
+    parser.add_argument("--display", choices=CHOICES, default=None,
+                        help="gpu: a virtual display the GPU presents to (weston and Xwayland); xvfb: Xvfb, which "
+                             "copies every frame through the CPU; auto: gpu if it starts, else xvfb with a note "
+                             "(default: $GDH_DISPLAY, else auto)")
+
+
 def add_parsers(sub):
     live = sub.add_parser("live", help="Start a game off-screen and drive it step by step")
     commands = live.add_subparsers(dest="live_command", required=True)
@@ -572,6 +604,7 @@ def add_parsers(sub):
     p.add_argument("--scene", help="res:// path (default: the project's main scene)")
     p.add_argument("--out", help="Output directory (default: ./captures/live/<session>)")
     p.add_argument("--resolution", default="1280x720")
+    add_display_option(p)
     p.add_argument("--idle-timeout", type=int, default=1800,
                    help="Quit after this many seconds without a request (default 1800)")
     p.add_argument("--timeout", type=int, default=60,

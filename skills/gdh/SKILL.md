@@ -5,7 +5,7 @@ description: See and drive a Godot 4 game on Linux. Render scenes off-screen on 
 
 # gdh: seeing and driving a Godot game
 
-`gdh` runs Godot under Xvfb with Vulkan on the real GPU, so nothing appears on the user's desktop. It has two modes:
+`gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. It has two modes:
 
 - `gdh capture` renders a scene once. You get six views, the engine errors and the probe findings.
 - `gdh live` starts the game held at frame 0. You step it an exact number of frames with input, and you can look at it between steps.
@@ -21,7 +21,9 @@ uv tool install "${CLAUDE_PLUGIN_ROOT}"                 # puts gdh on PATH
 uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh --help     # no install
 ```
 
-Requirements are Linux, Godot 4.x as `godot` on PATH (or set `GODOT=/path/to/godot`), Xvfb, and a Vulkan driver. After adding or changing assets such as textures or models, run `gdh import --project <dir>` so Godot imports them before capturing.
+Requirements are Linux, Godot 4.x as `godot` on PATH (or set `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb. After adding or changing assets such as textures or models, run `gdh import --project <dir>` so Godot imports them before capturing.
+
+**Displays.** By default gdh runs the game on a display the GPU presents to (weston and Xwayland), so it runs at the GPU's full speed, even at 4K. If that can't start (weston or Xwayland missing, no GPU to composite on), gdh falls back to Xvfb and prints a note. Xvfb copies every frame through the CPU, so it's slow at high resolutions and the GPU idles between frames. If you see the note, say so when you report timings, and suggest installing weston and Xwayland. `--display gpu|xvfb|auto` (or `GDH_DISPLAY`) picks one. Screenshots are the same on both.
 
 A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gdh builds it with `dotnet build` before every `capture`, `live start` and `import`, and runs `godot-mono`, so there's nothing to do by hand. A failed build stops gdh with the compiler's errors. `eval` can't see plain C# objects: have the game expose a node or autoload whose methods return dictionaries and arrays, and call those.
 
@@ -66,7 +68,7 @@ gdh live stop --session <name>
 ```
 
 - **Session names.** Give each task its own `--session` name. Another agent or task may be using `default`.
-- **Stop when done.** Always run `gdh live stop`, because a running game keeps the GPU busy. It quits by itself after 30 idle minutes.
+- **Stop when done.** Always run `gdh live stop`, because a running game keeps the GPU busy. It stops the game's display too. The game quits by itself after 30 idle minutes.
 - **Time.** The game is held between commands, so take as long as you need. `step N` runs exactly N frames, and each frame is one physics tick. Game seconds are frames divided by ticks per second, shown in `status`. This makes measurements exact. For example, a player at 120 px/s moves exactly 60 px in 30 frames at 60 ticks per second.
 - **Input.** An INPUT is an action from the Input Map, such as `ui_right` or `jump`, or a key such as `key:Space`.
   - `--press`: press and keep pressed.
@@ -81,6 +83,7 @@ gdh live stop --session <name>
 - **`eval`** evaluates one Godot Expression, with the current scene as its base. `scene`, `tree`, `root`, every autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`...) are available. It can't assign with `=`. Use `set("prop", value)` or call a method instead.
 - **Errors.** Every reply lists the engine errors raised since the previous command. Read them after every step. They're often the real bug.
 - **Companions and instances.** `--companion 'NAME=COMMAND'` starts a program beside the game (a server, say) and stops it with the session; `{port}` in its command is a free port, and `{NAME.port}` passes it to the game's arguments (`-- --server ws://127.0.0.1:{server.port}`). `--companion-ready NAME=http://127.0.0.1:{port}/health` waits for it. `--instances N` runs N games that step together (`{instance}` in the game's arguments tells them apart); `step` input goes to `--instance K`, and `eval`, `shot` and `tree` take `--instance K` or `all`. A script that steps many times keeps one `gdh live pipe` open (docs/live.md).
+- **Frame pacing.** gdh starts Godot with V-Sync off: steps run as fast as the GPU goes. If the game turns V-Sync on itself, a step's notes say so, and steps then run at about 60 frames a second.
 - **Nodes that run while held.** `status` lists nodes with process mode ALWAYS or WHEN_PAUSED. They keep running while the game is held, so account for them when measuring.
 
 ## Looking at images

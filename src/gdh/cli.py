@@ -1,9 +1,12 @@
 """gdh: run Godot scenes off-screen on the real GPU and collect what they render.
 
-Godot runs under Xvfb with the Vulkan driver, so windows never reach the
-user's desktop. Environment: GODOT (the binary; default godot-mono for a C#
-project and godot otherwise), GDH_GPU_INDEX (Vulkan device index; default
-lets Godot choose). A C# project is built with `dotnet build` first.
+Godot runs with Vulkan on a display of its own, so windows never reach the
+user's desktop: a virtual display the GPU presents to (weston and Xwayland),
+or Xvfb when that can't start (--display). Environment: GODOT (the binary;
+default godot-mono for a C# project and godot otherwise), GDH_GPU_INDEX
+(Vulkan device index; default lets Godot choose), GDH_DISPLAY (the default
+for --display: auto, gpu or xvfb). A C# project is built with `dotnet build`
+first.
 
 Arguments after `--` go to the game (capture and live start), where
 OS.get_cmdline_user_args() returns exactly them.
@@ -13,6 +16,7 @@ import sys
 
 from gdh import live
 from gdh.capture import cmd_capture, cmd_import
+from gdh.display import default_choice
 from gdh.godot import GdhError
 
 
@@ -28,6 +32,7 @@ def main():
     cap.add_argument("--modes", help="Comma list: normal,unshaded,lighting,normals,wireframe,overdraw")
     cap.add_argument("--warmup", type=int, default=30, help="Frames to render before capturing")
     cap.add_argument("--resolution", default="1280x720")
+    live.add_display_option(cap)
     cap.add_argument("--timeout", type=int, default=120, help="Seconds per scene")
     cap.add_argument("--tiles", action="store_true", help="Also save normal.png as 2x2 tiles at 2x zoom")
     cap.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
@@ -51,6 +56,8 @@ def main():
     if hasattr(args, "game_args"):
         args.game_args = game_args
     try:
+        if getattr(args, "display", False) is None:
+            args.display = default_choice()
         sys.exit(args.func(args))
     except GdhError as e:
         sys.stdout.flush()

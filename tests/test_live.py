@@ -2,7 +2,7 @@
 
 The arena moves the player right at 120 px/s while ui_right is held, counts
 ui_accept in _physics_process, _process and _input, and counts Go button
-clicks. GameState is an autoload.
+clicks; its Field is a LineEdit to type into. GameState is an autoload.
 """
 import json
 import os
@@ -68,6 +68,15 @@ def test_tap_reaches_every_callback_once(arena):
     live("step", "5", "--tap", "key:Space")
     after = value("[just_physics, just_process, input_events, GameState.jumps]")
     assert [a - b for a, b in zip(after, before)] == [2, 2, 2, 2]
+
+
+def test_type_puts_text_where_the_keys_go(arena):
+    live("step", "2", "--click", "450,120")  # (the field takes the focus)
+    live("step", "12", "--type", "Ada Lovelace")
+    assert value("get_node('UI/Field').text") == "Ada Lovelace"
+    live("step", "2", "--tap", "key:BackSpace")
+    assert value("get_node('UI/Field').text") == "Ada Lovelac"
+    value("get_node('UI/Field').release_focus()")  # (the keys go back to the game)
 
 
 def test_press_persists_across_steps(arena):

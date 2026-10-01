@@ -423,6 +423,18 @@ func _make_event(spec: Dictionary) -> InputEvent:
 		e.pressed = pressed
 		e.strength = float(spec.get("strength", 1.0)) if pressed else 0.0
 		return e
+	if spec.has("text"):
+		# A typed character: the key it's on (when it has one) and the character itself, with Shift for a capital,
+		# so a LineEdit or TextEdit takes it as a keyboard's typing.
+		var ch: String = spec.text
+		var e := InputEventKey.new()
+		var key := OS.find_keycode_from_string(ch.to_upper()) if ch != " " else KEY_SPACE
+		e.keycode = key
+		e.physical_keycode = key
+		e.unicode = ch.unicode_at(0)
+		e.shift_pressed = ch != ch.to_lower()
+		e.pressed = pressed
+		return e
 	if spec.has("key"):
 		var code := OS.find_keycode_from_string(spec.key)
 		if code == KEY_NONE:

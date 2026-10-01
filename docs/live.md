@@ -38,6 +38,7 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 | `--release INPUT` | Release at the start of the step |
 | `--hold INPUT` | Press at the start, release at the end |
 | `--tap INPUT` | Press for one frame |
+| `--type TEXT` | Type TEXT into whatever has the keyboard's focus (a `LineEdit`, a chat line), a character a frame from the step's start: each a key press and release carrying its character, with Shift for a capital. The step must be at least as many frames as characters |
 | `--click X,Y` | Left click at screenshot pixel X,Y |
 | `--right-click X,Y` | Right click at screenshot pixel X,Y |
 | `--left-hold X,Y` | Press the left button at X,Y at the start of the step, release it at the end |

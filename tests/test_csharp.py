@@ -1,6 +1,7 @@
 """gdh with a C# project (testbed_cs): it builds the assemblies with dotnet
 first, runs Godot's .NET build (godot-mono) without being told, and reports
 a failed build in a sentence."""
+import json
 import os
 import re
 import shutil
@@ -81,3 +82,25 @@ def test_failed_build_is_reported(project, tmp_path):
     finally:
         broken.unlink()
         run("live", "stop", "--session", SESSION, check=False)
+
+
+def test_editor_runs_csharp_tool_scripts(project, tmp_path, monkeypatch):
+    """gdh editor builds the project, and the editor runs its C# tool scripts: what one makes in the editor shows."""
+    monkeypatch.setenv("GDH_EDITOR_HOME", str(tmp_path / "editor-home"))
+    tool = project / "Grower.cs"
+    tool.write_text("using Godot;\n\n[Tool]\npublic partial class Grower : Node3D\n{\n"
+                    "    public override void _Ready()\n    {\n"
+                    "        if (Engine.IsEditorHint()) AddChild(new MeshInstance3D { Name = \"Grown\", Mesh = new BoxMesh() });\n"
+                    "    }\n}\n")
+    scene = project / "grower.tscn"
+    scene.write_text('[gd_scene format=3]\n\n[ext_resource type="Script" path="res://Grower.cs" id="1_grower"]\n\n'
+                     '[node name="Grower" type="Node3D"]\nscript = ExtResource("1_grower")\n')
+    try:
+        run("editor", "--project", project, "--scene", "res://grower.tscn", "--out", tmp_path / "out")
+        report = json.loads((tmp_path / "out" / "report.json").read_text())
+        assert report["tree"]["name"] == "Grower"
+        assert report["tree"].get("made_by_scripts") == 1
+        assert not [e for e in report["open_errors"] + report["errors"] if e["type"] != "warning"]
+    finally:
+        tool.unlink()
+        scene.unlink()

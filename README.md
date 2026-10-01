@@ -119,6 +119,43 @@ gdh live pipe < requests.jsonl
 
 See [docs/live.md](docs/live.md).
 
+## See what the editor shows
+
+```sh
+gdh editor --project path/to/game --scene res://levels/level_1.tscn --out captures/editor
+gdh editor --project path/to/game --scene res://levels/level_1.tscn --out captures/editor --zoom 30 --orbit=-150,40
+gdh editor --project path/to/game --scene res://levels/level_1.tscn --out captures/editor --view 0,40,80:0,0,0 --far 5000
+```
+
+`gdh editor` opens scenes in the Godot editor itself, on a display of gdh's own, and saves what the editor shows. Godot runs as `godot --editor --script <gdh's harness>`, so the editor starts as it does for a person, with the project's tool scripts, plugins and importers, and gdh's harness as its main loop: nothing is installed into the project. For each scene the output directory gets:
+
+| File | Contents |
+|---|---|
+| `viewport.png` | The editor's first 3D viewport (or its 2D one), as the editor draws it: the scene, the grid and the gizmos |
+| `editor.png` | The whole editor window: the docks, the inspector, the viewport and its menus |
+| `report.json` | Errors and warnings while the scene opened and after, how long it took to open, how often the editor redrew over idle seconds, what one redraw of the viewport costs, the camera, and the scene's nodes with how many tool scripts made under each |
+
+Beside them, `editor.json` holds the startup (how long the editor took to be ready, its errors) and `project_changes`: files outside `.godot` that the editor wrote in the project (Godot often rewrites `project.godot` in its own format). gdh lists them and leaves them as they are. `godot.log` and `display.log` are the engine's and the display's output.
+
+Options:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--scene` | required | Scene to open. Repeat it to open several in one editor run, each in its own subdirectory. |
+| `--resolution` | `1600x900` | The editor window's size |
+| `--warmup` | `60` | Frames to wait after a scene opens |
+| `--idle` | `2` | Seconds to count the editor's redraws while nothing happens |
+| `--orbit DX,DY` | | Turn the 3D view as dragging with the middle button does (write `--orbit=DX,DY` for a negative DX) |
+| `--zoom STEPS` | | Zoom the 3D view as the mouse wheel does: out, or in when negative |
+| `--focus NODE` | | Center the 3D view on a node, as the View menu's Focus Selection does |
+| `--view X,Y,Z:X,Y,Z` | | Look from the first point at the second, through a camera gdh adds and previews (never saved) |
+| `--far` | the editor camera's | The `--view` camera's far plane |
+| `--set NODE:PROPERTY=VALUE` | | Set a property before capturing, in memory only; repeatable. The value is read as Godot's syntax; a `res://` path is that resource, loaded; anything else is plain text |
+| `--select NODE` | | Select a node, so the inspector shows it |
+| `--display`, `--timeout`, `--no-build` | | As for `capture` |
+
+NODE is a path from the scene's root (`.` is the root). The editor's settings, data and caches live in `~/.local/share/gdh/editor-home` (`GDH_EDITOR_HOME` picks another), never your own, and the project's `.godot/editor` (its layout, recent scenes and each scene's camera) is put back as it was. See [docs/editor.md](docs/editor.md).
+
 ## Probes
 
 After capturing, `gdh` checks the scene's data for likely defects. Examples are floating objects, a tilted camera, geometry cut off by the far plane, material values out of range, blurry pixel art, raw translation keys and misaligned UI items. It prints each finding and saves a zoomed crop of it. See [docs/probes.md](docs/probes.md) for the checks, their thresholds and test results.
@@ -147,15 +184,16 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | Path | Contents |
 |---|---|
 | `src/gdh/cli.py` | The `gdh` command |
-| `src/gdh/capture.py`, `live.py` | `gdh capture` and `gdh live` |
+| `src/gdh/capture.py`, `live.py`, `editor.py` | `gdh capture`, `gdh live` and `gdh editor` |
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/companions.py`, `watchdog.py` | A live session's companion processes, and the watchdog that stops them when its game ends |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
+| `src/gdh/harness/editor.gd` | The editor's main loop for `gdh editor`: opens each scene and saves what the editor shows |
 | `src/gdh/harness/probes.gd` | The probes |
 | `testbed/` | Godot project with test scenes |
-| `tests/` | `uv run pytest`: probe findings on the testbed, live control and the displays, each on both displays |
-| `docs/` | Live control, probes, and test reports |
+| `tests/` | `uv run pytest`: probe findings on the testbed, live control, the editor and the displays, each on both displays |
+| `docs/` | Live control, the editor, probes, and test reports |
 | `skills/gdh/`, `.claude-plugin/` | The Claude Code skill and plugin manifests |
 
 ## License

@@ -211,7 +211,7 @@ def add_parser(sub, add_display_option):
                    help="Seconds to count the editor's redraws while nothing happens (default 2)")
     p.add_argument("--set", action="append", default=[], metavar="NODE:PROPERTY=VALUE",
                    help="Set a property before capturing, in memory only (never saved); the value in Godot's syntax "
-                        "(str_to_var) or plain text. NODE is relative to the scene's root: . is the root. Repeatable")
+                        "(str_to_var), a res:// path as that resource, or plain text. NODE is relative to the scene's root: . is the root. Repeatable")
     p.add_argument("--select", metavar="NODE", help="Select a node, so the inspector shows it")
     p.add_argument("--focus", metavar="NODE",
                    help="Center the 3D view on a node, as the View menu's Focus Selection does (it keeps its distance)")

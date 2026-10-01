@@ -161,8 +161,8 @@ func _edited_root(scene: String, frames: int) -> Node:
 	return null
 
 
-## --set node:property=value, in memory only. The value is read as Godot's own syntax (str_to_var), and as plain text
-## when it isn't any.
+## --set node:property=value, in memory only. The value is read as Godot's own syntax (str_to_var); a res:// path to a
+## resource is that resource, loaded; anything else is plain text.
 func _apply_set(edited: Node, spec: String) -> Array[String]:
 	var colon := spec.find(":")
 	var equals := spec.find("=", colon)
@@ -175,7 +175,9 @@ func _apply_set(edited: Node, spec: String) -> Array[String]:
 	var text := spec.substr(equals + 1)
 	var value = str_to_var(text)
 	if value == null and text != "null":
-		value = text
+		value = load(text) if text.begins_with("res://") and ResourceLoader.exists(text) else text
+	if not property in node:
+		return ["--set: %s has no property %s" % [spec.substr(0, colon), property]]
 	node.set(property, value)
 	return []
 

@@ -150,7 +150,7 @@ Options:
 | `--focus NODE` | | Center the 3D view on a node, as the View menu's Focus Selection does |
 | `--view X,Y,Z:X,Y,Z` | | Look from the first point at the second, through a camera gdh adds and previews (never saved) |
 | `--far` | the editor camera's | The `--view` camera's far plane |
-| `--set NODE:PROPERTY=VALUE` | | Set a property before capturing, in memory only; repeatable. The value is read as Godot's syntax, or as plain text |
+| `--set NODE:PROPERTY=VALUE` | | Set a property before capturing, in memory only; repeatable. The value is read as Godot's syntax; a `res://` path is that resource, loaded; anything else is plain text |
 | `--select NODE` | | Select a node, so the inspector shows it |
 | `--display`, `--timeout`, `--no-build` | | As for `capture` |
 

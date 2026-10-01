@@ -71,6 +71,25 @@ def test_line_width_and_brightness(tmp_path):
     assert m.lines(path, [{"a": [101, 20, 2], "b": [101, 180, 2]}, {"a": [101, 20], "b": [101, 40]}]) == []
 
 
+def test_spots_find_points_and_their_size(tmp_path):
+    a = grey(10, 160, 120)
+    yy, xx = np.mgrid[0:120, 0:160]
+    for (x, y, sigma) in ((40, 40, 0.62), (100, 40, 1.5), (40, 90, 3.0)):
+        a += (200 * np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * sigma ** 2)))[..., None]
+    a[80:100, 100:140] = 200  # a block: not a point
+    path = save(tmp_path / "spots.png", np.clip(a, 0, 255))
+    found = sorted(m.spots(path, radius=8), key=lambda s: s["x"] * 1000 + s["y"])
+    assert [(s["x"], s["y"]) for s in found] == [(40, 40), (40, 90), (100, 40)]
+    # A Gaussian's width at half maximum is 2.355 sigma; its second moment gives sigma back.
+    by = {(s["x"], s["y"]): s for s in found}
+    assert by[(100, 40)]["fwhm_px"] == pytest.approx(2.355 * 1.5, abs=0.3)
+    assert by[(40, 90)]["fwhm_px"] == pytest.approx(2.355 * 3.0, abs=0.4)
+    assert by[(40, 90)]["sigma_px"] == pytest.approx(3.0, abs=0.35)
+    assert by[(100, 40)]["peak_above_bg"] == pytest.approx(200, abs=2)
+    out = m.spots_summary(found)
+    assert out["spots"] == 3 and out["fwhm_px"]["max"] == by[(40, 90)]["fwhm_px"]
+
+
 def test_dissolve_counts_doubled_and_empty(tmp_path):
     rng = np.random.default_rng(3)
     h = rng.random((40, 40))

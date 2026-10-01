@@ -18,6 +18,7 @@ KINDS = {
     "black": "Pure black, and black holes cut in something lit: a NaN's signature",
     "crush": "Pixels at the tone mapper's floor in a region that should hold detail",
     "line": "A thin line's width (full width at half maximum) and brightness across its profile",
+    "spots": "Isolated points of light (stars, dust, sparks): how many, and each one's width, sigma and peak",
 }
 
 
@@ -64,6 +65,11 @@ def run_kind(kind, paths, args):
         out["crush_free"] = out["totals"].get("crushed_px", 0) == 0
     elif kind == "line":
         out = run_lines(paths, args)
+    elif kind == "spots":
+        each = []
+        for p in paths:
+            each += [{"image": str(p), **s} for s in m.spots(p, region, args.radius, args.contrast, args.limit)]
+        out = {"frames": len(paths), **m.spots_summary(each), "each": each}
     else:
         raise MeasureCliError(f"Unknown measure {kind}.")
     if region:
@@ -135,6 +141,13 @@ def brief(kind, out):
                 lines.append(f"  {Path(r['image']).name}: {r['crushed_px']} px ({r['crushed_share']:.4%} of "
                              f"{r['pixels']}), largest {r['largest_shape']}")
         return "\n".join(lines)
+    if kind == "spots":
+        if not out["spots"]:
+            return f"spots: none found over {out['frames']} frames (none stood out from the background)"
+        f, s, pk = out["fwhm_px"], out["sigma_px"], out["peak_above_bg"]
+        return (f"spots over {out['frames']} frames: {out['spots']} points, width {f['median']} px median "
+                f"({f['p10']} to {f['p90']} for 80%, {f['min']} to {f['max']} in all), sigma {s['median']} px median "
+                f"(min {s['min']}), peak {pk['median']} above the background")
     if kind == "line":
         if not out["lines_measured"]:
             return f"line: nothing measured over {out['frames']} frames (no point stood out from the background)"
@@ -246,10 +259,14 @@ def add_image_options(p, kind):
         p.add_argument("--samples", type=int, default=24, help="Points measured along the line's middle 60%% (24)")
         p.add_argument("--contrast", type=float, default=12.0, help="How far a point's peak must stand above its background (12)")
         p.add_argument("--min-length", type=float, default=40.0, help="Shorter lines are skipped (40 px)")
+    if kind == "spots":
+        p.add_argument("--radius", type=int, default=5, help="The window round each point, in pixels each way: nothing as bright in it (5)")
+        p.add_argument("--contrast", type=float, default=12.0, help="How far a point's peak must stand above its background (12)")
+        p.add_argument("--limit", type=int, default=2000, help="The brightest this many points in each frame (2000)")
 
 
 def add_parsers(sub):
-    p = sub.add_parser("measure", help="Measure saved frames: flicker, shimmer, lines, dissolves, NaNs, crushed blacks, frame times")
+    p = sub.add_parser("measure", help="Measure saved frames: flicker, shimmer, lines, points, dissolves, NaNs, crushed blacks, frame times")
     kinds = p.add_subparsers(dest="kind", required=True)
     for kind, text in KINDS.items():
         k = kinds.add_parser(kind, help=text, description=text)
@@ -442,3 +459,5 @@ def add_shared_measure_options(p):
     p.add_argument("--samples", type=int, default=24)
     p.add_argument("--contrast", type=float, default=12.0)
     p.add_argument("--min-length", type=float, default=40.0)
+    p.add_argument("--radius", type=int, default=5, help="spots: the window round each point (5 px)")
+    p.add_argument("--limit", type=int, default=2000, help="spots: the brightest this many in each frame (2000)")

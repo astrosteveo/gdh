@@ -1,8 +1,7 @@
-"""Launching Godot off-screen: Xvfb, the command line, environment and alert stand-ins."""
+"""Launching Godot off-screen: the command line, environment and alert stand-ins. The display is display.py's."""
 import json
 import os
 import re
-import select
 import shutil
 import signal
 import subprocess
@@ -44,8 +43,27 @@ def alert_shims():
         yield write_alert_shims(tmp)
 
 
-def godot_env(shims, display, harness_args=()):
+def user_data_home():
+    """Where a game run under gdh keeps user:// (its saves, settings, logs and caches): never the player's own, so a
+    test run can't rotate out their logs or touch their saves. GDH_USER_DATA names another directory, or "real" for
+    the player's own. Kept between runs, so a game's caches stay warm."""
+    chosen = os.environ.get("GDH_USER_DATA", "")
+    if chosen == "real":
+        return None
+    if chosen:
+        return os.path.abspath(os.path.expanduser(chosen))
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(base, "gdh", "user-data")
+
+
+def godot_env(shims, display, harness_args=(), game=True):
     env = dict(os.environ)
+    # A game's user:// lives under XDG_DATA_HOME on Linux: point it at gdh's own (the editor's import keeps the real
+    # one, where its settings and templates are).
+    home = user_data_home() if game else None
+    if home:
+        os.makedirs(home, exist_ok=True)
+        env["XDG_DATA_HOME"] = home
     # The harness's settings travel in the environment, so the command line
     # after `--` holds only the game's own arguments.
     env["GDH_ARGS"] = json.dumps([str(a) for a in harness_args])
@@ -95,42 +113,6 @@ def _group_alive(pgid):
     return True
 
 
-def start_xvfb(resolution, timeout=15):
-    """Start Xvfb on a free display, in a new process group.
-
-    -displayfd lets Xvfb pick the display number itself, so concurrent runs
-    never collide the way `xvfb-run -a` can. -terminate makes it exit when its
-    last client (Godot) disconnects. Returns (process, ":N"). Xvfb gets its own
-    session and process group, so it outlives the gdh command that started it.
-    """
-    width, height = resolution.split("x")
-    read_fd, write_fd = os.pipe()
-    proc = subprocess.Popen(
-        ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", f"{width}x{height}x24",
-         "-nolisten", "tcp", "-terminate"],
-        pass_fds=[write_fd], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL, start_new_session=True)
-    os.close(write_fd)
-    # Xvfb writes the number and its newline separately, and dies if the pipe
-    # is closed between the two, so read up to the newline.
-    data = b""
-    deadline = time.monotonic() + timeout
-    try:
-        while b"\n" not in data:
-            ready, _, _ = select.select([read_fd], [], [], max(deadline - time.monotonic(), 0))
-            chunk = os.read(read_fd, 64) if ready else b""
-            if not chunk:
-                break
-            data += chunk
-    finally:
-        os.close(read_fd)
-    number = data.decode().strip() if data.endswith(b"\n") else ""
-    if not number:
-        kill_groups(proc.pid)
-        raise RuntimeError("Xvfb didn't start. Is it installed (Arch: xorg-server-xvfb, Debian/Ubuntu: xvfb)?")
-    return proc, f":{number}"
-
-
 def csharp_project(project):
     """The project's .csproj if it's a C# project, else None."""
     found = sorted(Path(project).glob("*.csproj"))
@@ -172,6 +154,9 @@ def godot_cmd(project, resolution, extra, game_args=()):
         "--rendering-driver", "vulkan",
         *gpu,
         "--audio-driver", "Dummy",
+        # gdh paces the frames itself (held, running, stepping uncapped), so V-Sync
+        # mustn't hold them to the display's refresh. The game can still turn it on.
+        "--disable-vsync",
         "--resolution", resolution,
         "--path", str(project),
         *extra,

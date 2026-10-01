@@ -26,7 +26,7 @@
         "Measures the speed in the running game (a frame count or time plus a position change), not only by reading the code",
         "Confirms Go button clicks are counted by clicking it in the running game",
         "Includes at least one screenshot of the running game in outputs/",
-        "Leaves no Godot or Xvfb process from the run running"
+        "Leaves no Godot, weston, Xwayland or Xvfb process from the run running"
       ]
     },
     {

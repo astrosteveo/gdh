@@ -13,14 +13,16 @@ gdh live stop
 
 A C# project is built with `dotnet build` first and run with `godot-mono` (README, "C# projects"). Arguments after `--` go to the game: `gdh live start --project path/to/game -- --server ws://localhost:8787` gives the game exactly `["--server", "ws://localhost:8787"]` from `OS.get_cmdline_user_args()`. The harness's own settings travel in the `GDH_ARGS` environment variable, so they never mix with the game's.
 
-Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/harness/live.gd`, which loads the scene and attaches the control node `bridge.gd`. The project's autoloads load as usual. The control node is an internal child of the root, so game code that walks `root.get_children()` doesn't see it.
+Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/harness/live.gd`, which loads the scene and attaches the control node `bridge.gd`. The game runs on a display of its own: the GPU display by default, or Xvfb (`--display`, README's [Displays](../README.md#displays)). The project's autoloads load as usual. The control node is an internal child of the root, so game code that walks `root.get_children()` doesn't see it.
 
 ## Time
 
 - The game starts held at game frame 0. The scene's `_ready` has run, and no `_process` or `_physics_process` has.
 - `step N` runs exactly N frames, then holds again. Godot is launched with `--fixed-fps` set to the project's physics tick rate, so each frame is exactly one physics tick of game time, however long it takes to render.
 - The frame number in every reply counts game frames only. Frames rendered while held don't count.
+- Held, the game still draws 20 frames a second, so it barely loads the GPU, and a request wakes it at once. gdh paces these frames itself, since Godot's own limiter (`Engine.max_fps`) is off under `--fixed-fps`.
 - `run` lets the game run at about real time until `pause`.
+- Steps run as fast as the GPU draws, since gdh starts Godot with V-Sync off. A game that turns V-Sync on itself waits for the display's 60 Hz refresh on the GPU display, and the first `step` after it does says so in a note.
 - Holding uses `SceneTree.paused`. It has these side effects:
   - Nodes whose process mode is `ALWAYS` or `WHEN_PAUSED` keep running while held. `status` lists them.
   - If the game unpauses itself while held, `gdh` pauses it again and says so in the next reply.
@@ -87,7 +89,7 @@ gdh live start --project client --session vs \
 
 ## Several instances
 
-`--instances N` runs N instances of the game in one session, each under its own Xvfb, with its own output in `<out>/instance-K/`. `{instance}` in the game's arguments is each one's number, so they can be told apart (`-- --user pilot{instance}`).
+`--instances N` runs N instances of the game in one session, each on a display of its own, with its own output in `<out>/instance-K/`. `{instance}` in the game's arguments is each one's number, so they can be told apart (`-- --user pilot{instance}`).
 
 - **`step`, `run` and `pause` go to every instance at once**, so the instances step together: when each frame of one waits on another (two clients of a server on a test clock that ticks once every client has asked), they keep in step. The input of a step goes to `--instance K` (default 0), or to every instance with `--instance all`.
 - **`shot`, `probes`, `tree` and `eval` go to `--instance K`** (default 0), or to every instance with `--instance all`.
@@ -111,7 +113,7 @@ The commands and their arguments are the raw protocol's (below), and `"instance"
 - **Session files:** each is kept in `$XDG_RUNTIME_DIR/gdh/` and can be read only by you. It holds the port and a random token that every request must carry. The game gets the token through its environment, which other users can't read. Keeping it off the command line keeps it out of the process list.
 - **Local only:** the game listens on 127.0.0.1.
 - **Idle timeout:** a game quits after 30 minutes without a request. Change this with `--idle-timeout SECONDS`, or set 0 to turn it off.
-- **Stopping:** `stop` asks the game to quit, then stops Xvfb and Godot if they're still running.
+- **Stopping:** `stop` asks the game to quit, then stops Godot and its display if they're still running, and removes the display's runtime directory. The display's own output is in `<out>/display.log`.
 - **Crashed games:** if a game dies, the next command says so, shows the end of its log, stops the session's other processes and removes the session.
 
 ## Protocol
@@ -131,7 +133,7 @@ This is how gdh talks to one instance. The commands are `status`, `step`, `shot`
 
 ## Tests
 
-`uv run pytest` runs `tests/test_live.py` against `testbed/live/arena.tscn`. The tests need Godot, a GPU with Vulkan, and Xvfb. They check:
+The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every test runs on both displays, the GPU display and Xvfb (the GPU display's are skipped without weston and Xwayland). `uv run pytest` runs `tests/test_live.py` against `testbed/live/arena.tscn`. It checks:
 
 - exact frame counts and movement at 60 and 120 ticks per second
 - that taps reach `_physics_process`, `_process` and `_input` once each
@@ -147,3 +149,16 @@ This is how gdh talks to one instance. The commands are `status`, `step`, `shot`
 - input to the instance named, and a hold's release seen by a node that tracks its keys by their events
 - one instance's reply alone, a bad instance number, and `pipe`
 - `status`, an HTTP ready check, `stop` stopping the companion, the watchdog stopping it when the game ends by itself, a companion that fails to start, and a placeholder that names no companion
+
+`tests/test_display.py` checks the displays themselves:
+
+- screenshots of a 3D scene in all six views, captured and at the same stepped frame live, the same pixel for pixel on both displays
+- that the GPU display has DRI3 and runs Godot's X11 driver with V-Sync off, says so when a game turns V-Sync on, and leaves no process or runtime directory behind
+- a window smaller than Xwayland's smallest screen (320x200)
+- the watchdog stopping both instances' displays when one game is killed
+- the fallback to Xvfb, with its note, when weston isn't installed, when weston has only a software renderer, and when it can't start at all; and `--display gpu` failing instead
+- a bad `GDH_DISPLAY`, and the sweep of runtime directories left by killed runs
+
+## The game's user data
+
+A game run under gdh (capture or live) keeps `user://` (its saves, settings, logs and caches) in gdh's own directory, `~/.local/share/gdh/user-data` (under `$XDG_DATA_HOME` when set), never in the player's `~/.local/share/godot`. So a test run can't touch a player's saves or rotate out their logs. The directory is kept between runs, so shader caches stay warm. `GDH_USER_DATA=<dir>` picks another one, and `GDH_USER_DATA=real` uses the player's own. `gdh import` keeps the real one, where the editor's settings are.

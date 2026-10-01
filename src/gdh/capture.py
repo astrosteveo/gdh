@@ -6,7 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from gdh.godot import HARNESS, alert_shims, build_csharp, godot_binary, godot_cmd, godot_env, kill_groups, start_xvfb
+from gdh.display import open_display
+from gdh.godot import HARNESS, alert_shims, build_csharp, godot_binary, godot_cmd, godot_env, kill_groups
 from gdh.images import crop_findings, save_tiles
 
 CAPTURE_SCRIPT = HARNESS / "capture.gd"
@@ -22,24 +23,25 @@ def capture_one(project, scene, out_dir, args, shims):
     if args.modes:
         user_args += ["--modes", args.modes]
     cmd = godot_cmd(project, args.resolution, ["--script", str(CAPTURE_SCRIPT)], args.game_args)
-    xvfb, display = start_xvfb(args.resolution)
+    display = open_display(args.display, args.resolution, out_dir / "display.log")
     try:
         with open(out_dir / "godot.log", "w") as log:
             proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                    env=godot_env(shims, display, user_args), start_new_session=True)
+                                    env=godot_env(shims, display.name, user_args), start_new_session=True)
             try:
                 code = proc.wait(timeout=args.timeout)
             except subprocess.TimeoutExpired:
                 code = "timeout"
     finally:
-        # Godot may have left children, so stop its whole group, then Xvfb.
-        kill_groups(*([proc.pid] if "proc" in locals() else []), xvfb.pid)
-        xvfb.wait()
+        # Godot may have left children, so stop its whole group, then the display.
         if "proc" in locals():
+            kill_groups(proc.pid)
             proc.wait()
+        display.stop()
     report_path = out_dir / "report.json"
     report = json.loads(report_path.read_text()) if report_path.exists() else {}
     if report:
+        report["display"] = display.kind
         images = {p.stem: p for p in out_dir.glob("*.png")}
         crop_findings(report.get("findings", []), report.get("image_size"), images, out_dir / "crops", out_dir)
         if args.tiles and "normal" in images:
@@ -49,7 +51,7 @@ def capture_one(project, scene, out_dir, args, shims):
     errors = sum(e.get("count", 1) for e in report.get("errors", []))
     findings = report.get("findings", [])
     warnings = sum(f["severity"] == "warning" for f in findings)
-    print(f"{scene}: exit={code} adapter={report.get('adapter', '?')} errors={errors} "
+    print(f"{scene}: exit={code} adapter={report.get('adapter', '?')} display={display.kind} errors={errors} "
           f"warnings={warnings} findings={len(findings)} images={','.join(pngs) or 'none'} -> {out_dir}")
     for f in findings:
         crop = f"  [{f['crop']}]" if f.get("crop") else ""
@@ -81,11 +83,11 @@ def cmd_import(args):
     cmd = [godot_binary(project), "--headless", "--import", "--path", str(project)]
     with alert_shims() as shims:
         # Headless needs no display. The bogus one keeps any child off the desktop.
-        code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display")).returncode
+        code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display", game=False)).returncode
         if code != 0:
             # Godot 4.7's editor sometimes aborts at the end of a headless import
             # ("Parameter "singleton" is null" in EditorNode::is_cmdline_mode, exit 134),
             # in the standard and .NET builds alike. The next run succeeds.
             print(f"gdh: Godot exited with code {code} while importing; importing again", file=sys.stderr)
-            code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display")).returncode
+            code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display", game=False)).returncode
         return code

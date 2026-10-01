@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -8,9 +9,21 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 TESTBED = ROOT / "testbed"
+GPU_DISPLAY = bool(shutil.which("weston") and shutil.which("Xwayland"))
 
 if not (shutil.which("Xvfb") and shutil.which("godot")):
     pytest.skip("needs godot and Xvfb on PATH", allow_module_level=True)
+
+
+@pytest.fixture(scope="session", autouse=True, params=["gpu", "xvfb"])
+def display(request):
+    """Every test runs on both displays: gdh reads GDH_DISPLAY when --display isn't given.
+    A module-scoped fixture that starts a game must depend on this, so it starts again for each."""
+    if request.param == "gpu" and not GPU_DISPLAY:
+        pytest.skip("the GPU display needs weston and Xwayland")
+    os.environ["GDH_DISPLAY"] = request.param
+    yield request.param
+    os.environ.pop("GDH_DISPLAY", None)
 
 
 def gdh(*args, check=True):

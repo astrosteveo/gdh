@@ -8,8 +8,9 @@ Linux only for now.
 
 - Linux
 - Godot 4.7 (tested with 4.7.2)
-- Xvfb (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
 - A Vulkan driver for your GPU
+- weston and Xwayland, for the display the GPU presents to (Arch: `weston xorg-xwayland`, Debian/Ubuntu: `weston xwayland`). Tested with weston 15 and Xwayland 24.1. Older releases may not have what gdh uses (rootful Xwayland, weston's `--renderer=gl` on its headless backend), and then gdh falls back to Xvfb.
+- Xvfb, the fallback when that display can't start (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
 - [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+, Pillow and NumPy)
 - For a C# project: Godot's .NET build as `godot-mono`, and the .NET SDK (`dotnet`)
 
@@ -70,9 +71,10 @@ Nothing is installed into the project. For each scene, the output directory gets
 | `normals.png` | Surface directions (normal buffer) |
 | `wireframe.png` | Triangle edges |
 | `overdraw.png` | How many times each pixel is drawn |
-| `report.json` | GPU used, engine errors and warnings, render stats, probe findings |
+| `report.json` | GPU used, display, engine errors and warnings, render stats, probe findings |
 | `crops/` | A zoomed crop for each finding that has a screen area |
 | `godot.log` | Full engine output |
+| `display.log` | The display's own output (weston and Xwayland, or Xvfb) |
 
 Options:
 
@@ -82,6 +84,7 @@ Options:
 | `--modes` | all six | Comma-separated list of views, e.g. `normal,wireframe` |
 | `--warmup` | `30` | Frames to render before capturing |
 | `--resolution` | `1280x720` | Size of the capture |
+| `--display` | `auto` | `gpu`, `xvfb` or `auto` ([Displays](#displays)) |
 | `--timeout` | `120` | Seconds allowed per scene |
 | `--tiles` | off | Also save `normal.png` as four 2× tiles in `crops/` |
 
@@ -91,6 +94,7 @@ Environment variables:
 |---|---|
 | `GODOT` | Path to the Godot binary. Default: `godot-mono` for a C# project, `godot` otherwise. |
 | `GDH_GPU_INDEX` | Vulkan device index to render on. Default: Godot picks one. |
+| `GDH_DISPLAY` | The display when `--display` isn't given: `auto` (the default), `gpu` or `xvfb`. |
 
 ## Drive a running game
 
@@ -134,9 +138,24 @@ See [docs/measure.md](docs/measure.md) for each measure's definition and limits.
 
 After capturing, `gdh` checks the scene's data for likely defects. Examples are floating objects, a tilted camera, geometry cut off by the far plane, material values out of range, blurry pixel art, raw translation keys and misaligned UI items. It prints each finding and saves a zoomed crop of it. See [docs/probes.md](docs/probes.md) for the checks, their thresholds and test results.
 
+## Displays
+
+Each Godot run gets an X display of its own, and Godot draws to it with its X11 driver and Vulkan. There are two kinds:
+
+- **`gpu`**: a virtual display the GPU presents to. It's weston's headless backend, compositing with OpenGL on the GPU, running a rootful Xwayland. Xwayland has DRI3, so Vulkan hands each finished frame over as a GPU buffer, and the game runs as fast as the GPU draws it.
+- **`xvfb`**: Xvfb, which has no DRI3. Vulkan copies every frame through the CPU, which takes about 100 ms a frame at 3840x2160 while the GPU idles.
+
+`--display auto`, the default, uses the GPU display, and falls back to Xvfb with a note when it can't start: weston or Xwayland isn't installed, or weston finds no GPU to composite on. `--display gpu` fails instead of falling back. `GDH_DISPLAY` sets the default for scripts. Screenshots are the same on both, pixel for pixel, since gdh reads them from the game's own viewport. [docs/displays.md](docs/displays.md) has how it works and what was measured.
+
+gdh starts Godot with `--disable-vsync`, since it paces the frames itself: held at 20 frames a second, `run` at the tick rate and `step` as fast as the GPU goes. A game that turns V-Sync on itself waits for the display's 60 Hz refresh on the GPU display, and `step` says so.
+
 ## How it stays off your desktop
 
-`gdh` runs Godot inside Xvfb with the X11 display driver and Vulkan, so windows never reach your session. For each run, it also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `xmessage` to a temporary directory and puts that directory first on `PATH`. When Godot pops up an alert, the stand-in writes the message to `godot.log` and no dialog opens.
+Godot's window is on its own display, never your session's. Each GPU display has a runtime directory of its own for weston's socket, so weston and Xwayland never see your Wayland session, and Godot is pointed at a Wayland display that doesn't exist, so it can't fall back to yours. Every display ends when its game does, and gdh stops and removes whatever is left (`gdh live stop`, or the session's watchdog when a game ends by itself).
+
+A game run under gdh also keeps its `user://` (saves, settings, logs, caches) in `~/.local/share/gdh/user-data`, never your own `~/.local/share/godot`, so a test run can't touch your saves or rotate out your logs. `GDH_USER_DATA=<dir>` picks another directory, `GDH_USER_DATA=real` uses yours ([docs/live.md](docs/live.md)).
+
+For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `xmessage` to a temporary directory and puts that directory first on `PATH`. When Godot pops up an alert, the stand-in writes the message to `godot.log` and no dialog opens.
 
 ## Layout
 
@@ -144,6 +163,7 @@ After capturing, `gdh` checks the scene's data for likely defects. Examples are 
 |---|---|
 | `src/gdh/cli.py` | The `gdh` command |
 | `src/gdh/capture.py`, `live.py` | `gdh capture` and `gdh live` |
+| `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/companions.py`, `watchdog.py` | A live session's companion processes, and the watchdog that stops them when its game ends |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
@@ -151,7 +171,7 @@ After capturing, `gdh` checks the scene's data for likely defects. Examples are 
 | `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
 | `src/gdh/harness/probes.gd` | The probes |
 | `testbed/` | Godot project with test scenes |
-| `tests/` | `uv run pytest`: probe findings on the testbed, live control, and the measures |
+| `tests/` | `uv run pytest`: probe findings on the testbed, live control and the displays, each on both displays, and the measures |
 | `docs/` | Live control, measuring frames, probes, and test reports |
 | `skills/gdh/`, `.claude-plugin/` | The Claude Code skill and plugin manifests |
 

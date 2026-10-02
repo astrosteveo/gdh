@@ -73,6 +73,33 @@ static func parse_args(argv: PackedStringArray) -> Dictionary:
 	return out
 
 
+## PNG saving off the main thread. Encoding a PNG is most of what saving a frame costs (about 27 ms at 1920x1080 and
+## 105 ms at 3840x2160, against 2.5 and 10 ms to read the frame back from the GPU), so the frame is read back here, on
+## the main thread, and encoded on the WorkerThreadPool while the game goes on. Every frame is its own file, so their
+## order is in their names. Whoever starts saves waits for them (wait_saves) before it reports the files.
+## At most max_pending_saves() frames wait to be encoded (each 33 MB at 3840x2160): one more waits for the oldest
+## first. The tasks are low priority, so the engine's own work on the pool goes first.
+static var _pending: Array[int] = []
+
+
+static func max_pending_saves() -> int:
+	return clampi(OS.get_processor_count() - 2, 2, 16)
+
+
+## Reads the root viewport's frame back now and saves it as a PNG at path on a worker thread.
+static func save_frame(tree: SceneTree, path: String) -> void:
+	var image := tree.root.get_texture().get_image()
+	while _pending.size() >= max_pending_saves():
+		WorkerThreadPool.wait_for_task_completion(_pending.pop_front())
+	_pending.append(WorkerThreadPool.add_task(func() -> void: image.save_png(path), false, "gdh: save a frame"))
+
+
+## Waits until every frame save_frame started is written.
+static func wait_saves() -> void:
+	while not _pending.is_empty():
+		WorkerThreadPool.wait_for_task_completion(_pending.pop_front())
+
+
 ## Renders `views` of the root viewport and saves each as <dir>/<prefix><view>.png.
 ## Waits a few frames after switching modes so the new mode is drawn. No game
 ## time passes while the tree is paused. Returns {view: path}.
@@ -89,7 +116,8 @@ static func save_views(tree: SceneTree, views: Array, dir: String, prefix := "")
 			await tree.process_frame
 		await RenderingServer.frame_post_draw
 		var path := dir.path_join("%s%s.png" % [prefix, view])
-		root.get_texture().get_image().save_png(path)
+		save_frame(tree, path)
 		saved[view] = path
 	root.debug_draw = Viewport.DEBUG_DRAW_DISABLED
+	wait_saves()
 	return saved

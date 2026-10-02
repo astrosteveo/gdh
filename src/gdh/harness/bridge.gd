@@ -269,6 +269,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			await RenderingServer.frame_post_draw
 			shots.append(_save_image("step-f%d" % (i + 1)))
 	_set_held(was_held)
+	Common.wait_saves()
 	return {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
 
 
@@ -491,7 +492,7 @@ func _save_image(label: String) -> String:
 	var dir := out_dir.path_join("shots")
 	DirAccess.make_dir_recursive_absolute(dir)
 	var path := dir.path_join("%04d-%s.png" % [_shot_count, label])
-	get_tree().root.get_texture().get_image().save_png(path)
+	Common.save_frame(get_tree(), path)  # written by the time the step replies (Common.wait_saves)
 	return path
 
 

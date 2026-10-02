@@ -1,0 +1,32 @@
+# Working on gdh
+
+gdh renders and drives Godot 4 off-screen. `README.md` covers what it does and needs, and `docs/` covers each command. This file covers developing gdh itself.
+
+## Never run Godot by hand
+
+Run Godot only through gdh: `uv run gdh ...` from this folder. A bare `godot` run can open windows or error dialogs on the owner's desktop. Godot's alerts use zenity, which finds the Wayland desktop even with `WAYLAND_DISPLAY` unset. gdh isolates every run. Don't wrap gdh in your own `xvfb-run` either, because gdh picks and manages its displays.
+
+## Tests
+
+- Run `timeout 1200 uv run pytest -q` before merging to `main`. It runs real Godot on the GPU display and on Xvfb, and takes about 11 minutes. Run a single file, such as `uv run pytest tests/test_spawned.py`, while you work.
+- After a run, check that nothing is left: `pgrep -x Xvfb`, `pgrep -x weston`, `pgrep -x godot`.
+- pytest collects any function named `test*`, so name helpers in `tests/conftest.py` something else, like `make_testbed_variant`.
+- `testbed/project.godot` must keep `run/main_scene`. Tests depend on it. When an agent builds testbed scenes, tell it not to edit `project.godot`, and check `git diff testbed/project.godot` afterwards.
+
+## Processes
+
+- Never use `pkill -f` or `pgrep -f`. The pattern matches your own command, so `pkill -f` can kill the shell running it, and `pgrep -f` counts itself. Use `pgrep -x`, or stop a known PID.
+- Other agents may be working in gdh at the same time, in worktrees under `~/Projects/.gdh-worktrees/`. Stop only your own processes. Stage explicit paths, not `git add -A`.
+
+## Shipping changes
+
+- gdh has no remote and runs in place from this folder, so `main` is what everyone uses.
+- Work in your own worktree: `git worktree add ~/Projects/.gdh-worktrees/<name> -b <area>/<name> main`.
+- Merge into `main` with a merge commit, named like the existing history: `Merge <branch>: <what it adds>`. Run the full tests first. Then remove your worktree and branch.
+- Update `README.md`, the matching file in `docs/`, and `skills/gdh/SKILL.md` along with any change users will see.
+- Keep gdh generic. It serves any Godot project, not only the one that found the problem.
+
+## This machine
+
+- `rsync` isn't installed. Copy with `cp -a`, or `shutil.copytree` in Python.
+- Godot uses the NVIDIA RTX 5080 (Vulkan device 0) by default.

@@ -110,6 +110,11 @@ def load_session(name, ended_ok=False):
     if not path.exists():
         raise LiveError(f"No live session '{name}'. Start one with: gdh live start --project <dir>")
     session = json.loads(path.read_text())
+    # A command on the session: with --keep-children, the watchdog's idle timeout counts from this.
+    try:
+        os.utime(path)
+    except OSError:
+        pass
     for i, instance in enumerate(instances(session)):
         if not pid_alive(instance["pid"]):
             children = spawned_by(session) if session.get("keep_children") else []
@@ -329,12 +334,14 @@ def wait_ready(record, proc, ready, deadline, label, resolution):
     return info
 
 
-def start_watchdog(watch, groups, remove, marks, keep_children):
+def start_watchdog(watch, groups, remove, marks, keep_children, idle_timeout, name, logs):
     """A detached process that stops the session's other processes once any game ends, or with keep_children once
-    every game and every process they spawned has ended (watchdog.py)."""
+    every game and every process they spawned has ended, or every game has exited and no gdh command has touched the
+    session for idle_timeout seconds (watchdog.py)."""
+    keep = ["--keep-children", "--idle-timeout", str(idle_timeout), "--session-file", str(session_path(name)),
+            "--logs", *logs] if keep_children else []
     proc = subprocess.Popen([sys.executable, "-m", "gdh.watchdog", "--watch", *map(str, watch),
-                             "--groups", *map(str, groups), "--remove", *remove, "--marks", *marks,
-                             *(["--keep-children"] if keep_children else [])],
+                             "--groups", *map(str, groups), "--remove", *remove, "--marks", *marks, *keep],
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             start_new_session=True)
     return proc.pid
@@ -407,7 +414,8 @@ def cmd_start(args):
     extra = [g for g in started_groups if g not in [r["pid"] for r in games]]
     watchdog = start_watchdog([r["pid"] for r in games], extra,
                               [r["display"]["runtime_dir"] for r in games if r["display"].get("runtime_dir")],
-                              [r["mark"] for r in games], args.keep_children)
+                              [r["mark"] for r in games], args.keep_children, args.idle_timeout, name,
+                              [r["log"] for r in games])
     first = games[0]
     session.update({"pid": first["pid"], "port": first["port"], "token": first["token"], "log": first["log"],
                     "out": str(out), "project": str(project), "instances": games, "watchdog": watchdog,
@@ -704,7 +712,9 @@ def add_parsers(sub):
     p.add_argument("--resolution", default="1280x720")
     add_display_option(p)
     p.add_argument("--idle-timeout", type=int, default=1800,
-                   help="Quit after this many seconds without a request (default 1800)")
+                   help="Quit after this many seconds without a request (default 1800; 0: never). With "
+                        "--keep-children, once the game has exited: stop what it spawned, and the session, after "
+                        "this many seconds without a gdh live command on the session")
     p.add_argument("--timeout", type=int, default=60,
                    help="Seconds to wait for each companion, and then for the game, to be ready")
     p.add_argument("--instances", type=int, default=1, metavar="N",
@@ -720,8 +730,9 @@ def add_parsers(sub):
                    help="Give a companion this port instead of a free one")
     p.add_argument("--keep-children", action="store_true",
                    help="Keep the session, and its display, until every process the game spawned has ended too, "
-                        "not just the game (a launcher that hands off to the game it starts). Without it, spawned "
-                        "processes end with the session")
+                        "not just the game (a launcher that hands off to the game it starts), or, once the game "
+                        "has exited, until --idle-timeout seconds pass without a gdh live command on the session. "
+                        "Without it, spawned processes end with the session")
     p.add_argument("--gpu-passes", action="store_true",
                    help="Have the renderer time each of its passes, for `frames` (Godot's --gpu-profile; it also "
                         "prints a GPU profile to the log each second)")

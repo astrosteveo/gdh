@@ -47,7 +47,14 @@ Movie Maker writes `.png` frames too (`--write-movie frames.png`), but each fram
 
 On gdh's testbed (`testbed/movie/movie.tscn`), the RTX 5080 machine described in [displays.md](displays.md):
 
-MEASUREMENTS
+| Display | Size | 120 frames recorded | Of which Godot's start | A frame after it | H.264 encode | Whole command |
+|---|---|---|---|---|---|---|
+| `gpu` | 1920x1080 | 6.8 s | about 5.4 s | about 12 ms | 0.6-0.8 s | 8.5-8.8 s |
+| `gpu` | 3840x2160 | 10.3-10.4 s | 5.4-5.5 s | about 41 ms | 2.2-2.6 s | 16.5-17.0 s |
+| `xvfb` | 1920x1080 | 9.6-10.1 s | about 5.4 s | about 37 ms | 0.5-0.7 s | 11.2-11.9 s |
+| `xvfb` | 3840x2160 | 22.4-22.7 s | 5.4 s | about 144 ms | 2.5-2.7 s | 29.0-29.3 s |
+
+Two runs each, with 60 frames a second of game time. Godot's start is a 1-frame recording's time, measured at 3840x2160 (5.4-5.5 s on both displays) and taken as the same at 1920x1080. The whole command adds the checks with ffprobe, the audio's level and the contact sheet. On Xvfb about 100 ms of each 3840x2160 frame is presenting it through the CPU ([displays.md](displays.md)), the same as for any run there. The testbed scene draws little, so a game's own frames add their render time to these.
 
 ## The contact sheet
 

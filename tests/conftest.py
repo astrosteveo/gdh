@@ -15,6 +15,23 @@ if not (shutil.which("Xvfb") and shutil.which("godot")):
     pytest.skip("needs godot and Xvfb on PATH", allow_module_level=True)
 
 
+def pytest_configure(config):
+    """One gdh test run on the machine at a time. Each runs real games on the GPU, and two at once can run the GPU
+    out of channels for new Vulkan devices (NVRM: NV_ERR_STATE_IN_USE), failing tests that would pass alone. Every
+    worktree's run takes the same lock, and waits for it; flock lets go when the run ends, however it ends."""
+    import fcntl
+    from gdh.live import SESSION_DIR
+    SESSION_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock = open(SESSION_DIR / "test-suite.lock", "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f"gdh tests: waiting for another gdh test run to finish ({SESSION_DIR / 'test-suite.lock'})",
+              file=sys.stderr, flush=True)
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    config._gdh_suite_lock = lock
+
+
 @pytest.fixture(scope="session", autouse=True, params=["gpu", "xvfb"])
 def display(request):
     """Every test runs on both displays: gdh reads GDH_DISPLAY when --display isn't given.

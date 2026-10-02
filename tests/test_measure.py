@@ -212,13 +212,27 @@ def session_for(tmp_path_factory, mode, *start):
     return name, out
 
 
+# Sessions kept open at once. Every game holds a Vulkan device (and on the GPU display, weston and Xwayland hold the
+# GPU too), and a GPU has only so many channels for all of its processes: on a shared machine, with a desktop and
+# another game running, a sixth game failed to create its device (VK_ERROR_INITIALIZATION_FAILED; the kernel's
+# NVRM: NV_ERR_STATE_IN_USE) and a running one its swapchain. The least recently used session is stopped to start another.
+OPEN_SESSIONS = 2
+
+
 @pytest.fixture(scope="module")
 def sessions(tmp_path_factory):
-    started = {}
+    started = {}  # mode: (name, out), least recently used first
+    options = {}  # mode: its start options, kept for a restart
 
     def get(mode, *start):
-        if mode not in started:
-            started[mode] = session_for(tmp_path_factory, mode, *start)
+        options.setdefault(mode, start)
+        if mode in started:
+            started[mode] = started.pop(mode)
+            return started[mode]
+        while len(started) >= OPEN_SESSIONS:
+            name, _ = started.pop(next(iter(started)))
+            gdh("live", "stop", "--session", name)
+        started[mode] = session_for(tmp_path_factory, mode, *options[mode])
         return started[mode]
 
     yield get

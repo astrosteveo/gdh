@@ -384,7 +384,9 @@ def cmd_frames(args):
     from gdh.live import call, load_session, report
     session = load_session(args.session)
     reply = call(session, "frames", {"reset": args.reset, "clear": args.clear}, instance=args.instance)
-    result = report(reply, False)
+    # With --json, stdout is one JSON document: the engine's errors go into it, not before it.
+    result = report(reply, args.json, echo=False)
+    errors = [e for part in reply.get("instances", [reply]) for e in part.get("errors", [])]
     results = result if isinstance(result, list) else [result]
     summaries = []
     for r in results:
@@ -400,7 +402,10 @@ def cmd_frames(args):
         print("frame record cleared")
         return 0
     if args.json:
-        print(json.dumps(summaries[0] if len(summaries) == 1 else summaries, indent=1))
+        out = summaries[0] if len(summaries) == 1 else summaries
+        if errors:
+            out = {**out, "errors": errors} if isinstance(out, dict) else {"instances": out, "errors": errors}
+        print(json.dumps(out, indent=1))
         return 0
     for i, s in enumerate(summaries):
         prefix = f"[{i}] " if len(summaries) > 1 else ""

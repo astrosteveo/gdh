@@ -19,10 +19,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from gdh import companions
-from gdh.display import CHOICES, open_display, stop_displays
+from gdh.display import CHOICES, open_display, parse_resolution, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
-                       write_alert_shims)
+                       size_mismatch, write_alert_shims)
 from gdh.images import crop_findings, save_tiles
+from gdh.imports import describe_missing, ensure_imported, missing_resources
 
 LIVE_SCRIPT = HARNESS / "live.gd"
 SESSION_DIR = Path(os.environ.get("XDG_RUNTIME_DIR") or Path.home() / ".cache") / "gdh"
@@ -177,6 +178,9 @@ def report(reply, as_json, echo=True):
             for e in part.get("errors", []):
                 count = f" (x{e['count']})" if e.get("count", 1) > 1 else ""
                 print(f"{prefix}{e['type']}: {e['message']}{count} at {e['where']}")
+            missing = missing_resources(part.get("errors", []))
+            if missing:
+                print(f"{prefix}{describe_missing(missing)}")
     if not reply.get("ok"):
         raise LiveError(reply.get("error", "Request failed."))
     if "instances" in reply:
@@ -229,7 +233,7 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     ready = SESSION_DIR / f"{name}-ready.json"
     ready.unlink(missing_ok=True)
     token = secrets.token_hex(16)
-    user_args = ["--ready-file", str(ready), "--out", str(out),
+    user_args = ["--ready-file", str(ready), "--out", str(out), "--resolution", args.resolution,
                  "--idle-timeout", str(args.idle_timeout), "--ticks", str(ticks)]
     if args.scene:
         user_args += ["--scene", args.scene]
@@ -260,7 +264,7 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     return record, proc, ready
 
 
-def wait_ready(record, proc, ready, deadline, label):
+def wait_ready(record, proc, ready, deadline, label, resolution):
     while not ready.exists():
         if proc.poll() is not None:
             raise LiveError(f"Godot{label} exited with code {proc.returncode} before the game was ready. "
@@ -270,10 +274,17 @@ def wait_ready(record, proc, ready, deadline, label):
         time.sleep(0.2)
     info = json.loads(ready.read_text())
     ready.unlink()
+    prefix = label.strip() + " " if label else ""
     for e in info.get("errors", []):
-        print(f"{label.strip() + ' ' if label else ''}{e['type']}: {e['message']} at {e['where']}")
+        print(f"{prefix}{e['type']}: {e['message']} at {e['where']}")
+    missing = missing_resources(info.get("errors", []))
+    if missing:
+        print(f"{prefix}{describe_missing(missing)}")
     if not info.get("port"):
         raise LiveError(info.get("error") or "The game didn't open a port.")
+    mismatch = size_mismatch(info.get("status", {}).get("window_size"), resolution)
+    if mismatch:
+        raise LiveError(f"Not started{label}: {mismatch}")
     record["port"] = info["port"]
     return info
 
@@ -312,8 +323,11 @@ def cmd_start(args):
     for arg in args.game_args:
         companions.expand(arg, ports, instance=0)
     project = Path(args.project).resolve()
+    parse_resolution(args.resolution)
     if not args.no_build:
         build_csharp(project)
+    if not args.no_import:
+        ensure_imported(project)
     out = Path(args.out or Path.cwd() / "captures" / "live" / name).resolve()
     out.mkdir(parents=True, exist_ok=True)
     SESSION_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -339,7 +353,8 @@ def cmd_start(args):
             record, proc, ready = start_instance(project, args, index, args.instances, instance_out, shims, ports, ticks)
             started_groups += record["groups"]
             started.append((record, proc, ready))
-        infos = [wait_ready(record, proc, ready, deadline, "" if args.instances == 1 else f" (instance {i})")
+        infos = [wait_ready(record, proc, ready, deadline, "" if args.instances == 1 else f" (instance {i})",
+                            args.resolution)
                  for i, (record, proc, ready) in enumerate(started)]
     except BaseException:
         kill_groups(*started_groups)
@@ -609,6 +624,8 @@ def add_parsers(sub):
     p = command("start", cmd_start, "Launch the game, held at frame 0 (arguments after -- go to the game)")
     p.set_defaults(game_args=[])
     p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
+    p.add_argument("--no-import", action="store_true",
+                   help="Don't import the project first when its import cache is missing or stale")
     p.add_argument("--project", required=True, help="Godot project directory")
     p.add_argument("--scene", help="res:// path (default: the project's main scene)")
     p.add_argument("--out", help="Output directory (default: ./captures/live/<session>)")

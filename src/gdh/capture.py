@@ -1,14 +1,14 @@
 """gdh capture and gdh import."""
 import json
-import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from gdh.display import open_display
-from gdh.godot import HARNESS, alert_shims, build_csharp, godot_binary, godot_cmd, godot_env, kill_groups
+from gdh.display import open_display, parse_resolution
+from gdh.godot import HARNESS, alert_shims, build_csharp, godot_cmd, godot_env, kill_groups, size_mismatch
 from gdh.images import crop_findings, save_tiles
+from gdh.imports import describe_missing, ensure_imported, missing_resources
 
 CAPTURE_SCRIPT = HARNESS / "capture.gd"
 
@@ -40,8 +40,14 @@ def capture_one(project, scene, out_dir, args, shims):
         display.stop()
     report_path = out_dir / "report.json"
     report = json.loads(report_path.read_text()) if report_path.exists() else {}
+    mismatch = size_mismatch(report.get("window_size"), args.resolution) if report else None
+    missing = missing_resources(report.get("errors", []))
     if report:
         report["display"] = display.kind
+        if mismatch:
+            report["size_mismatch"] = mismatch
+        if missing:
+            report["missing_resources"] = missing
         images = {p.stem: p for p in out_dir.glob("*.png")}
         crop_findings(report.get("findings", []), report.get("image_size"), images, out_dir / "crops", out_dir)
         if args.tiles and "normal" in images:
@@ -56,7 +62,11 @@ def capture_one(project, scene, out_dir, args, shims):
     for f in findings:
         crop = f"  [{f['crop']}]" if f.get("crop") else ""
         print(f"  {f['severity']}: {f['probe']} {f['node']}: {f['message']}{crop}")
-    return code == 0
+    if missing:
+        print(f"  {describe_missing(missing)}")
+    if mismatch:
+        print(f"  gdh: {mismatch}", file=sys.stderr)
+    return code == 0 and not mismatch
 
 
 def scene_out_name(scene):
@@ -66,28 +76,14 @@ def scene_out_name(scene):
 def cmd_capture(args):
     project = Path(args.project).resolve()
     out_root = Path(args.out).resolve()
+    parse_resolution(args.resolution)
     if not args.no_build:
         build_csharp(project)
+    if not args.no_import:
+        ensure_imported(project)
     ok = True
     with alert_shims() as shims:
         for scene in args.scene:
             out_dir = out_root if len(args.scene) == 1 else out_root / scene_out_name(scene)
             ok &= capture_one(project, scene, out_dir, args, shims)
     return 0 if ok else 1
-
-
-def cmd_import(args):
-    project = Path(args.project).resolve()
-    if not args.no_build:
-        build_csharp(project)
-    cmd = [godot_binary(project), "--headless", "--import", "--path", str(project)]
-    with alert_shims() as shims:
-        # Headless needs no display. The bogus one keeps any child off the desktop.
-        code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display", game=False)).returncode
-        if code != 0:
-            # Godot 4.7's editor sometimes aborts at the end of a headless import
-            # ("Parameter "singleton" is null" in EditorNode::is_cmdline_mode, exit 134),
-            # in the standard and .NET builds alike. The next run succeeds.
-            print(f"gdh: Godot exited with code {code} while importing; importing again", file=sys.stderr)
-            code = subprocess.run(cmd, env=godot_env(shims, ":gdh-no-display", game=False)).returncode
-        return code

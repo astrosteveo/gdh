@@ -35,6 +35,8 @@ var warmup_frames := 10
 var ticks_per_second := 60
 ## The display gdh started the game on: "gpu" or "xvfb".
 var display := ""
+## The window size gdh asked for (--resolution), or zero: a step notes once if the game's window isn't that size.
+var resolution := Vector2i.ZERO
 var recorder: Node  # frames.gd: each game frame's render times
 
 var _server := TCPServer.new()
@@ -47,6 +49,7 @@ var _notes: Array[String] = []
 var _shot_count := 0
 var _game_frames := 0
 var _vsync_noted := false
+var _size_noted := false
 var _next_frame_us := 0
 
 
@@ -248,6 +251,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			return {"error": "Bad input event: %s" % JSON.stringify(spec)}
 		timeline.get_or_add(clampi(int(spec.get("at", 0)), 0, frames), []).append(event)
 	_note_vsync()
+	_note_window_size()
 	var was_held := _held
 	var start_frame := _game_frames
 	_set_held(false)
@@ -276,6 +280,16 @@ func _note_vsync() -> void:
 	_vsync_noted = true
 	_notes.append("The game turned V-Sync on, so each frame waits for the display's refresh: steps run at about 60 "
 			+ "frames a second, not as fast as the GPU can draw them.")
+
+
+## The window was the size asked for when the game started (gdh checks); a game that resizes it later is noted once.
+func _note_window_size() -> void:
+	var size := DisplayServer.window_get_size()
+	if _size_noted or resolution == Vector2i.ZERO or size == resolution:
+		return
+	_size_noted = true
+	_notes.append("The game's window is now %dx%d, not the %dx%d asked for: the game resized it. Shots are at the "
+			% [size.x, size.y, resolution.x, resolution.y] + "window's new size.")
 
 
 func _cmd_shot(args: Dictionary) -> Dictionary:
@@ -350,6 +364,7 @@ func _status() -> Dictionary:
 		"frame": _game_frames,
 		"ticks_per_second": ticks_per_second,
 		"image_size": Common.image_size(get_tree()),
+		"window_size": [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y],
 		"runs_while_held": _unpausable_nodes(),
 	}
 

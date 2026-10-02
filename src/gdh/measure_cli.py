@@ -322,8 +322,10 @@ def step_events(args, frames):
     return events
 
 
-def record(session, args, frames, out_dir):
-    """Step `frames` frames, saving every one, and move the frames into out_dir as frame-0000.png on. Returns the paths."""
+def record(session, args, frames, out_dir, as_json=False):
+    """Step `frames` frames, saving every one, and move the frames into out_dir as frame-0000.png on. Returns the paths
+    and the engine errors raised meanwhile. Printed as they come, or with as_json left for the caller to put in its
+    JSON, so stdout stays one JSON document."""
     from gdh.live import call, report
     out_dir = Path(out_dir)
     if out_dir.exists():
@@ -332,7 +334,8 @@ def record(session, args, frames, out_dir):
     out_dir.mkdir(parents=True, exist_ok=True)
     reply = call(session, "step", {"frames": frames, "events": step_events(args, frames), "shot_every": args.every},
                  instance=args.instance, timeout=max(120, frames * 5))
-    result = report(reply, False)
+    result = report(reply, as_json, echo=False)
+    errors = [e for part in reply.get("instances", [reply]) for e in part.get("errors", [])]
     if isinstance(result, list):  # several instances: the one asked for
         result = result[int(args.instance) if args.instance != "all" else 0]
     paths = []
@@ -340,7 +343,7 @@ def record(session, args, frames, out_dir):
         dst = out_dir / f"frame-{i:04d}.png"
         shutil.move(shot, dst)
         paths.append(dst)
-    return paths
+    return paths, errors
 
 
 def default_dir(session, name):
@@ -351,7 +354,7 @@ def cmd_record(args):
     from gdh.live import load_session
     session = load_session(args.session)
     out = Path(args.out) if args.out else default_dir(session, args.label)
-    paths = record(session, args, args.frames, out)
+    paths, _ = record(session, args, args.frames, out)
     print(f"recorded {len(paths)} frames into {out}")
     return 0
 
@@ -360,7 +363,7 @@ def cmd_live_measure(args):
     from gdh.live import load_session
     session = load_session(args.session)
     out = Path(args.out) if args.out else default_dir(session, args.kind)
-    paths = record(session, args, args.frames, out)
+    paths, errors = record(session, args, args.frames, out, args.json)
     if not paths:
         raise MeasureCliError("The step saved no frames.")
     try:
@@ -368,6 +371,8 @@ def cmd_live_measure(args):
     except m.MeasureError as e:
         raise MeasureCliError(str(e)) from None
     result["frames_dir"] = str(out)
+    if args.json and errors:
+        result["errors"] = errors
     emit(args.kind, result, args.json, args.save)
     if not args.keep:
         for p in paths:

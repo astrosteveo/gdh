@@ -20,6 +20,16 @@ A project with a `.csproj` is a C# project. Before `capture`, `live start` and `
 
 C# objects are invisible to `eval` unless the game hands them over as Godot values, so give the project a node or autoload with methods that return dictionaries and arrays.
 
+## Importing
+
+Godot run from the command line, as gdh runs a game, never imports assets. A texture or model whose imported copy in `.godot/imported` is missing fails to load, and the game draws without it, so a fresh checkout or worktree renders with missing textures. A changed asset with a stale copy draws as it was. So before `capture` and `live start`, gdh checks the project's import cache and imports it (`godot --headless --import`) when it's missing or stale, and says why on stderr. The check reads file times only, and hashes an asset only when it's newer than its import (a checkout touches files without changing them), so it costs next to nothing when nothing changed; a Godot import costs a couple of seconds. It counts as stale when `.godot` or `.godot/uid_cache.bin` is missing, an importable asset has no `.import` file, an imported copy named in an `.import` file is missing, or an asset's content changed since its import. A change to an asset's import settings alone isn't detected: run `gdh import`. `--no-import` skips the check.
+
+Resources that still fail to load (`Failed loading resource`, a missing `.ctex`) are a defect, not log noise: `capture` prints a `DEFECT:` line naming them and lists them in `report.json` under `missing_resources`, and `live` prints the same line with the errors of the command that raised them.
+
+## Window size
+
+`--resolution` sets the game's window. gdh checks the window's real size once the game has started (`DisplayServer.window_get_size()`), since a game can size its window itself, from a saved setting say. If it isn't the size asked for, `capture` saves what it got and exits 1 with the size it found (also in `report.json` under `size_mismatch`), and `live start` stops the game and says so. A game that resizes its window later in a live session gets a note on the next `step`. The window is what's compared: under stretch mode `viewport` the screenshots are at the project's base size whatever the window is.
+
 ## Install
 
 From a clone of this repo:
@@ -71,7 +81,7 @@ Nothing is installed into the project. For each scene, the output directory gets
 | `normals.png` | Surface directions (normal buffer) |
 | `wireframe.png` | Triangle edges |
 | `overdraw.png` | How many times each pixel is drawn |
-| `report.json` | GPU used, display, engine errors and warnings, render stats, probe findings |
+| `report.json` | GPU used, display, window and image size, engine errors and warnings, resources that failed to load, render stats, probe findings |
 | `crops/` | A zoomed crop for each finding that has a screen area |
 | `godot.log` | Full engine output |
 | `display.log` | The display's own output (weston and Xwayland, or Xvfb) |
@@ -83,10 +93,11 @@ Options:
 | `--scene` | required | Scene to capture. Repeat it to capture several scenes, each in its own subdirectory. |
 | `--modes` | all six | Comma-separated list of views, e.g. `normal,wireframe` |
 | `--warmup` | `30` | Frames to render before capturing |
-| `--resolution` | `1280x720` | Size of the capture |
+| `--resolution` | `1280x720` | The game window's size, checked once the game has started ([Window size](#window-size)) |
 | `--display` | `auto` | `gpu`, `xvfb` or `auto` ([Displays](#displays)) |
 | `--timeout` | `120` | Seconds allowed per scene |
 | `--tiles` | off | Also save `normal.png` as four 2× tiles in `crops/` |
+| `--no-import` | off | Don't import the project first when its import cache is missing or stale ([Importing](#importing)) |
 
 Environment variables:
 
@@ -204,6 +215,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/cli.py` | The `gdh` command |
 | `src/gdh/capture.py`, `live.py`, `editor.py` | `gdh capture`, `gdh live` and `gdh editor` |
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
+| `src/gdh/imports.py` | `gdh import`, and the import cache's check before a run |
 | `src/gdh/companions.py`, `watchdog.py` | A live session's companion processes, and the watchdog that stops them when its game ends |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |

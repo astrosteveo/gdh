@@ -4,7 +4,7 @@ extends SceneTree
 ##
 ## Options after "--": --scene res://x.tscn (default: the project's main scene),
 ## --ready-file <path>, --out <dir>, --idle-timeout <seconds>, --ticks <physics
-## ticks per second>, --display <gpu or xvfb>. The request token comes from the GDH_TOKEN environment
+## ticks per second>, --display <gpu or xvfb>, --resolution <WxH asked for>. The request token comes from the GDH_TOKEN environment
 ## variable, which other users can't read.
 
 const Bridge := preload("bridge.gd")
@@ -33,6 +33,9 @@ func _initialize() -> void:
 	bridge.idle_timeout_s = float(args.get("idle-timeout", "1800"))
 	bridge.ticks_per_second = int(args.get("ticks", "60"))
 	bridge.display = args.get("display", "")
+	var asked: PackedStringArray = args.get("resolution", "").split("x")
+	if asked.size() == 2:
+		bridge.resolution = Vector2i(int(asked[0]), int(asked[1]))
 	root.add_child(bridge, false, Node.INTERNAL_MODE_BACK)
 	var frames := Frames.new()
 	frames.name = "GdhFrames"

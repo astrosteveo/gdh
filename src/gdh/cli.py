@@ -16,9 +16,10 @@ import argparse
 import sys
 
 from gdh import editor, live, measure_cli
-from gdh.capture import cmd_capture, cmd_import
+from gdh.capture import cmd_capture
 from gdh.display import default_choice
 from gdh.godot import GdhError
+from gdh.imports import cmd_import
 
 
 def main():
@@ -37,6 +38,8 @@ def main():
     cap.add_argument("--timeout", type=int, default=120, help="Seconds per scene")
     cap.add_argument("--tiles", action="store_true", help="Also save normal.png as 2x2 tiles at 2x zoom")
     cap.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
+    cap.add_argument("--no-import", action="store_true",
+                     help="Don't import the project first when its import cache is missing or stale")
     cap.set_defaults(func=cmd_capture, game_args=[])
 
     imp = sub.add_parser("import", help="Import project assets headlessly")

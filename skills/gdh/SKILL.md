@@ -22,7 +22,9 @@ uv tool install "${CLAUDE_PLUGIN_ROOT}"                 # puts gdh on PATH
 uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh --help     # no install
 ```
 
-Requirements are Linux, Godot 4.x as `godot` on PATH (or set `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb. After adding or changing assets such as textures or models, run `gdh import --project <dir>` so Godot imports them before capturing.
+Requirements are Linux, Godot 4.x as `godot` on PATH (or set `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb. gdh imports the project before `capture` and `live start` when its import cache is missing or stale (a fresh checkout or worktree, a new or changed asset), and says so; `gdh import --project <dir>` does it by hand, for instance after changing only an asset's import settings. A `DEFECT: ... failed to load` line means the game drew without those resources: report it, never treat it as log noise.
+
+`--resolution` is checked: if the game sizes its own window to something else, `capture` exits 1 and `live start` refuses, naming the size it found. Ask for that size, or change what sizes the window.
 
 **Displays.** By default gdh runs the game on a display the GPU presents to (weston and Xwayland), so it runs at the GPU's full speed, even at 4K. If that can't start (weston or Xwayland missing, no GPU to composite on), gdh falls back to Xvfb and prints a note. Xvfb copies every frame through the CPU, so it's slow at high resolutions and the GPU idles between frames. If you see the note, say so when you report timings, and suggest installing weston and Xwayland. `--display gpu|xvfb|auto` (or `GDH_DISPLAY`) picks one. Screenshots are the same on both.
 

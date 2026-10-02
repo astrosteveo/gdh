@@ -74,6 +74,7 @@ func _write_report(extra: Dictionary) -> void:
 		"rendering_method": RenderingServer.get_current_rendering_method(),
 		"rendering_driver": RenderingServer.get_current_rendering_driver_name(),
 		"resolution": [root.size.x, root.size.y],
+		"window_size": [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y],
 		"image_size": Common.image_size(self),
 		"errors": _errors.all(),
 	}

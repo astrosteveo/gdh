@@ -164,6 +164,21 @@ def godot_cmd(project, resolution, extra, game_args=()):
     ]
 
 
+def size_mismatch(window_size, resolution):
+    """A sentence when the game's window isn't the size asked for, else None. window_size is [w, h] as the harness
+    reported it (DisplayServer.window_get_size()): the window, not the image, since under stretch mode "viewport" the
+    image is at the project's base size whatever the window is."""
+    if not window_size:
+        return None
+    want = [int(v) for v in resolution.split("x")]
+    got = [int(round(v)) for v in window_size]
+    if got == want:
+        return None
+    return (f"the game's window is {got[0]}x{got[1]}, not the {resolution} asked for: the game most likely sizes its "
+            f"window itself (DisplayServer.window_set_size, Window.size, or a settings file it applies). Its images "
+            f"are at the window's size; change what sizes it, or ask for {got[0]}x{got[1]}.")
+
+
 def project_ticks(project):
     """The project's physics ticks per second (Godot's default is 60)."""
     text = (Path(project) / "project.godot").read_text()

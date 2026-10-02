@@ -11,7 +11,7 @@ gdh live probes                                  # run the probes on the current
 gdh live stop
 ```
 
-A C# project is built with `dotnet build` first and run with `godot-mono` (README, "C# projects"). Arguments after `--` go to the game: `gdh live start --project path/to/game -- --server ws://localhost:8787` gives the game exactly `["--server", "ws://localhost:8787"]` from `OS.get_cmdline_user_args()`. The harness's own settings travel in the `GDH_ARGS` environment variable, so they never mix with the game's.
+A C# project is built with `dotnet build` first and run with `godot-mono` (README, "C# projects"). A project whose import cache is missing or stale is imported first (README, "Importing"; `--no-import` skips it). Once the game is ready, `start` checks that its window is the `--resolution` asked for, and stops the game, saying what size it found, if the game sized it otherwise; a game that resizes its window later gets a note on the next `step` (README, "Window size"). Arguments after `--` go to the game: `gdh live start --project path/to/game -- --server ws://localhost:8787` gives the game exactly `["--server", "ws://localhost:8787"]` from `OS.get_cmdline_user_args()`. The harness's own settings travel in the `GDH_ARGS` environment variable, so they never mix with the game's.
 
 Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/harness/live.gd`, which loads the scene and attaches the control node `bridge.gd`. The game runs on a display of its own: the GPU display by default, or Xvfb (`--display`, README's [Displays](../README.md#displays)). The project's autoloads load as usual. The control node is an internal child of the root, so game code that walks `root.get_children()` doesn't see it.
 
@@ -64,12 +64,12 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
 | `eval EXPR` | Any Godot expression. The base is the current scene. `scene`, `tree`, `root`, each autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) are also available. |
-| `status` | Game frame, held or running, scene, nodes that run while held |
+| `status` | Game frame, held or running, scene, image and window size, nodes that run while held |
 | `record N [--out DIR]` | N frames stepped and each saved as `DIR/frame-0000.png` on, for `gdh measure` |
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
 | `frames [--clear] [--reset] [--save FILE]` | Each game frame's GPU and CPU time since the record started over, and each render pass's with `start --gpu-passes`: the median, 99th percentile and worst |
 
-Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Every reply lists the engine errors raised since the previous reply, with repeats merged. Add `--json` to any command for the raw reply.
+Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Every reply lists the engine errors raised since the previous reply, with repeats merged, and resources that failed to load among them get a `DEFECT:` line of their own. Add `--json` to any command for the raw reply.
 
 ## Companions
 
@@ -150,6 +150,12 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - input to the instance named, and a hold's release seen by a node that tracks its keys by their events
 - one instance's reply alone, a bad instance number, and `pipe`
 - `status`, an HTTP ready check, `stop` stopping the companion, the watchdog stopping it when the game ends by itself, a companion that fails to start, and a placeholder that names no companion
+
+`tests/test_imports_and_size.py` checks the import cache's check and the window's size:
+
+- a fresh copy of the testbed (no `.godot`) imported before its first capture, which then loads every texture, and not imported again on the second; a touched but unchanged texture not counted as stale, and a changed, a new or a deleted import counted
+- resources that fail to load (their imported copies deleted, `--no-import`) printed as a `DEFECT:` and listed in `report.json`
+- `report.json`'s `window_size`, and a scene that resizes its own window failing `capture` and refused by `live start`, with no session left behind
 
 `tests/test_display.py` checks the displays themselves:
 

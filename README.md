@@ -22,9 +22,9 @@ C# objects are invisible to `eval` unless the game hands them over as Godot valu
 
 ## Importing
 
-Godot run from the command line, as gdh runs a game, never imports assets. A texture or model whose imported copy in `.godot/imported` is missing fails to load, and the game draws without it, so a fresh checkout or worktree renders with missing textures. A changed asset with a stale copy draws as it was. So before `capture` and `live start`, gdh checks the project's import cache and imports it (`godot --headless --import`) when it's missing or stale, and says why on stderr. The check reads file times only, and hashes an asset only when it's newer than its import (a checkout touches files without changing them), so it costs next to nothing when nothing changed; a Godot import costs a couple of seconds. It counts as stale when `.godot` or `.godot/uid_cache.bin` is missing, an importable asset has no `.import` file, an imported copy named in an `.import` file is missing, or an asset's content changed since its import. A change to an asset's import settings alone isn't detected: run `gdh import`. `--no-import` skips the check.
+Godot run from the command line, as gdh runs a game, never imports assets. A texture or model whose imported copy in `.godot/imported` is missing fails to load, and the game draws without it, so a fresh checkout or worktree renders with missing textures. A changed asset with a stale copy draws as it was. So before `capture` and `live start`, gdh checks the project's import cache and imports it (`godot --headless --import`) when it's missing or stale, and says why on stderr. The check reads file times only, and hashes an asset only when it's newer than its import (a checkout touches files without changing them), so it costs next to nothing when nothing changed; a Godot import costs a couple of seconds. It counts as stale when `.godot` or `.godot/uid_cache.bin` is missing, an importable asset has no `.import` file, an imported copy named in an `.import` file is missing, or an asset's content changed since its import. A change to an asset's import settings alone isn't detected: run `gdh import`. `--no-import` skips the check. `gdh editor` needs none of this: it runs the editor, which imports as it opens.
 
-Resources that still fail to load (`Failed loading resource`, a missing `.ctex`) are a defect, not log noise: `capture` prints a `DEFECT:` line naming them and lists them in `report.json` under `missing_resources`, and `live` prints the same line with the errors of the command that raised them.
+Resources that still fail to load (`Failed loading resource`, `Error loading resource`, `No loader found for resource`, a scene's `[ext_resource] referenced non-existent resource`, a missing `.ctex`) are a defect, not log noise: `capture` prints a `DEFECT:` line naming them and lists them in `report.json` under `missing_resources`, and `live` prints the same line with the errors of the command that raised them.
 
 ## Window size
 
@@ -127,6 +127,8 @@ gdh live step 60 --hold move_right --instance 1
 gdh live eval "get_node('Player').position" --instance all
 gdh live pipe < requests.jsonl
 ```
+
+Processes the game spawns (a launcher's game, a tool) are listed by `gdh live status` and end with the session. `gdh live start --keep-children` keeps the session and its display until they have ended too, for a launcher that hands off to the game and exits; the harness stays in the game gdh started, so a handed-off game can be watched but not stepped.
 
 See [docs/live.md](docs/live.md).
 

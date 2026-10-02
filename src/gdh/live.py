@@ -6,6 +6,10 @@ command steps it.
 
 A session can also start companion processes beside the game (a server, say:
 companions.py), and run several instances of the game, which step together.
+
+Whatever a game spawns (a launcher's game, a tool) carries the game's GDH_MARK in its environment (spawned.py):
+status lists those processes, and they end with the session. With --keep-children the session, and its display,
+last until they have ended too.
 """
 import json
 import os
@@ -18,7 +22,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from gdh import companions
+from gdh import companions, spawned
 from gdh.display import CHOICES, open_display, parse_resolution, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
                        size_mismatch, write_alert_shims)
@@ -70,19 +74,53 @@ def displays(session):
     return [g["display"] for g in instances(session) if g.get("display")]
 
 
+def spawned_by(session, index=None):
+    """The live processes the session's games spawned ([{"pid", "cmd"}]): every instance's, or instance `index`'s."""
+    games = instances(session)
+    chosen = games if index is None else [games[index]]
+    pids = {g["pid"] for g in games}
+    return [p for g in chosen for p in spawned.marked(g.get("mark"), exclude=pids)]
+
+
+def session_running(session):
+    """Whether any of the session's games runs, or, with --keep-children, any process they spawned."""
+    if any(pid_alive(g["pid"]) for g in instances(session)):
+        return True
+    return bool(session.get("keep_children") and spawned_by(session))
+
+
+def describe_spawned(procs, prefix=""):
+    return "\n".join(f"{prefix}spawned: pid {p['pid']}: {p['cmd'][:150]}" for p in procs)
+
+
 def stop_all(session):
-    """Stop every process the session started, and remove its displays' runtime directories."""
+    """Stop every process the session started or its games spawned, and remove its displays' runtime directories."""
+    games = [g["pid"] for g in instances(session)]
+    kill_groups(*games)
+    spawned.stop([p["pid"] for p in spawned_by(session)])
     kill_groups(*all_groups(session))
     stop_displays(displays(session))
 
 
-def load_session(name):
+def load_session(name, ended_ok=False):
+    """The session, after checking its games run. A game that has ended ends the session (its processes are stopped
+    and it is removed), unless --keep-children keeps it for the processes the game spawned: then it raises, or, with
+    ended_ok, returns the session for commands that don't need the game (status)."""
     path = session_path(name)
     if not path.exists():
         raise LiveError(f"No live session '{name}'. Start one with: gdh live start --project <dir>")
     session = json.loads(path.read_text())
     for i, instance in enumerate(instances(session)):
         if not pid_alive(instance["pid"]):
+            children = spawned_by(session) if session.get("keep_children") else []
+            if children:
+                if ended_ok:
+                    continue
+                which = f"Instance {i} of session '{name}'" if len(instances(session)) > 1 else f"The game of session '{name}'"
+                raise LiveError(f"{which} has exited, so it takes no commands. --keep-children keeps the session, "
+                                f"and its display, while the processes it spawned run:\n{describe_spawned(children)}\n"
+                                f"Their output goes to {instance['log']}. gdh live status lists them; gdh live stop "
+                                f"--session {name} stops them.")
             stop_all(session)
             remove_session(session)
             which = f"Instance {i} of session '{name}'" if len(instances(session)) > 1 else f"Session '{name}'"
@@ -233,6 +271,7 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     ready = SESSION_DIR / f"{name}-ready.json"
     ready.unlink(missing_ok=True)
     token = secrets.token_hex(16)
+    mark = secrets.token_hex(8)
     user_args = ["--ready-file", str(ready), "--out", str(out), "--resolution", args.resolution,
                  "--idle-timeout", str(args.idle_timeout), "--ticks", str(ticks)]
     if args.scene:
@@ -250,6 +289,7 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     # command line is visible to everyone in the process list.
     env = godot_env(shims, display.name, user_args)
     env["GDH_TOKEN"] = token
+    env[spawned.VAR] = mark  # everything the game spawns inherits it (spawned.py)
     try:
         with open(log_path, "w") as log:
             proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -260,7 +300,7 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     # pid is Godot, the process that matters for liveness. groups are the
     # process groups of Godot and its display, which stop kills.
     record = {"pid": proc.pid, "port": 0, "token": token, "out": str(out), "log": str(log_path),
-              "groups": [proc.pid, *display.groups], "display": display.record()}
+              "groups": [proc.pid, *display.groups], "display": display.record(), "mark": mark}
     return record, proc, ready
 
 
@@ -289,10 +329,12 @@ def wait_ready(record, proc, ready, deadline, label, resolution):
     return info
 
 
-def start_watchdog(watch, groups, remove):
-    """A detached process that stops the session's other processes once any game ends (watchdog.py)."""
+def start_watchdog(watch, groups, remove, marks, keep_children):
+    """A detached process that stops the session's other processes once any game ends, or with keep_children once
+    every game and every process they spawned has ended (watchdog.py)."""
     proc = subprocess.Popen([sys.executable, "-m", "gdh.watchdog", "--watch", *map(str, watch),
-                             "--groups", *map(str, groups), "--remove", *remove],
+                             "--groups", *map(str, groups), "--remove", *remove, "--marks", *marks,
+                             *(["--keep-children"] if keep_children else [])],
                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             start_new_session=True)
     return proc.pid
@@ -303,7 +345,7 @@ def cmd_start(args):
     existing = session_path(name)
     if existing.exists():
         old = json.loads(existing.read_text())
-        if pid_alive(old["pid"]):
+        if session_running(old):
             raise LiveError(f"Session '{name}' is already running. Stop it with: gdh live stop --session {name}")
         stop_all(old)
         remove_session(old)
@@ -364,10 +406,12 @@ def cmd_start(args):
     games = [record for record, _, _ in started]
     extra = [g for g in started_groups if g not in [r["pid"] for r in games]]
     watchdog = start_watchdog([r["pid"] for r in games], extra,
-                              [r["display"]["runtime_dir"] for r in games if r["display"].get("runtime_dir")])
+                              [r["display"]["runtime_dir"] for r in games if r["display"].get("runtime_dir")],
+                              [r["mark"] for r in games], args.keep_children)
     first = games[0]
     session.update({"pid": first["pid"], "port": first["port"], "token": first["token"], "log": first["log"],
                     "out": str(out), "project": str(project), "instances": games, "watchdog": watchdog,
+                    "keep_children": args.keep_children,
                     "groups": [*started_groups, watchdog]})
     fd = os.open(session_path(name), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
@@ -408,16 +452,44 @@ def cmd_stop(args):
 
 
 def cmd_status(args):
-    session = load_session(args.session)
-    reply = call(session, "status", instance="all")
-    result = report(reply, args.json)
-    if not args.json:
-        for (prefix, status), instance in zip(each(reply, result), instances(session)):
+    session = load_session(args.session, ended_ok=True)
+    games = instances(session)
+    running = [i for i, g in enumerate(games) if pid_alive(g["pid"])]
+    many = len(games) > 1
+    # Each instance's status from its game, or, for a game that has exited (--keep-children), None.
+    statuses = [None] * len(games)
+    replies = []
+    if len(running) == len(games):
+        reply = call(session, "status", instance="all")
+        replies.append(reply)
+        result = report(reply, args.json, echo=False)
+        for i, (_, status) in enumerate(each(reply, result)):
+            statuses[i] = status
+    else:
+        for i in running:
+            reply = call(session, "status", instance=i)
+            replies.append(reply)
+            statuses[i] = report(reply, args.json, echo=False)
+    children = [spawned_by(session, i) for i in range(len(games))]
+    if args.json:
+        out = replies[0] if len(replies) == 1 and len(running) == len(games) else {"ok": True, "instances": replies}
+        out["spawned"] = [{**p, "instance": i} if many else p for i, procs in enumerate(children) for p in procs]
+        out["exited"] = [i for i in range(len(games)) if i not in running]
+        print(json.dumps(out, indent=2))
+        return 0
+    for i, (status, instance) in enumerate(zip(statuses, games)):
+        prefix = f"[{i}] " if many else ""
+        if status is None:
+            print(f"{prefix}the game has exited; the session lasts while the processes it spawned run "
+                  f"(--keep-children). Output in {instance['log']}")
+        else:
             print(describe_status(status, prefix))
-            print(f"{prefix}  {describe_display(instance)}")
-        for companion in session.get("companions", []):
-            state = "running" if pid_alive(companion["pid"]) else "exited"
-            print(f"companion '{companion['name']}': {state}, pid {companion['pid']}, port {companion['port']}")
+        print(f"{prefix}  {describe_display(instance)}")
+        if children[i]:
+            print(describe_spawned(children[i], prefix + "  "))
+    for companion in session.get("companions", []):
+        state = "running" if pid_alive(companion["pid"]) else "exited"
+        print(f"companion '{companion['name']}': {state}, pid {companion['pid']}, port {companion['port']}")
     return 0
 
 
@@ -646,6 +718,10 @@ def add_parsers(sub):
                         "none, or an http(s) URL that answers 2xx")
     p.add_argument("--companion-port", action="append", default=[], metavar="NAME=PORT",
                    help="Give a companion this port instead of a free one")
+    p.add_argument("--keep-children", action="store_true",
+                   help="Keep the session, and its display, until every process the game spawned has ended too, "
+                        "not just the game (a launcher that hands off to the game it starts). Without it, spawned "
+                        "processes end with the session")
     p.add_argument("--gpu-passes", action="store_true",
                    help="Have the renderer time each of its passes, for `frames` (Godot's --gpu-profile; it also "
                         "prints a GPU profile to the log each second)")

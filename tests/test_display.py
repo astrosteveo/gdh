@@ -62,8 +62,21 @@ def path_without(directory, *programs):
 
 
 def runtime_dirs():
-    from gdh.display import displays_root
-    return set(displays_root().glob("*")) if displays_root().exists() else set()
+    """The GPU displays' runtime directories that no running weston holds: left behind. Another gdh run on the
+    machine (another agent's tests) has directories of its own, which its weston holds, so they don't count."""
+    import fcntl
+    from gdh.display import SOCKET, displays_root
+    left = set()
+    for directory in displays_root().glob("*") if displays_root().exists() else []:
+        try:
+            with open(directory / f"{SOCKET}.lock") as f:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)  # (taken: nothing holds it)
+        except BlockingIOError:
+            continue
+        except OSError:
+            pass  # no lock file: weston never started there, or it's gone
+        left.add(directory)
+    return left
 
 
 @needs_gpu_display

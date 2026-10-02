@@ -10,6 +10,7 @@ Run Godot only through gdh: `uv run gdh ...` from this folder. A bare `godot` ru
 
 - Run `timeout 1200 uv run pytest -q` before merging to `main`. It runs real Godot on the GPU display and on Xvfb, and takes about 11 minutes. Run a single file, such as `uv run pytest tests/test_spawned.py`, while you work.
 - After a run, check that nothing is left: `pgrep -x Xvfb`, `pgrep -x weston`, `pgrep -x godot`.
+- Only one gdh test run goes at a time on this machine: `tests/conftest.py` takes a lock (`$XDG_RUNTIME_DIR/gdh/test-suite.lock`) and waits for another worktree's run to finish, saying so. Two at once ran the GPU out of channels for new Vulkan devices (`journalctl -k` shows `NVRM ... NV_ERR_STATE_IN_USE`) and failed tests that pass alone. A run from a branch older than the lock doesn't take it, so check `ps -eo pid,args | grep pytest` before a full run until every branch has it.
 - pytest collects any function named `test*`, so name helpers in `tests/conftest.py` something else, like `make_testbed_variant`.
 - `testbed/project.godot` must keep `run/main_scene`. Tests depend on it. When an agent builds testbed scenes, tell it not to edit `project.godot`, and check `git diff testbed/project.godot` afterwards.
 

@@ -7,6 +7,7 @@ passes with a game's own timestamp among them.
 """
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -242,6 +243,28 @@ def sessions(tmp_path_factory):
 
 def measured(session, kind, *args):
     return gdh_json("live", "measure", kind, "--session", session, *args)
+
+
+def test_recorded_frames_are_the_frames_shot_one_by_one(tmp_path_factory):
+    """record encodes its PNGs on worker threads: each must still be its own frame, whole, in order."""
+    recorded, _ = session_for(tmp_path_factory, "orbit")
+    try:
+        paths = sorted(Path(gdh_json("live", "measure", "flicker", "--frames", "12", "--keep",
+                                     "--session", recorded)["frames_dir"]).glob("frame-*.png"))
+    finally:
+        gdh("live", "stop", "--session", recorded)
+    one_by_one, _ = session_for(tmp_path_factory, "orbit")
+    try:
+        shots = []
+        for _ in range(12):
+            gdh("live", "step", "1", "--session", one_by_one)
+            shots.append(gdh_json("live", "shot", "--session", one_by_one)["result"]["shots"]["normal"])
+    finally:
+        gdh("live", "stop", "--session", one_by_one)
+    assert len(paths) == 12
+    frames = [np.asarray(Image.open(p)) for p in paths]
+    assert all(np.array_equal(f, np.asarray(Image.open(s))) for f, s in zip(frames, shots))
+    assert all(not np.array_equal(a, b) for a, b in zip(frames, frames[1:]))  # (it moves: order shows)
 
 
 def test_still_camera_does_not_flicker(sessions):

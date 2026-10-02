@@ -104,3 +104,33 @@ def test_keep_children_keeps_the_session_and_display_until_they_end(tmp_path):
         assert not session_path(name).exists()
     finally:
         gdh("live", "stop", "--session", name)
+
+
+def test_keep_children_ends_after_the_idle_timeout_once_the_game_has_exited(tmp_path):
+    """The idle timeout lives in the game's harness, so with the launcher gone the watchdog keeps it: gdh live
+    commands hold the session open, and without them what the game spawned and the display are stopped."""
+    name = f"{SESSION}-idle"
+    idle = 4
+    start(tmp_path, name, "--keep-children", "--idle-timeout", idle, child_seconds=120)
+    try:
+        pid = child_pid(name)
+        session = json.loads(session_path(name).read_text())
+        groups = [g for g in session["groups"] if g != session["pid"]]
+        gdh("live", "step", "5", "--session", name, check=False)
+        assert wait_for(lambda: not pid_alive(session["pid"]))
+
+        # Commands count as activity: well past the timeout, the child still runs.
+        until = time.monotonic() + 2.5 * idle
+        while time.monotonic() < until:
+            assert status(name)["exited"] == [0]
+            time.sleep(1)
+        assert pid_alive(pid)
+
+        # Left alone, the session ends: the child, then the display.
+        assert wait_for(lambda: not pid_alive(pid), idle + 10)
+        assert wait_for(lambda: not any(pid_alive(g) for g in groups), 15)
+        ended = gdh("live", "status", "--session", name, check=False)
+        assert ended.returncode == 1 and "--idle-timeout" in ended.stderr
+        assert not session_path(name).exists()
+    finally:
+        gdh("live", "stop", "--session", name)

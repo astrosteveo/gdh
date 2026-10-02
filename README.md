@@ -128,7 +128,7 @@ gdh live eval "get_node('Player').position" --instance all
 gdh live pipe < requests.jsonl
 ```
 
-Processes the game spawns (a launcher's game, a tool) are listed by `gdh live status` and end with the session. `gdh live start --keep-children` keeps the session and its display until they have ended too, for a launcher that hands off to the game and exits; the harness stays in the game gdh started, so a handed-off game can be watched but not stepped.
+Processes the game spawns (a launcher's game, a tool) are listed by `gdh live status` and end with the session. `gdh live start --keep-children` keeps the session and its display until they have ended too, for a launcher that hands off to the game and exits, or until the idle timeout passes with no `gdh live` command on the session; the harness stays in the game gdh started, so a handed-off game can be watched but not stepped.
 
 See [docs/live.md](docs/live.md).
 

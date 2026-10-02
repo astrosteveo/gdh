@@ -128,6 +128,8 @@ gdh live eval "get_node('Player').position" --instance all
 gdh live pipe < requests.jsonl
 ```
 
+Processes the game spawns (a launcher's game, a tool) are listed by `gdh live status` and end with the session. `gdh live start --keep-children` keeps the session and its display until they have ended too, for a launcher that hands off to the game and exits; the harness stays in the game gdh started, so a handed-off game can be watched but not stepped.
+
 See [docs/live.md](docs/live.md).
 
 ## See what the editor shows
@@ -217,6 +219,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/imports.py` | `gdh import`, and the import cache's check before a run |
 | `src/gdh/companions.py`, `watchdog.py` | A live session's companion processes, and the watchdog that stops them when its game ends |
+| `src/gdh/spawned.py` | Finding and stopping the processes a live game spawned (its `GDH_MARK`) |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |

@@ -64,7 +64,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
 | `eval EXPR` | Any Godot expression. The base is the current scene. `scene`, `tree`, `root`, each autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) are also available. |
-| `status` | Game frame, held or running, scene, image and window size, nodes that run while held |
+| `status` | Game frame, held or running, scene, image and window size, nodes that run while held, processes the game spawned |
 | `record N [--out DIR]` | N frames stepped and each saved as `DIR/frame-0000.png` on, for `gdh measure` |
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
 | `frames [--clear] [--reset] [--save FILE]` | Each game frame's GPU and CPU time since the record started over, and each render pass's with `start --gpu-passes`: the median, 99th percentile and worst |
@@ -108,6 +108,15 @@ A script that drives many steps can keep one `gdh live pipe --session NAME` open
 
 The commands and their arguments are the raw protocol's (below), and `"instance"` follows the rules above. The replies are what `--json` prints. `quit` is refused: stop the session with `gdh live stop`, which stops its companions too. If the game ends, the pipe answers with how it ended and exits with status 1.
 
+## Processes the game spawns
+
+A game can start other programs: a launcher that starts the game itself and exits, a server, a tool it runs. gdh marks the game with a random `GDH_MARK=...` in its environment, which everything it spawns inherits, and finds those processes by it. (Godot's `OS.create_process` starts each child in a session of its own, and a child whose parent exits is handed to init, so the game's process group and parent links don't find them.) They run on the game's display, with its environment, and their output goes to the game's `godot.log`.
+
+- **`status` lists them:** `spawned: pid N: COMMAND` under each instance, and `"spawned"` in `--json` (with `"instance"` when there are several).
+- **They end with the session.** `stop`, the watchdog (when a game ends by itself) and the cleanup after a crash stop them by pid, after the game and before the display. A spawned window can't outlive its display anyway: X closes its connection.
+- **`start --keep-children`** keeps the session, and its display, while any game or any process they spawned runs. When a launcher hands off and exits, the session goes on: `status` says the game has exited and lists what it spawned, commands that need the game (`step`, `shot`, `eval` and the rest) fail saying so, and `stop` ends it. Once the last spawned process exits, the watchdog stops the display and the next command says the session has ended. gdh's harness runs in the game it started, not in what that spawns, so a spawned game can be watched (its log, the files it writes, `status`) but not stepped or captured: to drive the real game, start it directly with `gdh live start`, with the arguments the launcher would give it.
+- A process that clears its environment, or sets `GDH_MARK` itself, isn't found.
+
 ## Sessions
 
 - **Several games at once:** `--session NAME` runs more than one game side by side. The default name is `default`.
@@ -115,7 +124,7 @@ The commands and their arguments are the raw protocol's (below), and `"instance"
 - **Local only:** the game listens on 127.0.0.1.
 - **Idle timeout:** a game quits after 30 minutes without a request. Change this with `--idle-timeout SECONDS`, or set 0 to turn it off.
 - **Stopping:** `stop` asks the game to quit, then stops Godot and its display if they're still running, and removes the display's runtime directory. The display's own output is in `<out>/display.log`.
-- **Crashed games:** if a game dies, the next command says so, shows the end of its log, stops the session's other processes and removes the session.
+- **Crashed games:** if a game dies, the next command says so, shows the end of its log, stops the session's other processes (and those the game spawned) and removes the session; with `--keep-children` that waits until what the game spawned has ended (above).
 
 ## Protocol
 
@@ -151,10 +160,16 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - one instance's reply alone, a bad instance number, and `pipe`
 - `status`, an HTTP ready check, `stop` stopping the companion, the watchdog stopping it when the game ends by itself, a companion that fails to start, and a placeholder that names no companion
 
+`tests/test_spawned.py` runs `testbed/children/launcher.tscn`, a launcher that starts `child.gd` in a second Godot on the same display and quits after a few frames. It checks:
+
+- the child listed by `status` (text and `--json`), and stopped by `stop`
+- without `--keep-children`, the child ending once the launcher quits
+- with `--keep-children`, the session and display kept after the launcher quits, the child still drawing frames, `status` saying the game exited, `shot` refused saying why, and the watchdog stopping the display and ending the session once the child exits
+
 `tests/test_imports_and_size.py` checks the import cache's check and the window's size:
 
 - a fresh copy of the testbed (no `.godot`) imported before its first capture, which then loads every texture, and not imported again on the second; a touched but unchanged texture not counted as stale, and a changed, a new or a deleted import counted
-- resources that fail to load (their imported copies deleted, `--no-import`) printed as a `DEFECT:` and listed in `report.json`
+- resources that fail to load (their imported copies deleted, `--no-import`) printed as a `DEFECT:` and listed in `report.json`, and each way Godot words a failed load read as one
 - `report.json`'s `window_size`, and a scene that resizes its own window failing `capture` and refused by `live start`, with no session left behind
 
 `tests/test_display.py` checks the displays themselves:

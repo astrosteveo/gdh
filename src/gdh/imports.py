@@ -25,9 +25,13 @@ IMPORTABLE = {
 UNFIXABLE = ".godot/gdh-import-unfixable"
 SKIPPED_DIRS = {".godot", ".git", ".import", "node_modules", "__pycache__"}
 
-# Engine errors that mean a resource didn't load. A missing imported copy shows as both.
+# Engine errors that mean a resource didn't load. A missing imported copy shows as the first two; a never-imported
+# asset (a font in a fresh checkout, say) as the others, from load() and from a scene's [ext_resource].
 MISSING = (re.compile(r"Failed loading resource: (res://\S+?)\.?$"),
-           re.compile(r"Unable to open file: (res://\.godot/imported/\S+?)\.?$"))
+           re.compile(r"Unable to open file: (res://\.godot/imported/\S+?)\.?$"),
+           re.compile(r"Error loading resource: '(res://[^']+)'"),
+           re.compile(r"No loader found for resource: (res://\S+?)(?: \(|\.?$)"),
+           re.compile(r"referenced non-existent resource at: (res://\S+?)\.?$"))
 
 
 def project_files(project):

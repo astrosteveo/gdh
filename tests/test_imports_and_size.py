@@ -6,7 +6,7 @@ import shutil
 import time
 
 from conftest import TESTBED, gdh
-from gdh.imports import stale_reason
+from gdh.imports import missing_resources, stale_reason
 
 SESSION = f"test-size-{os.getpid()}"
 SCENE = "res://blind/scene_01.tscn"
@@ -35,6 +35,17 @@ def test_staleness_is_read_from_file_times_and_hashes(tmp_path):
     assert stale_reason(project) is None
     next(project.glob(".godot/imported/bark.png-*.ctex")).unlink()
     assert "bark.png's imported copy is missing" in stale_reason(project)
+
+
+def test_each_way_godot_says_a_resource_failed_to_load_is_read():
+    errors = [{"message": "Error loading resource: 'res://fonts/Oxanium.ttf'."},
+              {"message": "Failed loading resource: res://blind/assets/textures/bark.png."},
+              {"message": "Unable to open file: res://.godot/imported/bark.png-0123.ctex."},
+              {"message": "No loader found for resource: res://fonts/Other.ttf (expected type: FontFile)"},
+              {"message": "res://main.tscn:4 - Parse Error: [ext_resource] referenced non-existent resource at: "
+                          "res://fonts/Third.otf."}]
+    assert missing_resources(errors) == ["res://fonts/Oxanium.ttf", "res://blind/assets/textures/bark.png",
+                                         "res://fonts/Other.ttf", "res://fonts/Third.otf"]
 
 
 def test_a_fresh_checkout_is_imported_before_capture_and_only_once(tmp_path):

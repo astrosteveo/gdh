@@ -14,6 +14,7 @@ extends Node
 ## --fixed-fps set to the physics tick rate, each frame is one physics tick.
 
 const Common := preload("common.gd")
+const Covered := preload("covered.gd")
 const ErrorCollector := preload("errors.gd")
 const Probes := preload("probes.gd")
 
@@ -237,13 +238,16 @@ func _set_held(held: bool) -> void:
 	get_tree().paused = held
 
 
-## args: frames, events [{at, ...event}], shot_every, views.
+## args: frames, events [{at, ...event}], shot_every, views, cover_every (sample the panels over the screen's centre
+## every K frames: covered.gd).
 ## Events with "at": k are injected before frame k+1 of the step (0 = before
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
 func _cmd_step(args: Dictionary) -> Dictionary:
 	var frames := maxi(int(args.get("frames", 1)), 1)
 	var shot_every := int(args.get("shot_every", 0))
+	var cover_every := int(args.get("cover_every", 0))
+	var cover_samples := []
 	var timeline := {}
 	for spec in args.get("events", []):
 		var event := _make_event(spec)
@@ -268,9 +272,14 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		if shot_every > 0 and (i + 1) % shot_every == 0:
 			await RenderingServer.frame_post_draw
 			shots.append(_save_image("step-f%d" % (i + 1)))
+		if cover_every > 0 and (i + 1) % cover_every == 0:
+			cover_samples.append(Covered.sample(get_tree()))
 	_set_held(was_held)
-	Common.wait_saves()
-	return {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
+	Common.wait_saves()  # every frame written before the reply names it
+	var result := {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
+	if cover_every > 0:
+		result.cover_samples = cover_samples
+	return result
 
 
 ## gdh starts the game with V-Sync off, so steps run as fast as the GPU goes. On the GPU

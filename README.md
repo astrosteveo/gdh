@@ -183,9 +183,20 @@ gdh measure spots frame.png --radius 6                     # each star's or mote
 gdh live measure black --frames 60 --fail --session s     # black cut into something lit: a NaN
 gdh live start --project game --session s --gpu-passes    # time each render pass too
 gdh live frames --clear --session s && gdh live step 600 --session s && gdh live frames --session s
+gdh measure sheet frames/still --out still-sheet.png      # 16 frames of a run (or a video) in one image
 ```
 
+A recording (`live record`, `live measure`) also writes a contact sheet beside its frames' directory and flags a UI panel that covered the middle of the screen for most of it ([docs/movie.md](docs/movie.md#panels-that-cover-the-screen)).
+
 See [docs/measure.md](docs/measure.md) for each measure's definition and limits.
+
+## Record a movie
+
+```sh
+gdh movie --project path/to/game --out captures/clip --seconds 20 --resolution 3840x2160
+```
+
+`gdh movie` records the game with Godot's Movie Maker at a fixed frame rate (`--fps`, 60), every frame and the game's audio, as an MJPEG AVI at its best quality, and ffmpeg encodes it to `movie.mp4`: H.264 (crf 18, yuv420p, `+faststart`) with AAC audio. The output directory also gets `sheet.png`, a contact sheet of 16 frames over the run, and `report.json`. Movie Maker ignores `--resolution` (it records at the size the project's settings give its window), so gdh writes an `override.cfg` into the project for the run and removes it once Godot has read it; it refuses to touch an `override.cfg` it didn't write. gdh checks the movie's size and frame count, and flags a UI panel left over the middle of the screen for most of the run (a `covered` warning). It needs `ffmpeg` and `ffprobe`. See [docs/movie.md](docs/movie.md).
 
 ## Probes
 
@@ -215,24 +226,23 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | Path | Contents |
 |---|---|
 | `src/gdh/cli.py` | The `gdh` command |
-| `src/gdh/capture.py`, `live.py`, `editor.py` | `gdh capture`, `gdh live` and `gdh editor` |
+| `src/gdh/capture.py`, `live.py`, `editor.py`, `movie.py` | `gdh capture`, `gdh live`, `gdh editor` and `gdh movie` |
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/imports.py` | `gdh import`, and the import cache's check before a run |
-| `src/gdh/companions.py`, `watchdog.py` | A live session's companion processes, and the watchdog that stops them when its game ends |
+| `src/gdh/override.py` | The `override.cfg` written into a project for one run |
+| `src/gdh/companions.py`, `spawned.py`, `watchdog.py` | A live session's companion processes, the processes its game spawns, and the watchdog that stops them when its game ends |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
+| `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
+| `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
+| `src/gdh/harness/movie.gd` | The main loop for `gdh movie`: runs the scene for the frames asked for under Movie Maker |
+| `src/gdh/harness/covered.gd` | Lists the UI panels drawn over the screen's centre, for `covered.py` |
 | `src/gdh/harness/editor.gd` | The editor's main loop for `gdh editor`: opens each scene and saves what the editor shows |
 | `src/gdh/harness/probes.gd` | The probes |
 | `testbed/` | Godot project with test scenes |
-| `tests/` | `uv run pytest`: probe findings on the testbed, live control, the editor and the displays, each on both displays |
-| `docs/` | Live control, the editor, probes, and test reports |
-
-| `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
-| `src/gdh/harness/probes.gd` | The probes |
-| `testbed/` | Godot project with test scenes |
-| `tests/` | `uv run pytest`: probe findings on the testbed, live control and the displays, each on both displays, and the measures |
-| `docs/` | Live control, measuring frames, probes, and test reports |
+| `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays |
+| `docs/` | Live control, the editor, measuring frames, movies, displays, probes, and test reports |
 | `skills/gdh/`, `.claude-plugin/` | The Claude Code skill and plugin manifests |
 
 ## License

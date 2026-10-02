@@ -58,3 +58,43 @@ def zoom(img, long_side):
     if factor < 1:
         return img.resize((round(img.width * factor), round(img.height * factor)), Image.LANCZOS)
     return img
+
+
+# A contact sheet: up to SHEET_TILES frames spread evenly over a run, SHEET_TILE_WIDTH px wide each, four across:
+# about 1220 px in all, which an image reader takes whole.
+SHEET_TILES = 16
+SHEET_COLUMNS = 4
+SHEET_TILE_WIDTH = 300
+
+
+def pick_evenly(count, wanted=SHEET_TILES):
+    """Indices of `wanted` items spread evenly over `count`, first and last included."""
+    if count <= wanted:
+        return list(range(count))
+    return sorted({round(i * (count - 1) / (wanted - 1)) for i in range(wanted)})
+
+
+def contact_sheet(tiles, out, columns=SHEET_COLUMNS, width=SHEET_TILE_WIDTH):
+    """Save frames side by side, each labeled, as one PNG: an overview of a run, which screen was up when.
+
+    tiles is [(label, image path or PIL image)]. A tile is downscaled, so read it for what's on screen, never for
+    pixel detail (thin lines, noise, aliasing), which scaling makes and hides. Returns out."""
+    from PIL import ImageDraw, ImageFont
+    images = [(label, Image.open(img) if not isinstance(img, Image.Image) else img) for label, img in tiles]
+    if not images:
+        raise ValueError("A contact sheet needs at least one frame.")
+    first = images[0][1]
+    height = round(first.height * width / first.width)
+    label_h = 18
+    rows = -(-len(images) // columns)
+    sheet = Image.new("RGB", (columns * width + (columns + 1) * 4, rows * (height + label_h) + (rows + 1) * 4), (24, 24, 24))
+    draw = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default(size=13)
+    for i, (label, img) in enumerate(images):
+        x = 4 + (i % columns) * (width + 4)
+        y = 4 + (i // columns) * (height + label_h + 4)
+        sheet.paste(img.convert("RGB").resize((width, height), Image.LANCZOS), (x, y + label_h))
+        draw.text((x + 2, y + 2), label, fill=(230, 230, 230), font=font)
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out)
+    return out

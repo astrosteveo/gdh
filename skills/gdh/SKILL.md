@@ -5,10 +5,11 @@ description: See and drive a Godot 4 game on Linux. Render scenes off-screen on 
 
 # gdh: seeing and driving a Godot game
 
-`gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. It has three modes:
+`gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. It has four modes:
 
 - `gdh capture` renders a scene once. You get six views, the engine errors and the probe findings.
 - `gdh live` starts the game held at frame 0. You step it an exact number of frames with input, and you can look at it between steps.
+- `gdh movie` records a video (MP4 with the game's audio) at any size, 4K included, with a contact sheet of the run.
 - `gdh editor` opens scenes in the Godot editor itself and saves what it shows: the 3D (or 2D) viewport, the whole editor window and a report. Use it to check what a user will see when they open a scene, above all a scene with tool scripts.
 
 Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges game feel (controls, pacing, fun). You cover whether the game renders correctly, runs without errors and behaves as specified.
@@ -42,6 +43,7 @@ A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gd
 | A thin effect's width, a point's size (stars, dust), a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
 | Frame time, or which render pass costs what | `gdh live start --gpu-passes`, then `gdh live frames` |
 | What the editor shows: tool scripts, `@tool` previews, scenes the user opens to edit | `gdh editor` |
+| Footage: a clip, a trailer shot, a video of a bug | `gdh movie` |
 
 ## The editor
 
@@ -110,6 +112,14 @@ gdh live stop --session <name>
 - **Frame pacing.** gdh starts Godot with V-Sync off: steps run as fast as the GPU goes. If the game turns V-Sync on itself, a step's notes say so, and steps then run at about 60 frames a second.
 - **Nodes that run while held.** `status` lists nodes with process mode ALWAYS or WHEN_PAUSED. They keep running while the game is held, so account for them when measuring.
 
+## Movies
+
+```sh
+gdh movie --project <dir> --out <dir>/captures/clip --seconds 10 --resolution 3840x2160 [--scene res://...] [--fps 60] [-- game args]
+```
+
+It writes `movie.mp4` (H.264 and AAC), `sheet.png` and `report.json`. Godot's Movie Maker records every frame at a fixed rate with the audio, so the movie is smooth however slowly it records. gdh puts the size in a temporary `override.cfg` (Movie Maker ignores `--resolution`): if the project has an `override.cfg` of its own, gdh refuses; tell the user rather than moving it yourself. After recording, read `sheet.png` first: it shows whether the clip shows what was wanted. A `covered` warning means a UI panel (a dialog, a popup) sat over the middle of the screen for most of the run. `report.json` has `problems` (size or frame count off; gdh exits 1) and the audio's peak, `silent` when there's none. See `${CLAUDE_PLUGIN_ROOT}/docs/movie.md`.
+
 ## Measuring
 
 Numbers settle what eyes can't: whether something flickers, swims, stays a pixel wide, or costs too much. Every measure reads PNGs (files or directories, in name order); see `${CLAUDE_PLUGIN_ROOT}/docs/measure.md` for each definition.
@@ -136,7 +146,8 @@ gdh live frames --clear --session <name>; gdh live step 600 --session <name>; gd
 
 Read PNGs with the Read tool. This is where you catch what logs miss, so don't skip it.
 
-- **Keep each image at about 1280 px wide or less, and never view several frames tiled into one large image.** Downscaled contact sheets create streaks and blotches that aren't in the real frame. To compare frames, view them one at a time or crop the same region from each.
+- **Keep each image at about 1280 px wide or less.** To compare frames for detail, view them one at a time or crop the same region from each, never tiled into one image: scaling creates streaks and blotches that aren't in the real frame.
+- **Contact sheets are for what's on screen, not for pixels.** `sheet.png` (from `gdh movie`), `<dir>-sheet.png` (from `live record` and `live measure`) and `gdh measure sheet` put 16 frames of a run in one image, about 1220 px wide: use them to see which screen was up when (a dialog left open, a menu, a loading screen, black), then open single frames for anything finer.
 - **Zoom in for small things.** A floating object, a blurry sprite or a misaligned icon is easy to miss at full-frame size and obvious at 2–4×. Use the crops in `crops/`, `--tiles`, or crop a region yourself with nearest-neighbor scaling.
 - **Debug views affect 3D only.** In a 2D or UI scene, all six images are identical. For 2D, use `tree` screen positions and zoomed crops instead.
 

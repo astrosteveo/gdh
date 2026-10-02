@@ -31,6 +31,12 @@ The probes check scene data after each capture, and on `gdh live probes`. Every 
 | `text_placeholder` | Text contains lorem ipsum, placeholder, TODO, TBD, FIXME, "sample text" or "insert text here". | These are generic placeholder markers. |
 | `sibling_offset` | The same-named child of 4+ sibling containers sits 3 px or more off, while 75% of the others agree within 1 px. Positions are compared by center, so icons of different sizes still match. | This catches a misplaced grid slot or list-row item. |
 
+One more check runs over a recording rather than a frame (`gdh movie`, `gdh live record`, `gdh live measure`):
+
+| Probe | Fires when | Why that threshold |
+|---|---|---|
+| `covered` | A UI panel that draws (a `Panel` or `PanelContainer` with a background, a `ColorRect`, a textured `TextureRect` or `NinePatchRect`, an embedded `Window` such as a dialog), at least half opaque, covers the screen's centre and 20% to 95% of the screen in at least half of about 48 samples over the run. | A HUD's widgets are far under 20% and its full-screen root draws nothing; a whole-screen backdrop (95% and up) is a screen of its own. Half the run means it hid the game, not that it flashed up. |
+
 Identical findings are merged into one, and the rest are listed in `data.also`.
 
 The `floating` probe adds temporary collision copies of every mesh for two physics frames. They sit alone on physics layer 32 and detect nothing. Probe rays and shape queries see only that layer, so the game's own colliders, areas and scripts never see the copies, and the copies never affect the game. `testbed/probes/isolation.tscn` tests this with a hidden collider and a trigger area.

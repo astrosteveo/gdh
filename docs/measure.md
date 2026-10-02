@@ -35,6 +35,10 @@ Every image measure reads luminance: Rec. 709's weights (0.2126, 0.7152, 0.0722)
 |---|---|
 | `gdh live record N [--out DIR] [--every K]` | Steps N frames and saves every frame (or every Kth) as `DIR/frame-0000.png` on. `--hold`, `--press`, `--release` and `--move` go in as `step`'s do. The default directory is `<session out>/measure/record`. |
 | `gdh live measure KIND [--frames N]` | Records N frames (120 by default) and measures them; any image measure but `dissolve` and `term`, with its options. The frames are deleted after unless `--keep`. |
+| `gdh live frames [--clear] [--reset] [--save FILE]` | The frame times recorded since the record last started over. `--clear` starts it over now (before a run), `--reset` after reading. |
+| `gdh measure sheet FRAMES... --out PNG` | A contact sheet of PNG frames or of a video: 16 frames spread evenly over the run, labeled, about 1220 px wide ([movie.md](movie.md#the-contact-sheet)). |
+
+`record` and `measure` also write a contact sheet of the frames beside their directory (`<dir>-sheet.png`; `--no-sheet` skips it), and flag a UI panel that covered the middle of the screen for most of the frames, as a `covered` warning with a crop in `<dir>-crops/` ([movie.md](movie.md#panels-that-cover-the-screen)).
 
 Saving a frame is two parts: reading it back from the GPU, which has to happen on the game's main thread between frames, and encoding it as a PNG, which is most of the cost. So each frame is read back on the main thread and encoded on Godot's worker threads (`WorkerThreadPool`, low priority) while the game goes on to the next, each into its own file; the step answers once every file is written. At most one frame per CPU core, less two, and no more than 16, wait to be encoded (a 3840x2160 frame is 33 MB in memory). The frames are the same, pixel for pixel, as frames saved one at a time. Shots of several views (`shot`, `capture`) are encoded the same way.
 
@@ -47,7 +51,6 @@ Saving a frame is two parts: reading it back from the GPU, which has to happen o
 | `xvfb` | 1920x1080 | 60 | 3.47-3.50 s (58 ms a frame) | 1.91-1.93 s (32 ms a frame) | 1.8x |
 
 Inside Godot, at 3840x2160, reading a frame back took about 10 ms and encoding it as a PNG about 105 ms (1920x1080: 2.5 ms and 27 ms). On Xvfb the rest is presenting each frame through the CPU ([displays.md](displays.md)), which no saving changes. High-priority tasks were about 20% faster again at 3840x2160 (15 ms a frame), but would compete with the game's own work on the pool, so the tasks stay low priority.
-| `gdh live frames [--clear] [--reset] [--save FILE]` | The frame times recorded since the record last started over. `--clear` starts it over now (before a run), `--reset` after reading. |
 
 ## Frame times
 

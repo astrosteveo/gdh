@@ -8,14 +8,14 @@ default godot-mono for a C# project and godot otherwise), GDH_GPU_INDEX
 for --display: auto, gpu or xvfb). A C# project is built with `dotnet build`
 first.
 
-Arguments after `--` go to the game (capture and live start), where
+Arguments after `--` go to the game (capture, live start and movie), where
 OS.get_cmdline_user_args() returns exactly them. `gdh editor` opens scenes in
 the Godot editor itself and saves what it shows.
 """
 import argparse
 import sys
 
-from gdh import editor, live, measure_cli
+from gdh import editor, live, measure_cli, movie
 from gdh.capture import cmd_capture
 from gdh.display import default_choice
 from gdh.godot import GdhError
@@ -49,6 +49,7 @@ def main():
 
     live.add_parsers(sub)
     editor.add_parser(sub, live.add_display_option)
+    movie.add_parser(sub, live.add_display_option)
     measure_cli.add_parsers(sub)
 
     argv = sys.argv[1:]
@@ -58,7 +59,7 @@ def main():
         argv, game_args = argv[:split], argv[split + 1:]
     args = parser.parse_args(argv)
     if game_args and not hasattr(args, "game_args"):
-        parser.error("arguments after -- go to the game: only capture and live start take them")
+        parser.error("arguments after -- go to the game: only capture, live start and movie take them")
     if hasattr(args, "game_args"):
         args.game_args = game_args
     try:

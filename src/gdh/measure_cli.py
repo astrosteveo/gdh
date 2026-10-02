@@ -7,8 +7,12 @@ import json
 import shutil
 from pathlib import Path
 
+from PIL import Image
+
 from gdh import measure as m
+from gdh.covered import covered_findings
 from gdh.godot import GdhError
+from gdh.images import contact_sheet, crop_findings, pick_evenly
 
 # The image measures, with their help.
 KINDS = {
@@ -203,6 +207,9 @@ def cmd_measure(args):
             mask = m.silhouette(args.with_, args.without, args.threshold, not args.no_fill)
             print(json.dumps(m.save_mask(mask, args.out), indent=1))
             return 0
+        if args.kind == "sheet":
+            print(json.dumps({"sheet": str(make_sheet(args.frames, args.out))}, indent=1))
+            return 0
         if args.kind == "times":
             out = m.times(m.load_record(args.record))
             if args.json:
@@ -218,6 +225,25 @@ def cmd_measure(args):
         return fail_code(args, out)
     except m.MeasureError as e:
         raise MeasureCliError(str(e)) from None
+
+
+VIDEO_SUFFIXES = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".ogv"}
+
+
+def make_sheet(sources, out):
+    """A contact sheet from PNG frames, or from a video (through ffmpeg)."""
+    if len(sources) == 1 and Path(sources[0]).suffix.lower() in VIDEO_SUFFIXES:
+        import tempfile
+        from gdh.movie import fps_of, sheet_from_video, video_facts
+        video = Path(sources[0])
+        if not video.is_file():
+            raise MeasureCliError(f"No such file: {video}")
+        with tempfile.TemporaryDirectory(prefix="gdh-sheet-") as work:
+            return sheet_from_video(video, video_facts(video)["frames"], fps_of(video), out, work)
+    paths = m.frame_paths(sources)
+    if not paths:
+        raise MeasureCliError("No frames: give PNG files or directories holding them, or a video.")
+    return sheet_of_frames(paths, out)
 
 
 def fail_code(args, out):
@@ -298,6 +324,12 @@ def add_parsers(sub):
     k.add_argument("--no-fill", action="store_true", help="Don't fill the holes inside it")
     k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
     k.set_defaults(func=cmd_measure)
+    k = kinds.add_parser("sheet", help="A contact sheet: 16 frames spread evenly over a run, labeled, in one image, "
+                                       "to see at a glance which screen was up when")
+    k.add_argument("frames", nargs="+", help="PNG files or directories of them (in name order), or one video file")
+    k.add_argument("--out", required=True, metavar="PNG", help="Where the sheet goes")
+    k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
+    k.set_defaults(func=cmd_measure)
     k = kinds.add_parser("times", help="Summarize a frame-time record (gdh live frames --save)")
     k.add_argument("record")
     k.add_argument("--json", action="store_true")
@@ -332,8 +364,9 @@ def record(session, args, frames, out_dir, as_json=False):
         for old in out_dir.glob("frame-*.png"):
             old.unlink()
     out_dir.mkdir(parents=True, exist_ok=True)
-    reply = call(session, "step", {"frames": frames, "events": step_events(args, frames), "shot_every": args.every},
-                 instance=args.instance, timeout=max(120, frames * 5))
+    step = {"frames": frames, "events": step_events(args, frames), "shot_every": args.every,
+            "cover_every": max(frames // COVER_SAMPLES, 1)}
+    reply = call(session, "step", step, instance=args.instance, timeout=max(120, frames * 5))
     result = report(reply, as_json, echo=False)
     errors = [e for part in reply.get("instances", [reply]) for e in part.get("errors", [])]
     if isinstance(result, list):  # several instances: the one asked for
@@ -343,7 +376,42 @@ def record(session, args, frames, out_dir, as_json=False):
         dst = out_dir / f"frame-{i:04d}.png"
         shutil.move(shot, dst)
         paths.append(dst)
-    return paths, errors
+    return paths, errors, result.get("cover_samples", [])
+
+
+# About this many samples of what covers the screen over a recording.
+COVER_SAMPLES = 48
+
+
+def sheet_path(out_dir):
+    """A recording's contact sheet goes beside its directory, so the directory holds only its frames."""
+    out_dir = Path(out_dir).resolve()
+    return out_dir.parent / f"{out_dir.name}-sheet.png"
+
+
+def sheet_of_frames(paths, out, every=1):
+    """A contact sheet of PNG frames spread evenly over a run, each labeled with its index in the run."""
+    return contact_sheet([(f"frame {i * every + every - 1}", paths[i]) for i in pick_evenly(len(paths))], out)
+
+
+def after_recording(paths, samples, out_dir, args, as_json):
+    """What a recording leaves beside its frames: the contact sheet, and the panels that covered the screen. Returns
+    {"sheet", "findings"} for JSON; prints them otherwise."""
+    extra = {"findings": covered_findings(samples)}
+    if paths and not getattr(args, "no_sheet", False):
+        extra["sheet"] = str(sheet_of_frames(paths, sheet_path(out_dir), args.every))
+    if extra["findings"] and paths:
+        with Image.open(paths[len(paths) // 2]) as middle:
+            size = list(middle.size)
+        crops = Path(out_dir).resolve().parent / f"{Path(out_dir).resolve().name}-crops"
+        crop_findings(extra["findings"], size, {"normal": paths[len(paths) // 2]}, crops)
+    if not as_json:
+        if extra.get("sheet"):
+            print(f"contact sheet: {extra['sheet']}")
+        for f in extra["findings"]:
+            crop = f"  [{f['crop']}]" if f.get("crop") else ""
+            print(f"{f['severity']}: {f['probe']} {f['node']}: {f['message']}{crop}")
+    return extra
 
 
 def default_dir(session, name):
@@ -354,8 +422,12 @@ def cmd_record(args):
     from gdh.live import load_session
     session = load_session(args.session)
     out = Path(args.out) if args.out else default_dir(session, args.label)
-    paths, _ = record(session, args, args.frames, out)
-    print(f"recorded {len(paths)} frames into {out}")
+    paths, _, samples = record(session, args, args.frames, out, args.json)
+    extra = after_recording(paths, samples, out, args, args.json)
+    if args.json:
+        print(json.dumps({"frames": [str(p) for p in paths], "frames_dir": str(out), **extra}, indent=1))
+    else:
+        print(f"recorded {len(paths)} frames into {out}")
     return 0
 
 
@@ -363,7 +435,7 @@ def cmd_live_measure(args):
     from gdh.live import load_session
     session = load_session(args.session)
     out = Path(args.out) if args.out else default_dir(session, args.kind)
-    paths, errors = record(session, args, args.frames, out, args.json)
+    paths, errors, samples = record(session, args, args.frames, out, args.json)
     if not paths:
         raise MeasureCliError("The step saved no frames.")
     try:
@@ -373,7 +445,13 @@ def cmd_live_measure(args):
     result["frames_dir"] = str(out)
     if args.json and errors:
         result["errors"] = errors
+    result.update(after_recording(paths, samples, out, args, True))
     emit(args.kind, result, args.json, args.save)
+    if not args.json:
+        for f in result["findings"]:
+            print(f"{f['severity']}: {f['probe']} {f['node']}: {f['message']}")
+        if result.get("sheet"):
+            print(f"contact sheet: {result['sheet']}")
     if not args.keep:
         for p in paths:
             p.unlink()
@@ -429,6 +507,8 @@ def add_live_parsers(commands, command):
         p.add_argument("--press", action="append", default=[], metavar="INPUT", help="As step: press at the start")
         p.add_argument("--release", action="append", default=[], metavar="INPUT", help="As step: release at the start")
         p.add_argument("--hold", action="append", default=[], metavar="INPUT", help="As step: hold for the frames")
+        p.add_argument("--no-sheet", action="store_true",
+                       help="Don't make the contact sheet (<out>-sheet.png, beside the frames' directory)")
 
     p = command("record", cmd_record, "Step and save every frame into a directory, for gdh measure",
                 instance="Which instance's frames, and who gets the input (default 0). Every instance steps")

@@ -12,6 +12,8 @@ description: See and drive a Godot 4 game on Linux. Render scenes off-screen on 
 - `gdh movie` records a video (MP4 with the game's audio) at any size, 4K included, with a contact sheet of the run.
 - `gdh editor` opens scenes in the Godot editor itself and saves what it shows: the 3D (or 2D) viewport, the whole editor window and a report. Use it to check what a user will see when they open a scene, above all a scene with tool scripts.
 
+Other parts of this plugin cover the rest of making a game: the `godot-editor` skill for changing files with the editor open (`gdh bridge`, UIDs), `gdh test` for the project's tests, `gdh api` for API names (below), `gdh export` for builds (the `godot-export` skill), and the `playtester` agent, which plays a scene against a goal and reports back.
+
 Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges game feel (controls, pacing, fun). You cover whether the game renders correctly, runs without errors and behaves as specified.
 
 ## Setup
@@ -44,6 +46,8 @@ A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gd
 | Frame time, or which render pass costs what | `gdh live start --gpu-passes`, then `gdh live frames` |
 | What the editor shows: tool scripts, `@tool` previews, scenes the user opens to edit | `gdh editor` |
 | Footage: a clip, a trailer shot, a video of a bug | `gdh movie` |
+| Logic with no picture to check: rules, save data, inventory, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
+| A long play-through against a goal, kept out of the main conversation | the `playtester` agent |
 
 ## The editor
 
@@ -181,13 +185,19 @@ Treat a `warning` as a strong lead and confirm it on its crop before reporting i
 
 ## Checking a Godot API name
 
-The installed Godot may be newer than your training data. When unsure whether a class, method, property or signal exists, check the engine itself:
+The installed Godot may be newer than your training data, and Godot 3 names (`KinematicBody2D`, `instance()`,
+`yield`) are easy to slip into Godot 4 code. Before using a class, method, property or signal you aren't sure of,
+look it up in the installed version's own class reference:
 
 ```sh
-godot --version
-cd /tmp && godot --headless --dump-extension-api   # writes extension_api.json
-jq '.classes[] | select(.name=="CharacterBody2D") | [.methods[].name, .properties[]?.name]' extension_api.json
+gdh api CharacterBody2D                 # its chain, properties, methods, signals and constants
+gdh api CharacterBody2D.move_and_slide  # one member's signature and description (found up the chain)
+gdh api --search floor                  # every class and member whose name contains "floor"
+gdh api @GDScript                       # GDScript's built-ins: preload, load, range, annotations
 ```
+
+A wrong name exits 1 and suggests close ones. The first lookup for a Godot version builds the reference (about ten
+seconds); later ones are instant.
 
 ## Reporting to the user
 

@@ -2,6 +2,8 @@
 
 Renders Godot scenes off-screen on the real GPU and saves screenshots, debug views, engine errors and checks for likely defects. An AI agent or a script can then inspect what the game draws.
 
+It also lets an agent change a project without fighting the Godot editor: a live link into the editor (`gdh bridge`) for UIDs, script checks and edits the user can undo, plus `gdh api` for the installed Godot's class reference, `gdh test` for a project's tests and `gdh export` for builds.
+
 Linux only for now.
 
 ## Requirements
@@ -44,7 +46,7 @@ To run it from the repo without installing, use `uv run gdh ...`.
 
 ## Claude Code plugin
 
-The repo is also a Claude Code plugin. Its `gdh` skill teaches Claude when and how to use the tool: which mode to pick, how to read the views and crops, how to drive a live session, and what to report. To try it without installing:
+The repo is also a Claude Code plugin. To try it without installing:
 
 ```sh
 claude --plugin-dir /path/to/gdh
@@ -57,7 +59,16 @@ To install it from GitHub once the repo is published, where `OWNER` is the GitHu
 /plugin install gdh@gdh
 ```
 
-The skill runs gdh from the plugin's own copy of this repo, so `uv` is the only extra install.
+It runs gdh from the plugin's own copy of this repo, so `uv` is the only extra install. It holds:
+
+| Part | What it does |
+|---|---|
+| `gdh` skill | When and how to see and drive the game: which mode to pick, how to read the views and crops, how to drive a live session, what to report |
+| `godot-editor` skill | Changing a project with the editor open: the bridge, live edits the user can undo, UIDs |
+| `godot-gdscript`, `godot-project`, `godot-export` skills | Typed Godot 4.7 GDScript and its Godot 3 pitfalls; scenes, autoloads, the Input Map and saves; exporting builds |
+| `playtester` agent | Plays a scene with `gdh live` against a goal and reports pass or fail with evidence |
+| Hooks | Before each Write or Edit in a Godot project: refuse edits to `.godot/`, to scenes with unsaved changes in the editor, to `project.godot` under a running editor, and `uid://` values the project doesn't have. After: rescan the file, reload it if it's open, fill in a new scene's UIDs and check GDScript, returning Godot's errors. `GDH_HOOKS=off` turns them off. |
+| Band | A row above Claude Code's prompt in a Godot project: the editor bridge, the open scene, unsaved scenes, the running game and editor errors waiting for Claude |
 
 ## Capture a scene
 
@@ -202,6 +213,51 @@ gdh movie --project path/to/game --out captures/clip --seconds 20 --resolution 3
 
 After capturing, `gdh` checks the scene's data for likely defects. Examples are floating objects, a tilted camera, geometry cut off by the far plane, material values out of range, blurry pixel art, raw translation keys and misaligned UI items. It prints each finding and saves a zoomed crop of it. See [docs/probes.md](docs/probes.md) for the checks, their thresholds and test results.
 
+## Work through the editor
+
+```sh
+gdh bridge install                 # copy the addon into addons/gdh_bridge; the user enables it in Project Settings > Plugins
+gdh bridge start                   # or: gdh's own headless editor, with nothing installed in the project
+gdh bridge status                  # open scenes, unsaved scenes, the current scene, the running game
+gdh bridge scan                    # rescan; waits until imports and new .uid files are done
+gdh bridge uid res://player.gd     # path to UID, or uid:// to path
+gdh bridge resave res://level.tscn # save through Godot, which fills in the scene's UIDs
+gdh bridge check res://player.gd   # Godot's errors for a script (headless when no editor runs)
+gdh bridge open res://level.tscn   # show it to the user
+gdh bridge exec edit.gd            # run func run(editor) inside the editor, as an undoable edit
+```
+
+The bridge is a small HTTP server on 127.0.0.1 inside the Godot editor, with a random token in `.godot/gdh_bridge.json`. Every reply carries the editor's errors since the last one. `gdh bridge start` runs it in a headless editor of gdh's own (settings in gdh's editor home, the project's `.godot/editor` put back when it stops), which quits after 30 idle minutes. See [docs/bridge.md](docs/bridge.md).
+
+## Look up the API
+
+```sh
+gdh api CharacterBody2D                 # its chain, properties, methods, signals, constants
+gdh api CharacterBody2D.move_and_slide  # one member's signature and description, found up the chain
+gdh api --search floor
+```
+
+The reference is the installed Godot's own: the editor's help cache, built once per Godot version (about ten seconds, in a headless editor) and kept in `~/.cache/gdh/api/`. A wrong name exits 1 with close matches.
+
+## Run tests
+
+```sh
+gdh test --project path/to/game                       # res://test and res://tests
+gdh test --project path/to/game res://test/test_player.gd --out captures/tests
+```
+
+`gdh test` runs GUT (`addons/gut`) or gdUnit4 (`addons/gdUnit4`) through their own command-line runners, or, in a project with neither, gdh's own runner: each method named `test*` in a `test*.gd` file is a test, and a test fails when it raises an engine error (a failed `assert()`, `push_error()`, a script error). It runs headless unless `--display` asks for one, and prints each failure; `report.json` and `junit.xml` hold the rest. See [docs/test.md](docs/test.md).
+
+## Export
+
+```sh
+gdh export --project path/to/game                    # list the presets
+gdh export --project path/to/game --preset Linux     # release build to the preset's export path
+gdh export --project path/to/game --preset Linux --pack   # the .pck alone, no templates needed
+```
+
+It checks the preset and the export templates for the exact Godot version first, and says what's missing.
+
 ## Displays
 
 Each Godot run gets an X display of its own, and Godot draws to it with its X11 driver and Vulkan. There are two kinds:
@@ -233,6 +289,9 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/companions.py`, `spawned.py`, `watchdog.py` | A live session's companion processes, the processes its game spawns, and the watchdog that stops them when its game ends |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |
+| `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
+| `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |
+| `src/gdh/api.py`, `testing.py`, `export.py` | `gdh api`, `gdh test` and `gdh export` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
 | `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
@@ -240,10 +299,11 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/harness/covered.gd` | Lists the UI panels drawn over the screen's centre, for `covered.py` |
 | `src/gdh/harness/editor.gd` | The editor's main loop for `gdh editor`: opens each scene and saves what the editor shows |
 | `src/gdh/harness/probes.gd` | The probes |
+| `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, and gdh's own test runner |
 | `testbed/` | Godot project with test scenes |
-| `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays |
+| `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays; the bridge and hooks, `api`, `test` and `export`, which run headless, once. `claude plugin test .` runs the band's tests. |
 | `docs/` | Live control, the editor, measuring frames, movies, displays, probes, and test reports |
-| `skills/gdh/`, `.claude-plugin/` | The Claude Code skill and plugin manifests |
+| `skills/`, `agents/`, `.claude-plugin/` | The Claude Code skills, the playtester agent, and the plugin manifests |
 
 ## License
 

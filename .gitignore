@@ -3,3 +3,5 @@ __pycache__/
 captures/
 .venv/
 dist/
+# Type files Claude Code writes on each load of a mod
+.claude-plugin/types/

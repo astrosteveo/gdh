@@ -1,0 +1,32 @@
+{
+  "description": "Keep Claude's edits in step with the Godot editor: refuse edits to .godot/, to scenes with unsaved changes and to made-up UIDs; then rescan, reload, fill in UIDs and check GDScript.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gdh_hook.py\" pre",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/gdh_hook.py\" post",
+            "timeout": 180
+          }
+        ]
+      }
+    ]
+  },
+  "modules": [
+    "./register.tsx"
+  ]
+}

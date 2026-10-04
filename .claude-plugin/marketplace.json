@@ -1,6 +1,6 @@
 {
   "name": "gdh",
-  "description": "The gdh plugin for Claude Code: see and drive Godot 4 games.",
+  "description": "The gdh plugin for Claude Code: make Godot 4 games with Claude.",
   "owner": {
     "name": "Steven Mosley"
   },
@@ -8,7 +8,7 @@
     {
       "name": "gdh",
       "source": "./",
-      "description": "Lets Claude see and drive Godot 4 games on Linux: off-screen GPU screenshots, debug views, defect probes and frame-by-frame play with scripted input."
+      "description": "Lets Claude make Godot 4 games: see and drive them off-screen on the GPU, work through the open editor with real UIDs, check scripts and the API, run tests and export builds."
     }
   ]
 }

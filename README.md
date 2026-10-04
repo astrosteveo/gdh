@@ -52,10 +52,10 @@ The repo is also a Claude Code plugin. To try it without installing:
 claude --plugin-dir /path/to/gdh
 ```
 
-To install it from GitHub once the repo is published, where `OWNER` is the GitHub account:
+To install it from GitHub ([astrosteveo/gdh](https://github.com/astrosteveo/gdh), private for now, so you need access to it):
 
 ```
-/plugin marketplace add OWNER/gdh
+/plugin marketplace add astrosteveo/gdh
 /plugin install gdh@gdh
 ```
 

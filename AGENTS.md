@@ -21,9 +21,9 @@ Run Godot only through gdh: `uv run gdh ...` from this folder. A bare `godot` ru
 
 ## Shipping changes
 
-- gdh has no remote and runs in place from this folder, so `main` is what everyone uses.
+- gdh's remote is `origin`, [github.com/astrosteveo/gdh](https://github.com/astrosteveo/gdh). gdh also runs in place from this folder, so the local `main` is what everyone on this machine uses. Push `main` to `origin` after each merge.
 - Work in your own worktree: `git worktree add ~/Projects/.gdh-worktrees/<name> -b <area>/<name> main`.
-- Merge into `main` with a merge commit, named like the existing history: `Merge <branch>: <what it adds>`. Run the full tests first. Then remove your worktree and branch.
+- Merge into `main` with a merge commit, named like the existing history: `Merge <branch>: <what it adds>`. Run the full tests first. Then remove your worktree and branch, and delete the branch on `origin` too if you pushed it.
 - Update `README.md`, the matching file in `docs/`, and `skills/gdh/SKILL.md` along with any change users will see.
 - Keep gdh generic. It serves any Godot project, not only the one that found the problem.
 

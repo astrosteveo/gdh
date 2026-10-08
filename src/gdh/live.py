@@ -687,6 +687,7 @@ def add_display_option(parser):
 
 
 def add_parsers(sub):
+    from gdh import blackbox
     live = sub.add_parser("live", help="Start a game off-screen and drive it step by step")
     commands = live.add_subparsers(dest="live_command", required=True)
 
@@ -696,7 +697,7 @@ def add_parsers(sub):
         p.add_argument("--json", action="store_true", help="Print the raw reply")
         if instance:
             p.add_argument("--instance", default="0", metavar="N", help=instance)
-        p.set_defaults(func=func)
+        p.set_defaults(func=blackbox.route(name, func))  # a --binary session's commands go to blackbox.py
         return p
 
     one = "Which game instance: a number, or all (default 0)"
@@ -706,7 +707,7 @@ def add_parsers(sub):
     p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     p.add_argument("--no-import", action="store_true",
                    help="Don't import the project first when its import cache is missing or stale")
-    p.add_argument("--project", required=True, help="Godot project directory")
+    p.add_argument("--project", help="Godot project directory (or --binary)")
     p.add_argument("--scene", help="res:// path (default: the project's main scene)")
     p.add_argument("--out", help="Output directory (default: ./captures/live/<session>)")
     p.add_argument("--resolution", default="1280x720")
@@ -736,6 +737,7 @@ def add_parsers(sub):
     p.add_argument("--gpu-passes", action="store_true",
                    help="Have the renderer time each of its passes, for `frames` (Godot's --gpu-profile; it also "
                         "prints a GPU profile to the log each second)")
+    blackbox.add_start_options(p)
 
     command("stop", cmd_stop, "Quit the game and its companions, and clean up")
     command("status", cmd_status, "Show frame, hold state and scene of each instance, and the companions")
@@ -783,3 +785,4 @@ def add_parsers(sub):
 
     from gdh import measure_cli
     measure_cli.add_live_parsers(commands, command)
+    blackbox.add_live_parsers(commands, command)

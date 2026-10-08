@@ -33,7 +33,7 @@ Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/h
 
 ## Input
 
-Input is injected at the start of a step, where real input arrives. `_input`, `is_action_just_pressed` and `is_action_pressed` see it the same way they see a player's input. An input is either an action name from the Input Map or `key:NAME` for a key (for example `key:Space`). A key goes through the Input Map like a real key press.
+Input is injected at the start of a step, where real input arrives. `_input`, `is_action_just_pressed` and `is_action_pressed` see it the same way they see a player's input. An input is an action name from the Input Map, `key:NAME` for a key (for example `key:Space`, or `key:ctrl+s` with its modifiers), or `joy:NAME` for a gamepad button (for example `joy:a`). Keys and gamepad buttons go through the Input Map like a player's.
 
 | Option | Effect |
 |---|---|
@@ -49,6 +49,14 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 | `--right-hold X,Y` | Press the right button at X,Y at the start of the step, release it at the end (a held press: a context or marking menu) |
 | `--click-text TEXT` | Left click the node that shows TEXT, at the centre of what shows of it (below) |
 | `--click-node PATH` | Left click a node, at the centre of what shows of it (below) |
+
+| `--wheel DIR[:N]` | Turn the mouse wheel `up`, `down`, `left` or `right` N notches (default 1) where the pointer is, a notch a frame from the step's start. Each notch is a press and a release of the wheel's button, as a mouse sends. The step must be at least N frames |
+| `--wheel-at X,Y` | Move the pointer to X,Y first, and turn the wheel there |
+| `--mod MODS` | Hold `ctrl`, `shift`, `alt` or `meta` (comma-separated) for the whole step: their keys go down at its start, before the rest of its input, and up at its end, and every key, click, wheel notch and pointer move of the step carries them (`event.ctrl_pressed`) |
+| `--axis NAME=VALUE` | Put a gamepad axis at VALUE, from -1 to 1, at the start of the step: `left_x`, `left_y`, `right_x`, `right_y`, `trigger_left` or `trigger_right`. It stays there, as a held stick does, until another `--axis` moves it (`--axis left_x=0` lets go) |
+| `--touch X,Y` | Tap the touchscreen at X,Y: a finger down at the start of the step, up after one frame |
+| `--touch-drag X,Y:X,Y` | Put a finger down at the first point at the start of the step, move it evenly to the second over the step (a drag event a frame), and lift it at the end |
+| `--look DX,DY` | Move the mouse by DX,DY at the start of the step: relative motion, for mouse-look. A negative DX needs `=`: `--look=-40,0` |
 
 An INPUT can also be `mouse:left`, `mouse:right` or `mouse:middle`, pressed where the pointer is: `--move 300,200 --press mouse:right`, then steps with `--move` to drag or point, then `--release mouse:right`.
 
@@ -100,6 +108,12 @@ gdh live camera --release                        # the game's own camera again
 ```
 
 In 3D it adds a Camera3D with the game camera's lens (its fov, near and far planes, cull mask, environment and attributes) unless `--fov` or `--far` says otherwise, and makes it current. In 2D it adds a Camera2D, centred on X,Y in world units at `--zoom` (2 is twice as close), which moves the view while the game is held. Each is an internal child of the root, so game code walking the tree doesn't see it, and it stays through steps until `--release`, which frees it and makes the camera it replaced current again. `tree`, `find`, clicks and shots all see through it. A game that makes its own camera current again takes the view back, and one that reads the current camera (to aim, say) gets gdh's while it's there.
+
+- **Modifiers.** `--tap key:ctrl+s` presses Ctrl, then S carrying Ctrl, and lets them go in the opposite order, as a keyboard does, so an action bound to Ctrl+S fires and `Input.is_key_pressed(KEY_CTRL)` is true meanwhile. `--mod ctrl` holds Ctrl for the whole step instead: `--wheel up --mod ctrl` is Ctrl and the wheel, a map's zoom.
+- **Gamepad.** `joy:NAME` is a button of gamepad 0, by Godot's name: `a`, `b`, `x`, `y`, `back`, `guide`, `start`, `left_stick`, `right_stick`, `left_shoulder`, `right_shoulder`, `dpad_up`, `dpad_down`, `dpad_left`, `dpad_right`, `misc1`, `paddle1` to `paddle4` or `touchpad`, or a number. Buttons and axes reach the Input Map as a connected pad's do, so `is_action_pressed` and `get_action_strength` (past the action's deadzone) see them. Godot's built-in `ui_*` actions take the D-pad and the left stick. No pad is connected, though: `Input.get_connected_joypads()` is empty.
+- **Touch.** Each `--touch`, then each `--touch-drag`, of a step is a finger of its own, numbered from 0, so two `--touch-drag`s are a pinch or a two-finger swipe. They reach `_input` as `InputEventScreenTouch` and `InputEventScreenDrag`. With Godot's default `emulate_mouse_from_touch`, finger 0 also stands in for the mouse, so a tap presses a `Button`, and it moves the pointer.
+- **The pointer.** gdh moves the display's own pointer wherever a step's input leaves it (`--move`, clicks, `--wheel-at`, `--look`, finger 0), so `get_mouse_position()`, `get_global_mouse_position()` and `DisplayServer.mouse_get_position()` say where it is. X answers each move with a motion event of its own; gdh takes it and drops it before the step's input goes in, so the game sees only gdh's. A step's input starts from where the pointer is, so if the game moves it itself (`Input.warp_mouse`), the next step starts from there.
+- **Mouse-look.** `--look DX,DY` is a motion event carrying DX,DY as its `relative` and `screen_relative`, in screenshot pixels (the game's own units unless it stretches). With the mouse captured (`Input.MOUSE_MODE_CAPTURED`), the pointer stays at the window's centre, as X keeps it, and only the relative motion moves; otherwise the pointer moves by DX,DY.
 
 ## Coordinates
 
@@ -249,9 +263,14 @@ This is how gdh talks to one instance. The commands are `status`, `step`, `shot`
 
 `frames` takes `{"reset": bool, "clear": bool}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name}`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
 - `{action, pressed, strength}`
-- `{key, pressed}`
-- `{mouse_button, position, pressed}`
-- `{mouse_motion: [x, y]}`
+- `{key, pressed, mods}`: `key` is a key's name, or one with its modifiers (`"ctrl+s"`)
+- `{mouse_button, position, pressed, mods}`: buttons 1 to 3 are left, right and middle, and 4 to 7 the wheel up, down, left and right (a notch is a press and a release)
+- `{mouse_motion: [x, y], mods}`
+- `{look: [dx, dy], mods}`: relative motion
+- `{joy_button, pressed, device}` and `{joy_axis, value, device}`: Godot's `JoyButton` and `JoyAxis` numbers, on gamepad `device` (default 0)
+- `{touch: [x, y], index, pressed}` and `{touch_drag: [x, y], index}`: finger `index` down, up, or moved
+
+`mods` lists the modifiers held (`ctrl`, `shift`, `alt`, `meta`) and sets the event's flags. It doesn't press their keys, which are key events of their own (`gdh live step` sends them around the rest). Send events in time order: the bridge follows the pointer, its buttons and the fingers event by event.
 
 A mouse event with `"on": {"text": TEXT}` or `"on": {"node": PATH}` instead of a position goes to the centre of what shows of that node, as `--click-text` and `--click-node` do; the step's reply lists each target in `"aimed"`, and fails before stepping when a target can't be clicked.
 
@@ -281,6 +300,15 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - errors, `DEFECT:` lines and notes on stderr with only the result on stdout, and `--strict` and `GDH_STRICT=1`
 - the game's output in replies, merged and cut, and at `start`; a script error's backtrace without gdh's frames
 - `list`, and the one-line hint for options run together in one argument
+
+`tests/test_input.py` runs `testbed/input/devices.tscn`, which records each wheel notch, key, touch and drag its `_input` sees. It checks:
+
+- the wheel scrolling a `ScrollContainer` a notch a frame, and Ctrl and the wheel zooming a map that the wheel alone doesn't
+- `key:ctrl+s` reaching an action bound to Ctrl+S, which S alone doesn't, and `--mod` keys pressed around the rest
+- gamepad buttons and a stick reaching Godot's `ui_*` actions, with the stick's strength past its deadzone, until it's moved back
+- a tap pressing a `Button` through touch's mouse emulation, and two fingers dragging at once
+- the display's pointer where `--move`, a tap and `--look` leave it, with X's own motion event for each move never reaching the game, and `--look` turning a captured mouse
+- bad input refused, saying why
 
 `tests/test_companions.py` runs two instances of `testbed/live/lockstep.tscn` beside `testbed/live/barrier.py`, a companion every instance waits at each frame, as clients of a server on a test clock do. It checks:
 

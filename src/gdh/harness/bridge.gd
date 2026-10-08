@@ -282,8 +282,9 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	var cover_every := int(args.get("cover_every", 0))
 	var cover_samples := []
 	var timeline := {}
+	_sync_pointer()
 	for spec in args.get("events", []):
-		var event := _make_event(spec)
+		var event := _make_input(spec)
 		if event == null:
 			return {"error": "Bad input event: %s" % JSON.stringify(spec)}
 		timeline.get_or_add(clampi(int(spec.get("at", 0)), 0, frames), []).append(event)
@@ -297,6 +298,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	_set_held(false)
 	var shots := []
 	for i in frames + 1:
+		_warp_pointer(timeline.get(i, []))
 		for event in timeline.get(i, []):
 			Input.parse_input_event(event)
 		if i == frames:
@@ -696,6 +698,151 @@ func _make_event(spec: Dictionary) -> InputEvent:
 		_mouse_at = e.position
 		return e
 	return null
+
+
+## Where each finger on the touchscreen is, by index: a drag carries how far it moved.
+var _touches := {}
+## Where the display's own pointer was (screen coordinates) when gdh last looked or moved it.
+var _pointer_seen := Vector2i(-1, -1)
+## While gdh takes the motion event X sends for its warp (_warp_pointer), _input drops it.
+var _taking_echo := false
+var _echoes := 0
+
+const MODIFIERS := {"ctrl": KEY_MASK_CTRL, "shift": KEY_MASK_SHIFT, "alt": KEY_MASK_ALT, "meta": KEY_MASK_META}
+
+
+## A step's input event: one of _make_event's, a gamepad's, a touch or a mouse-look, holding the modifiers its
+## "mods" names (ctrl, shift, alt, meta). A key can name its modifiers too: "ctrl+s".
+func _make_input(spec: Dictionary) -> InputEvent:
+	var event := _make_event(spec)
+	if event == null:
+		event = _make_device_event(spec)
+	var key := event as InputEventKey
+	if key:
+		var mask: int = key.keycode & KEY_MODIFIER_MASK
+		key.keycode = (key.keycode & KEY_CODE_MASK) as Key
+		key.physical_keycode = (key.physical_keycode & KEY_CODE_MASK) as Key
+		for mod in MODIFIERS:
+			if mask & MODIFIERS[mod]:
+				key.set(mod + "_pressed", true)
+	for mod in spec.get("mods", []):
+		if not (event is InputEventWithModifiers) or not MODIFIERS.has(mod):
+			return null
+		event.set(mod + "_pressed", true)
+	return event
+
+
+func _make_device_event(spec: Dictionary) -> InputEvent:
+	var pressed: bool = spec.get("pressed", true)
+	if spec.has("joy_button"):
+		var e := InputEventJoypadButton.new()
+		e.device = int(spec.get("device", 0))
+		e.button_index = int(spec.joy_button) as JoyButton
+		e.pressed = pressed
+		return e
+	if spec.has("joy_axis"):
+		var e := InputEventJoypadMotion.new()
+		e.device = int(spec.get("device", 0))
+		e.axis = int(spec.joy_axis) as JoyAxis
+		e.axis_value = clampf(float(spec.get("value", 0.0)), -1.0, 1.0)
+		return e
+	if spec.has("touch"):
+		var e := InputEventScreenTouch.new()
+		e.index = int(spec.get("index", 0))
+		e.position = Common.shot_to_window(get_tree(), Vector2(spec.touch[0], spec.touch[1]))
+		e.pressed = pressed
+		if pressed:
+			_touches[e.index] = e.position
+		else:
+			_touches.erase(e.index)
+		_follow_finger(e.index, e.position)
+		return e
+	if spec.has("touch_drag"):
+		# Input works out the drag's velocity itself.
+		var e := InputEventScreenDrag.new()
+		e.index = int(spec.get("index", 0))
+		e.position = Common.shot_to_window(get_tree(), Vector2(spec.touch_drag[0], spec.touch_drag[1]))
+		e.relative = e.position - _touches.get(e.index, e.position)
+		e.screen_relative = e.relative
+		_touches[e.index] = e.position
+		_follow_finger(e.index, e.position)
+		return e
+	if spec.has("look"):
+		# Relative motion, as a mouse moved by hand. A captured mouse stays at the window's centre, as X keeps it.
+		var e := InputEventMouseMotion.new()
+		var tree := get_tree()
+		var to := Common.shot_to_window(tree, Vector2(spec.look[0], spec.look[1]))
+		e.relative = to - Common.shot_to_window(tree, Vector2.ZERO)
+		e.screen_relative = e.relative
+		var size := Vector2(DisplayServer.window_get_size())
+		if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			e.position = (size / 2).floor()
+		else:
+			e.position = (_mouse_at + e.relative).clamp(Vector2.ZERO, size - Vector2.ONE)
+		e.global_position = e.position
+		e.button_mask = _mouse_mask
+		_mouse_at = e.position
+		return e
+	return null
+
+
+## While touch stands in for the mouse (Input.emulate_mouse_from_touch), the first finger moves the pointer, as on a
+## touchscreen.
+func _follow_finger(index: int, at: Vector2) -> void:
+	if Input.emulate_mouse_from_touch and index == 0:
+		_mouse_at = at
+
+
+## gdh's pointer starts each step where the display's pointer is, if something else moved it (the game warped it, or
+## gdh hasn't yet): a captured mouse is the game's to place.
+func _sync_pointer() -> void:
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		return
+	var real := DisplayServer.mouse_get_position()
+	if real != _pointer_seen:
+		_pointer_seen = real
+		_mouse_at = Vector2(real - DisplayServer.window_get_position())
+
+
+## Moves the display's own pointer to where a frame's injected events leave gdh's (a first finger's too:
+## _follow_finger), so get_mouse_position() and DisplayServer.mouse_get_position() say where it is. X answers a warp
+## with a motion event of its own, which would reach the game a frame or so later, on top of gdh's: it's taken now,
+## before the frame's events go in, and dropped (_input).
+func _warp_pointer(events: Array) -> void:
+	var to := Vector2.INF
+	for event in events:
+		if event is InputEventMouse:
+			to = event.global_position
+		elif (event is InputEventScreenTouch or event is InputEventScreenDrag) and event.index == 0 \
+				and Input.emulate_mouse_from_touch:
+			to = event.position
+	if to == Vector2.INF or Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		return
+	var window := Rect2i(DisplayServer.window_get_position(), DisplayServer.window_get_size())
+	var before := DisplayServer.mouse_get_position()
+	if before == window.position + Vector2i(to.round()):
+		_pointer_seen = before
+		return
+	DisplayServer.warp_mouse(Vector2i(to.round()))
+	# A round trip: once it answers, X has moved the pointer and sent its motion event.
+	_pointer_seen = DisplayServer.mouse_get_position()
+	if _pointer_seen == before or not window.has_point(_pointer_seen):
+		return  # (a pointer that didn't move, or left the window, sends the game nothing)
+	_echoes = 0
+	_taking_echo = true
+	var deadline := Time.get_ticks_msec() + 100
+	while _echoes == 0 and Time.get_ticks_msec() < deadline:
+		OS.delay_usec(500)
+		DisplayServer.process_events()
+	_taking_echo = false
+
+
+## _input reaches the nodes last in the tree first, and the bridge comes after the game's, so it sees each event before
+## the game does.
+func _input(event: InputEvent) -> void:
+	if _taking_echo and event is InputEventMouseMotion:
+		_echoes += 1
+		get_viewport().set_input_as_handled()
 
 
 func _save_image(label: String) -> String:

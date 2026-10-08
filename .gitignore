@@ -5,3 +5,5 @@ captures/
 dist/
 # Type files Claude Code writes on each load of a mod
 .claude-plugin/types/
+# Claude Code worktrees, made per session
+.claude/worktrees/

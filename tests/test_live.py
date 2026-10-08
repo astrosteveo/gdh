@@ -144,6 +144,45 @@ def test_tree_and_errors(arena):
     assert any("Missing" in e["message"] for e in reply["errors"])
 
 
+def test_a_long_array_says_how_many_items_were_left_out(arena):
+    total = value("ClassDB.get_class_list().size()")
+    items = value("ClassDB.get_class_list()")
+    assert total > 100 and len(items) == 101 and items[100] == f"... {total - 100} more ({total} in all)"
+
+
+def test_shots_number_on_from_an_earlier_sessions_in_the_same_out_dir(tmp_path):
+    name = f"{SESSION}-shots"
+    shots = []
+    for _ in range(2):
+        gdh("live", "start", "--project", TESTBED, "--scene", "res://live/arena.tscn", "--session", name,
+            "--out", tmp_path)
+        try:
+            shots.append(gdh_json("live", "shot", "--session", name)["result"]["shots"]["normal"])
+            shots += gdh_json("live", "step", "2", "--shot-every", "1", "--session", name)["result"]["shots"]
+        finally:
+            gdh("live", "stop", "--session", name)
+    numbers = [int(os.path.basename(p).split("-")[0]) for p in shots]
+    assert numbers == sorted(set(numbers)) and numbers[0] == 1
+    assert all(os.path.exists(p) for p in shots)
+
+
+def test_a_pipe_step_waits_as_long_as_its_frames_need(monkeypatch, capsys):
+    import argparse
+    import io
+    import sys
+    from gdh import live as live_module
+    waited = []
+    monkeypatch.setattr(live_module, "load_session", lambda name: {"name": name})
+    monkeypatch.setattr(live_module, "call", lambda session, cmd, args, instance=0, timeout=300:
+                        waited.append((cmd, timeout)) or {"ok": True})
+    monkeypatch.setattr(sys, "stdin", io.StringIO('{"cmd": "step", "args": {"frames": 1000}}\n'
+                                                  '{"cmd": "step", "args": {"frames": 10}}\n'
+                                                  '{"cmd": "step", "args": {"frames": 10}, "timeout": 30}\n'
+                                                  '{"cmd": "status"}\n'))
+    assert live_module.cmd_pipe(argparse.Namespace(session="pipe")) == 0
+    assert waited == [("step", 2000), ("step", 300), ("step", 30), ("status", 300)]  # as gdh live step waits
+
+
 def test_self_unpause_is_reported(arena):
     live("eval", "tree.set_pause(false)")
     reply = live("status")

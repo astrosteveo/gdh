@@ -48,6 +48,7 @@ A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gd
 | Footage: a clip, a trailer shot, a video of a bug | `gdh movie` |
 | Logic with no picture to check: rules, save data, inventory, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
 | A long play-through against a goal, kept out of the main conversation | the `playtester` agent |
+| A check to keep: a playthrough to run again after later changes | `gdh live save-scenario`, then `gdh scenario run` (also run by `gdh test`) |
 
 ## The editor
 
@@ -104,6 +105,8 @@ gdh live stop --session <name>
 - Find UI with `gdh live find TEXT` (or `--name`, `--class`): visible nodes and their boxes. Click with `step 2 --click-text Play` or `--click-node UI/Menu/Play`. `tree --visible-only` drops hidden menus.
 - Send a sequence in one call: `gdh live batch --session <name> <<'END'` with one CLI line each, then `END`; `--stop-on-error` stops at the first failure.
 - `gdh live list` shows every session, yours and any left running.
+
+**Keep what you verified.** After a playthrough passes, `gdh live save-scenario --session <name> <file>.scenario.json` saves what the session was sent, with its seed; add `expect` checks and it replays frame-exactly with `gdh scenario run` (and under `gdh test` in `res://test`). For a script, `from gdh.client import Session` drives the game over one pipe. See `${CLAUDE_PLUGIN_ROOT}/docs/scenarios.md`.
 
 **Don't replay by hand after a code change.** For GDScript, `gdh live reload` loads the changed scripts into the running game and keeps its state (a pending `await` is cancelled; scenes, resources and C# aren't reloaded). Otherwise `gdh live restart --replay` starts the session again, rebuilt, with the same options and companions, and replays its input to the same frame. Keep "get to X" steps in a file of batch lines and start with `--recipe FILE`. `--seed N` makes `randi()` repeat; restart keeps the seed. `--user-data fresh` or `--user-data-from DIR` give a session its own `user://`. C# builds only when code changed, so don't run `dotnet build` yourself.
 

@@ -268,7 +268,16 @@ gdh test --project path/to/game                       # res://test and res://tes
 gdh test --project path/to/game res://test/test_player.gd --out captures/tests
 ```
 
-`gdh test` runs GUT (`addons/gut`) or gdUnit4 (`addons/gdUnit4`) through their own command-line runners, or, in a project with neither, gdh's own runner: each method named `test*` in a `test*.gd` file is a test, and a test fails when it raises an engine error (a failed `assert()`, `push_error()`, a script error). It runs headless unless `--display` asks for one, and prints each failure; `report.json` and `junit.xml` hold the rest. See [docs/test.md](docs/test.md).
+`gdh test` runs GUT (`addons/gut`) or gdUnit4 (`addons/gdUnit4`) through their own command-line runners, or, in a project with neither, gdh's own runner: each method named `test*` in a `test*.gd` file is a test, and a test fails when it raises an engine error (a failed `assert()`, `push_error()`, a script error). It runs headless unless `--display` asks for one, and prints each failure; `report.json` and `junit.xml` hold the rest. It also runs the `*.scenario.json` files there (below). See [docs/test.md](docs/test.md).
+
+## Scenarios
+
+```sh
+gdh live save-scenario --session s level1.scenario.json   # what a session was sent, with its seed
+gdh scenario run level1.scenario.json                       # replay it, check it, exit 1 on a failing check
+```
+
+A scenario is a JSON playthrough: `start` options, steps (`gdh live batch` lines or objects), checks (`expect` an expression truthy, `equals` or `approx` a value, `until` it holds) and checkpoint shots compared with baselines. gdh's steps are frame-exact, so a scenario replays the same way each time. `gdh scenario run` writes `results.json` and `junit.xml` and always stops its session. A script can drive a game from Python instead: `from gdh.client import Session`, then `with Session.start(project, scene=...) as g: g.step(30, hold="ui_right"); g.until("..."); g.eval("...")`, all over one pipe. See [docs/scenarios.md](docs/scenarios.md).
 
 ## Export
 
@@ -310,6 +319,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/imports.py` | `gdh import`, and the import cache's check before a run |
 | `src/gdh/override.py` | The `override.cfg` written into a project for one run |
+| `src/gdh/client.py`, `scenario.py` | The Python client (`gdh.client.Session`) and `gdh scenario` |
 | `src/gdh/restart.py` | `gdh live restart`, replays and input logs, recipes, and `gdh live reload` |
 | `src/gdh/blackbox.py`, `perf.py` | `--binary` sessions (any program, its shots and XTest input), and `live bench`, `monitors` and `audio` |
 | `src/gdh/companions.py`, `spawned.py`, `watchdog.py` | A live session's companion processes, the processes its game spawns, and the watchdog that stops them when its game ends |

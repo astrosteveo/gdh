@@ -17,12 +17,12 @@ Run Godot only through gdh: `uv run gdh ...` from this folder. A bare `godot` ru
 ## Processes
 
 - Never use `pkill -f` or `pgrep -f`. The pattern matches your own command, so `pkill -f` can kill the shell running it, and `pgrep -f` counts itself. Use `pgrep -x`, or stop a known PID.
-- Other agents may be working in gdh at the same time, in worktrees under `~/Projects/.gdh-worktrees/`. Stop only your own processes. Stage explicit paths, not `git add -A`.
+- Other agents may be working in gdh at the same time, in worktrees of their own. Stop only your own processes. Stage explicit paths, not `git add -A`.
 
 ## Shipping changes
 
 - gdh's remote is `origin`, [github.com/astrosteveo/gdh](https://github.com/astrosteveo/gdh). gdh also runs in place from this folder, so the local `main` is what everyone on this machine uses. Push `main` to `origin` after each merge.
-- Work in your own worktree: `git worktree add ~/Projects/.gdh-worktrees/<name> -b <area>/<name> main`.
+- Work in your own worktree, on a branch named `<area>/<name>` from `main`.
 - Merge into `main` with a merge commit, named like the existing history: `Merge <branch>: <what it adds>`. Run the full tests first. Then remove your worktree and branch, and delete the branch on `origin` too if you pushed it.
 - Update `README.md`, the matching file in `docs/`, and `skills/gdh/SKILL.md` along with any change users will see.
 - Keep gdh generic. It serves any Godot project, not only the one that found the problem.

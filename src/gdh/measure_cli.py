@@ -157,11 +157,51 @@ def brief(kind, out):
             return f"line: nothing measured over {out['frames']} frames (no point stood out from the background)"
         return (f"line over {out['frames']} frames: {out['lines_measured']} measured, width {out['fwhm_px_median']} px "
                 f"(from {out['fwhm_px_min']} to {out['fwhm_px_max']}), peak {out['peak_above_bg_median']} above the background")
+    if kind == "diff":
+        return diff_brief(out)
     return json.dumps(out, indent=2)
 
 
 def args_threshold(out, prefix):
     return next(k for k in out if k.startswith(prefix))[len(prefix):]
+
+
+def diff_brief(out):
+    if "each" not in out:
+        return "\n".join(pair_brief(out, f"diff {out['a']} {out['b']}"))
+    lines = [f"diff {out['a']} {out['b']}: {len(out['changed'])} of {out['compared']} frames changed by more than "
+             f"{out['threshold']:g}"]
+    for r in out["each"]:
+        if r.get("error") or r["changed_px"]:
+            lines += [f"  {line}" for line in pair_brief(r, Path(r["b"]).name)]
+    for key, which in (("only_in_a", "A"), ("only_in_b", "B")):
+        if out[key]:
+            lines.append(f"  only in {which}: {', '.join(out[key])}")
+    return "\n".join(lines)
+
+
+def pair_brief(r, title):
+    """One pair's diff: how much changed, where, and the heatmap and crop."""
+    if r.get("error"):
+        return [f"{title}: {r['error']}"]
+    if not r["changed_px"]:
+        if r["identical"]:
+            return [f"{title}: identical"]
+        return [f"{title}: no pixel changed by more than {r['threshold']:g} (max {r['max_diff']})"]
+    lines = [f"{title}: {100 * r['changed_px'] / r['pixels']:.3g}% of pixels ({r['changed_px']}) changed by more than "
+             f"{r['threshold']:g}, max {r['max_diff']}, mean {r['mean_diff']}, in the box {box_text(r['box'])}"]
+    if r["region_count"] > 1:
+        big = r["regions"][0]
+        lines.append(f"  {r['region_count']} regions; the largest, {big['px']} px (max {big['max_diff']}), in the box "
+                     f"{box_text(big['box'])}")
+    for key in ("heatmap", "crop"):
+        if key in r:
+            lines.append(f"  {key}: {r[key]}")
+    return lines
+
+
+def box_text(box):
+    return ",".join(str(v) for v in box)
 
 
 def emit(kind, out, as_json, save=None):
@@ -217,6 +257,10 @@ def cmd_measure(args):
             else:
                 print(times_brief(out))
             return 0
+        if args.kind == "diff":
+            out = m.diff_paths(args.a, args.b, args.threshold, region_of(args), args.out)
+            emit("diff", out, args.json, args.save)
+            return 1 if args.fail and m.diff_over(out, args.tolerance) else 0
         paths = m.frame_paths(args.frames)
         if not paths:
             raise MeasureCliError("No frames: give PNG files or directories holding them.")
@@ -292,7 +336,7 @@ def add_image_options(p, kind):
 
 
 def add_parsers(sub):
-    p = sub.add_parser("measure", help="Measure saved frames: flicker, shimmer, lines, points, dissolves, NaNs, crushed blacks, frame times")
+    p = sub.add_parser("measure", help="Measure saved frames: flicker, shimmer, lines, points, dissolves, NaNs, crushed blacks, frame times, diffs")
     kinds = p.add_subparsers(dest="kind", required=True)
     for kind, text in KINDS.items():
         k = kinds.add_parser(kind, help=text, description=text)
@@ -333,6 +377,23 @@ def add_parsers(sub):
     k = kinds.add_parser("times", help="Summarize a frame-time record (gdh live frames --save)")
     k.add_argument("record")
     k.add_argument("--json", action="store_true")
+    k.set_defaults(func=cmd_measure)
+    k = kinds.add_parser("diff", help="What changed between two frames, or two directories of them by name: how much, "
+                                      "where, a heatmap and a crop of the largest change")
+    k.add_argument("a", help="The frame before (a PNG), or a directory of them")
+    k.add_argument("b", help="The frame after, or a directory holding PNGs of the same names")
+    k.add_argument("--out", metavar="DIR", help="Save a heatmap and a side-by-side crop of the largest change here")
+    k.add_argument("--threshold", type=float, default=m.DIFF_THRESHOLD,
+                   help="A pixel has changed when a channel differs by more than this (2, of 255)")
+    k.add_argument("--box", metavar="X0,Y0,X1,Y1", help="Compare only this box (image pixels, far edges excluded)")
+    k.add_argument("--mask", metavar="PNG", help="Compare only where this image is white")
+    k.add_argument("--fail", action="store_true",
+                   help="Exit 1 when more than --tolerance percent of a frame's pixels changed, two frames differ in "
+                        "size, or a name is in one directory only")
+    k.add_argument("--tolerance", type=float, default=0.0, metavar="PCT",
+                   help="With --fail: the percent of a frame's pixels that may change (0)")
+    k.add_argument("--save", metavar="FILE.json", help="Also write the result here")
+    k.add_argument("--json", action="store_true", help="Print the whole result")
     k.set_defaults(func=cmd_measure)
 
 

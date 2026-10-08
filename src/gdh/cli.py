@@ -37,6 +37,15 @@ def main():
     live.add_display_option(cap)
     cap.add_argument("--timeout", type=int, default=120, help="Seconds per scene")
     cap.add_argument("--tiles", action="store_true", help="Also save normal.png as 2x2 tiles at 2x zoom")
+    cap.add_argument("--baseline", metavar="DIR",
+                     help="Compare each view with the PNG of its name here (a subdirectory per scene, as --out); "
+                          "exit 1 when one changed past --tolerance")
+    cap.add_argument("--update-baseline", action="store_true",
+                     help="Write the views into --baseline (changes are listed, never failed)")
+    cap.add_argument("--tolerance", type=float, default=0.0, metavar="PCT",
+                     help="With --baseline: the percent of a view's pixels that may change (0)")
+    cap.add_argument("--threshold", type=float, default=2.0,
+                     help="With --baseline: a pixel has changed when a channel differs by more than this (2, of 255)")
     cap.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     cap.add_argument("--no-import", action="store_true",
                      help="Don't import the project first when its import cache is missing or stale")

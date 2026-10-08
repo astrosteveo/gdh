@@ -7,6 +7,7 @@ gdh live record 120 --session s --out frames/still          # step 120 frames, s
 gdh measure flicker frames/still                             # then measure them
 gdh live measure shimmer --frames 90 --session s --hold ui_left   # or both in one go
 gdh live frames --clear --session s; gdh live step 600 --session s; gdh live frames --session s
+gdh live bench 600 --budget-p99 8.3 --session s                  # the same in one call; exit 1 over 8.3 ms
 ```
 
 ## Definitions
@@ -70,6 +71,7 @@ Some views make steadier baselines than others. `unshaded` (the albedo alone) an
 | `gdh live record N [--out DIR] [--every K]` | Steps N frames and saves every frame (or every Kth) as `DIR/frame-0000.png` on. `--hold`, `--press`, `--release` and `--move` go in as `step`'s do. The default directory is `<session out>/measure/record`. |
 | `gdh live measure KIND [--frames N]` | Records N frames (120 by default) and measures them; any image measure but `dissolve` and `term`, with its options. The frames are deleted after unless `--keep`. |
 | `gdh live frames [--clear] [--reset] [--save FILE]` | The frame times recorded since the record last started over. `--clear` starts it over now (before a run), `--reset` after reading. |
+| `gdh live bench N [--budget-median MS] [--budget-p99 MS]` | Starts the record over, steps N frames (600 by default) and prints their times; exits 1 over a budget ([below](#a-budget-gdh-live-bench)). |
 | `gdh measure sheet FRAMES... --out PNG` | A contact sheet of PNG frames or of a video: 16 frames spread evenly over the run, labeled, about 1220 px wide ([movie.md](movie.md#the-contact-sheet)). |
 
 `record` and `measure` also write a contact sheet of the frames beside their directory (`<dir>-sheet.png`; `--no-sheet` skips it), and flag a UI panel that covered the middle of the screen for most of the frames, as a `covered` warning with a crop in `<dir>-crops/` ([movie.md](movie.md#panels-that-cover-the-screen)).
@@ -96,6 +98,17 @@ Inside Godot, at 3840x2160, reading a frame back took about 10 ms and encoding i
 - **The summary** of each: the median, the 99th percentile and the worst, nearest rank (the smallest value with at least that share of frames at or under it), and the mean. A pass missing from a frame counts as 0 there.
 
 The GPU under gdh's display idles between frames and clocks down, so times read slower than in play; compare runs on the same machine, alone on the GPU.
+
+The summary warns of two things that make its times read high:
+
+- **`--gpu-passes`:** the renderer timing each of its passes adds GPU time to every frame (a game's 99th percentile read 17 ms with it and 9 ms without). It's on when the game runs with `--gpu-profile`, or the record holds the renderer's own groups. Time a budget in a session started without it.
+- **Other games on the machine:** a Godot process other than the game measured (`pgrep -x` for `godot`, `godot-mono` and the name of `$GODOT`'s binary), or any gdh live session's game whatever its binary (the session files in `$XDG_RUNTIME_DIR/gdh/`), running as the record started over (`frames --clear` or `--reset` looks, and the game keeps what it found with the record) or as it's read. `bench` also looks every half second while it runs. A Godot run `--headless` draws nothing and isn't counted. Another instance of the same session counts too. Each is named, by its session or its project. A game that both started and ended between those looks is missed.
+
+`--json` has them as `"warnings"`, with `"gpu_passes"` and `"other_games"` (`[{"pid", "what"}]`). `gdh measure times` shows them for a record `--save` kept.
+
+## A budget: `gdh live bench`
+
+`gdh live bench N` times N frames (600 by default) in one call. In one request to the game it draws held frames back to back for a second (`--warmup SECONDS`), so the GPU has clocked up and no game time passes; starts the frame record over; and steps N frames, all with no gap for the GPU to idle. Then it prints the summary, with its warnings, and checks the GPU's times against `--budget-median MS` and `--budget-p99 MS`: it prints each, and exits 1 if one is over, or if no frame was measured to check it against. `--save FILE.json` keeps the record. `--hold`, `--press`, `--release` and `--move` go in as `step`'s do, to time the game while it's played. Every instance steps; `--instance` picks whose times (and who gets the input). `--json` adds `"budgets"` (`[{"stat", "gpu_ms", "budget_ms", "over"}]`) and `"over_budget"` to the summary.
 
 ## Tests
 

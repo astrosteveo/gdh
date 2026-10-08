@@ -228,6 +228,8 @@ def times_brief(out):
             lines.append(f"  {title} (GPU ms over {out[key + '_frames']} frames; median, p99, worst):")
             for name, s in list(out[key].items())[:30]:
                 lines.append(f"    {name}: {s['p50']:.3f}, {s['p99']:.3f}, {s['max']:.3f}")
+    for warning in out.get("warnings", []):
+        lines.append(f"  warning: {warning}")
     return "\n".join(lines)
 
 
@@ -251,7 +253,9 @@ def cmd_measure(args):
             print(json.dumps({"sheet": str(make_sheet(args.frames, args.out))}, indent=1))
             return 0
         if args.kind == "times":
-            out = m.times(m.load_record(args.record))
+            from gdh.perf import add_warnings
+            record = m.load_record(args.record)
+            out = add_warnings(m.times(record), record, None, record.get("summary", {}).get("other_games", []))
             if args.json:
                 print(json.dumps(out, indent=1))
             else:
@@ -520,18 +524,24 @@ def cmd_live_measure(args):
 
 
 def cmd_frames(args):
-    from gdh.live import call, load_session, report
+    from gdh.live import call, instances, load_session, report
+    from gdh.perf import add_warnings, running_games
     session = load_session(args.session)
-    reply = call(session, "frames", {"reset": args.reset, "clear": args.clear}, instance=args.instance)
+    # The other games running now: as the record starts over, the game keeps them with it; read, they're warned of.
+    others = running_games()
+    reply = call(session, "frames", {"reset": args.reset, "clear": args.clear, "others": others},
+                 instance=args.instance)
     # With --json, stdout is one JSON document: the engine's errors go into it, not before it.
     result = report(reply, args.json, echo=False)
     errors = [e for part in reply.get("instances", [reply]) for e in part.get("errors", [])]
     results = result if isinstance(result, list) else [result]
     summaries = []
-    for r in results:
+    games = instances(session)
+    for part, r in zip(reply.get("instances", [reply]), results):
         if args.clear:
             continue
         summary = {"size": r.get("size"), "adapter": r.get("adapter"), **m.times(r)}
+        add_warnings(summary, r, games[part.get("instance", 0)]["pid"], others)
         summaries.append(summary)
         if args.save:
             path = Path(args.save) if len(results) == 1 else Path(args.save).with_suffix(f".{len(summaries) - 1}.json")

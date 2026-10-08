@@ -690,6 +690,8 @@ def cmd_step(args):
     events.sort(key=lambda e: e["at"])
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
     step_args.update(watch_args(args))
+    if args.monitors:
+        step_args["monitors"] = 0  # Godot's Performance monitors before the first frame and after the last (perf.py)
     # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
     reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
     result = report(reply, args.json)
@@ -701,6 +703,9 @@ def cmd_step(args):
             for path in r.get("shots", []):
                 print(f"{prefix}  shot: {path}")
             print(describe_status(r["status"], prefix))
+            if r.get("monitors"):
+                from gdh import perf
+                print(perf.describe_run(r["monitors"], prefix))
     unmet = watched(reply, result, args)
     if args.shot:
         shot(session, ["normal"], "after-step", False, args.json, args.instance)
@@ -1355,6 +1360,10 @@ def add_parsers(sub):
     p.add_argument("--every", type=int, metavar="K", help="Check --until and --trace every K frames (default 1)")
     p.add_argument("--trace-out", metavar="FILE.csv", help="Also write the --trace values here as CSV")
 
+    p.add_argument("--monitors", action="store_true",
+                   help="Godot's Performance monitors (objects, nodes, orphan nodes, draw calls, video memory...) "
+                        "before and after the step, and their change")
+
     p = command("shot", cmd_shot, "Save the current frame", instance=one)
     p.add_argument("--view", action="append",
                    help="normal, unshaded, lighting, normals, wireframe or overdraw; repeatable")
@@ -1408,3 +1417,5 @@ def add_parsers(sub):
 
     from gdh import measure_cli
     measure_cli.add_live_parsers(commands, command)
+    from gdh import perf
+    perf.add_live_parsers(commands, command)

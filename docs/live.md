@@ -137,6 +137,10 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `record N [--out DIR]` | N frames stepped and each saved as `DIR/frame-0000.png` on, for `gdh measure` |
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
 | `frames [--clear] [--reset] [--save FILE]` | Each game frame's GPU and CPU time since the record started over, and each render pass's with `start --gpu-passes`: the median, 99th percentile and worst |
+| `bench N [--budget-median MS] [--budget-p99 MS]` | N frames stepped and timed in one call, after a second of held frames drawn back to back; exits 1 over a budget ([measure.md](measure.md#a-budget-gdh-live-bench)) |
+| `monitors [--frames N] [--every K] [--leak]` | Godot's Performance monitors: objects, resources, nodes, orphan nodes, draw calls, video memory. `--leak` flags a count that grows steadily ([below](#performance-monitors)) |
+| `step N --monitors` | The monitors before and after the step, and their change |
+| `audio` | Each audio bus's peak level over the last step, and the players that played what ([below](#audio)) |
 
 Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Their names start with a number that goes on from the highest already in the folder, so a session started again with the same `--out` never writes over earlier shots. An array in a reply (from `eval`, say) keeps its first 100 items and ends with a string saying how many more there were: `"... 150 more (250 in all)"`. Add `--json` to any command for the raw reply.
 
@@ -167,6 +171,25 @@ Results go to stdout. Everything about what went wrong goes to stderr, so a comm
 With `--json` all of it is in the reply instead: `"errors"` (each with `"backtrace"` when it has one), `"notes"`, `"output"` and `"output_cut"`.
 
 **`--strict`**, on any command, or `GDH_STRICT=1` in the environment, makes a command exit 1 when the game raised engine errors during it (warnings don't count), after printing its results as usual. In a `batch`, each command is judged on its own.
+
+## Performance monitors
+
+`monitors` reads Godot's Performance monitors: the counts of objects, resources, nodes and orphan nodes (nodes out of the tree that nothing has freed), what the last frame drew (draw calls, objects, primitives), the render pipelines compiled so far, video memory (textures and buffers), static memory, and the active 2D and 3D physics bodies. A game's own monitors (`Performance.add_custom_monitor`) come too, as `custom/<id>`. Memory is in bytes in `--json`. Godot's process times aren't among them: it updates them once a second, with the slowest frame's.
+
+- **`monitors`** reads them once, now.
+- **`monitors --frames N`** steps N frames, every instance as `step` does, and reads them before the first frame and every K frames (`--every K`; about 60 readings by default). It prints each monitor at the start and the end, its change, and its least and most. `--hold`, `--press`, `--release` and `--move` go in as `step`'s do.
+- **`monitors --leak`** (600 frames unless `--frames`) also looks for a leak after a warm-up, a third of the frames by default (`--warmup FRAMES`). The readings after it are cut into quarters, and a count grew steadily when each quarter's median is above the one before and the last quarter's least is above the first quarter's most. It looks at objects, resources, nodes, orphan nodes, video, texture and buffer memory, and the game's own monitors, says which grew and by how much a frame, and exits 1 if any did. A count that churns (bullets made and freed) doesn't grow steadily, and neither does one that jumps once and stays (a level part loaded). Static memory isn't judged, since gdh's own frame record grows it.
+- **`step N --monitors`** reads them before and after the step, and prints the change.
+
+## Audio
+
+gdh runs Godot with the Dummy audio driver, which mixes the game's audio as a sound card's driver does, on a thread of its own in real time, and sends it nowhere: the buses' levels are real, and nothing reaches the speakers. `audio` reports, for the last step (or since `run`):
+
+- **Each bus:** its peak level over the step (the loudest of its channels), its volume, whether it's muted and the bus it sends to. `not measured` means no audio was mixed during the step, and `silent` that the bus was.
+- **The players that played:** every `AudioStreamPlayer`, `AudioStreamPlayer2D` and `AudioStreamPlayer3D` that played in the step, with its stream (the resource's path), its bus, its volume, where it is in the stream and its length, whether it was still playing at the end, and, for a 2D or 3D player, how far it is from the listener (the viewport's listener, else its camera, else for 2D the screen's centre) and how far it can be heard. A player freed during the step is listed as it was.
+- **The players that didn't play**, by name.
+
+The driver mixes a block of 4096 samples at a time (93 ms at 44.1 kHz) by the clock on the wall, not game time. A step that runs faster than real time mixes less sound than the game time it covers: 120 frames, two seconds of game time, can run in 80 ms and mix one block, so a player's position reads about a tenth of a second in. A step shorter than a block may mix none, and then the levels aren't measured; step longer to read them. Held, the game's players pause with it, so the levels are taken only from blocks mixed while the game ran.
 
 ## Companions
 
@@ -254,14 +277,14 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
 
 - `shot` takes `{"views": [...], "label": "shot", "out": FILE, "crop": [x, y, w, h], "node": PATH, "margin": PX, "zoom": K, "max_width": W, "no_ui": bool}`, all but `views` optional; a relative `out` is under the session's output directory. It returns `{"shots": {view: path}, "image_size": [w, h]}`, with `"crop"` and `"size"` when the shot is cropped or scaled.
 - `tree` takes `{"path", "depth", "visible_only": bool}`.
 - `find` takes `{"text", "name", "class"}`, at least one, and returns `{"matches": [{"path", "class", "text"?, "screen", "disabled"?}], "hidden": [{..., "why"}], "more": n}`.
 - `camera` takes `{"from": [x, y, z], "at": [x, y, z], "fov", "far"}` (3D), `{"at": [x, y], "zoom"}` (2D) or `{"release": true}`.
 
-`frames` takes `{"reset": bool, "clear": bool}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name}`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
+`frames` takes `{"reset": bool, "clear": bool, "others": [...]}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name, "others_at_start": [...]}`; `others`, the other games gdh found as the record starts over, is kept with the record. `monitors` returns one reading, `{"frame": n, "objects": n, ...}`, and `audio` what `gdh live audio --json` prints. In `step`, an event with `"at": k` is injected before frame k+1 of the step. `step` also takes `"warmup": seconds` (held frames drawn back to back first), `"clear_record": true` (the frame record started over just before the first frame) and `"monitors": K` (readings before the first frame, every K frames, and after the last, in the result's `"monitors"`; 0 for just the first and last). Event forms:
 - `{action, pressed, strength}`
 - `{key, pressed, mods}`: `key` is a key's name, or one with its modifiers (`"ctrl+s"`)
 - `{mouse_button, position, pressed, mods}`: buttons 1 to 3 are left, right and middle, and 4 to 7 the wheel up, down, left and right (a notch is a press and a release)
@@ -309,6 +332,13 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - a tap pressing a `Button` through touch's mouse emulation, and two fingers dragging at once
 - the display's pointer where `--move`, a tap and `--look` leave it, with X's own motion event for each move never reaching the game, and `--look` turning a captured mouse
 - bad input refused, saying why
+
+`tests/test_perf.py` runs `testbed/perf/perf.tscn`, whose modes (`-- --mode NAME`) churn nodes but keep their count flat, leak a node into the tree each frame, leak an orphan node each frame, or play a beep over and over on three kinds of player and two buses. It checks:
+
+- `bench`'s summary and its exit status under a budget and over one, with no game time passing in its warm-up
+- the warnings: a session started with `--gpu-passes`, another game running during `bench`, and one running when the record started though it has ended since
+- the monitors read once, over a step and with `step --monitors`; `--leak` flagging the leaking modes and passing the churning one, and the leak rule on made-up readings
+- `audio`: the three players playing the beep, the one that didn't, and a non-silent peak on both buses
 
 `tests/test_companions.py` runs two instances of `testbed/live/lockstep.tscn` beside `testbed/live/barrier.py`, a companion every instance waits at each frame, as clients of a server on a test clock do. It checks:
 

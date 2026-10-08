@@ -19,6 +19,7 @@ const MAX_FRAMES := 36000  # ten minutes at 60 frames a second; the oldest go fi
 
 var frames: Array[Dictionary] = []
 var game_frames := 0  # game frames run since the record started over
+var others: Array = []  # the other games gdh found on the machine when the record started over (gdh live frames)
 var _last_captured := -1
 
 
@@ -85,18 +86,21 @@ func _read(rd: RenderingDevice, count: int) -> Dictionary:
 	return record
 
 
-## gdh live frames: {"reset": bool, "clear": bool}. Returns the frames recorded since the record last started over,
-## how many game frames ran in that time, the window's size and the GPU. "reset" starts the record over after
-## reading it; "clear" starts it over and returns nothing.
+## gdh live frames: {"reset": bool, "clear": bool, "others": [...]}. Returns the frames recorded since the record
+## last started over, how many game frames ran in that time, the window's size and the GPU. "reset" starts the record
+## over after reading it; "clear" starts it over and returns nothing. "others" (the other games gdh found running as
+## the record starts over) is kept with the record and returned with it as "others_at_start".
 func command(args: Dictionary) -> Dictionary:
 	if args.get("clear", false):
 		frames.clear()
 		game_frames = 0
+		others = args.get("others", [])
 		return {"frames": [], "game_frames": 0, "cleared": true}
 	var size := get_tree().root.get_visible_rect().size
 	var out := {"frames": frames.duplicate(), "game_frames": game_frames, "size": [size.x, size.y],
-			"adapter": RenderingServer.get_video_adapter_name()}
+			"adapter": RenderingServer.get_video_adapter_name(), "others_at_start": others}
 	if args.get("reset", false):
 		frames.clear()
 		game_frames = 0
+		others = args.get("others", [])
 	return out

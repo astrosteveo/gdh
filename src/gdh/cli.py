@@ -13,6 +13,7 @@ OS.get_cmdline_user_args() returns exactly them. `gdh editor` opens scenes in
 the Godot editor itself and saves what it shows.
 """
 import argparse
+import re
 import sys
 
 from gdh import api, editor, editor_bridge, export, live, measure_cli, movie, testing
@@ -61,6 +62,11 @@ def main():
     if "--" in argv:
         split = argv.index("--")
         argv, game_args = argv[:split], argv[split + 1:]
+    for arg in argv:
+        # zsh doesn't split an unquoted $VAR, so S="--session x --json"; gdh live step 10 $S passes one argument.
+        if re.match(r"--[A-Za-z][\w-]*\s", arg):
+            parser.exit(2, f"gdh: {arg!r} reached gdh as one argument holding spaces. Pass each option and value as "
+                           f"an argument of its own (in zsh, ${{=VAR}} or an array splits a variable).\n")
     args = parser.parse_args(argv)
     if game_args and not hasattr(args, "game_args"):
         parser.error("arguments after -- go to the game: only capture, live start and movie take them")

@@ -10,10 +10,18 @@ companions.py), and run several instances of the game, which step together.
 Whatever a game spawns (a launcher's game, a tool) carries the game's GDH_MARK in its environment (spawned.py):
 status lists those processes, and they end with the session. With --keep-children the session, and its display,
 last until they have ended too.
+
+Results go to stdout. What went wrong (engine errors, DEFECT lines, notes) and what the game printed go to stderr,
+so a caller that throws stdout away still sees them.
 """
+import argparse
+import contextlib
+import csv
+import io
 import json
 import os
 import secrets
+import shlex
 import shutil
 import socket
 import subprocess
@@ -206,8 +214,35 @@ def call(session, cmd, args=None, instance=0, timeout=300):
 
 # --- Output -------------------------------------------------------------------
 
+# The engine errors (not warnings) that the replies to the command under way carried, for --strict.
+raised = []
+
+
+def problems(part, prefix=""):
+    """Print on stderr what the game printed, and the notes, engine errors (with a script's backtrace) and DEFECT
+    lines of one reply, or of a ready file."""
+    sys.stdout.flush()  # the results so far first, when stdout and stderr go to one place
+    for line in part.get("output", []):
+        print(f"{prefix}game: {line}", file=sys.stderr)
+    for note in part.get("notes", []):
+        print(f"{prefix}note: {note}", file=sys.stderr)
+    for e in part.get("errors", []):
+        count = f" (x{e['count']})" if e.get("count", 1) > 1 else ""
+        print(f"{prefix}{e['type']}: {e['message']}{count} at {e['where']}", file=sys.stderr)
+        for frame in e.get("backtrace", []):
+            print(f"{prefix}  at {frame}", file=sys.stderr)
+    missing = missing_resources(part.get("errors", []))
+    if missing:
+        print(f"{prefix}{describe_missing(missing)}", file=sys.stderr)
+    sys.stderr.flush()
+
+
+def count_errors(part):
+    raised.extend(e for e in part.get("errors", []) if e.get("type") != "warning")
+
+
 def report(reply, as_json, echo=True):
-    """Print a reply's notes and errors, or the whole reply as JSON. Returns
+    """Print a reply's problems on stderr (problems()), or the whole reply as JSON. Returns
     the result (a list of results for a reply from several instances), or
     raises on failure. echo=False defers JSON printing to the caller."""
     if as_json:
@@ -215,15 +250,9 @@ def report(reply, as_json, echo=True):
             print(json.dumps(reply, indent=2))
     else:
         for part in reply.get("instances", [reply]):
-            prefix = f"[{part['instance']}] " if "instance" in part else ""
-            for note in part.get("notes", []):
-                print(f"{prefix}note: {note}")
-            for e in part.get("errors", []):
-                count = f" (x{e['count']})" if e.get("count", 1) > 1 else ""
-                print(f"{prefix}{e['type']}: {e['message']}{count} at {e['where']}")
-            missing = missing_resources(part.get("errors", []))
-            if missing:
-                print(f"{prefix}{describe_missing(missing)}")
+            problems(part, f"[{part['instance']}] " if "instance" in part else "")
+    for part in reply.get("instances", [reply]):
+        count_errors(part)
     if not reply.get("ok"):
         raise LiveError(reply.get("error", "Request failed."))
     if "instances" in reply:
@@ -319,12 +348,8 @@ def wait_ready(record, proc, ready, deadline, label, resolution):
         time.sleep(0.2)
     info = json.loads(ready.read_text())
     ready.unlink()
-    prefix = label.strip() + " " if label else ""
-    for e in info.get("errors", []):
-        print(f"{prefix}{e['type']}: {e['message']} at {e['where']}")
-    missing = missing_resources(info.get("errors", []))
-    if missing:
-        print(f"{prefix}{describe_missing(missing)}")
+    problems(info, label.strip() + " " if label else "")
+    count_errors(info)
     if not info.get("port"):
         raise LiveError(info.get("error") or "The game didn't open a port.")
     mismatch = size_mismatch(info.get("status", {}).get("window_size"), resolution)
@@ -421,6 +446,7 @@ def cmd_start(args):
                     "out": str(out), "project": str(project), "instances": games, "watchdog": watchdog,
                     "keep_children": args.keep_children,
                     "groups": [*started_groups, watchdog]})
+    session["scene"] = infos[0].get("status", {}).get("scene", "")  # the scene it started in, for list
     fd = os.open(session_path(name), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(session, f)
@@ -518,7 +544,7 @@ def input_event(token, pressed, at):
 
 def cmd_step(args):
     session = load_session(args.session)
-    n = args.frames
+    n = step_length(args, session)
     events = []
     for point in args.move:
         x, y = (float(v) for v in point.split(","))
@@ -546,6 +572,7 @@ def cmd_step(args):
                        {"mouse_button": button, "position": [x, y], "pressed": True, "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": False, "at": until}]
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
+    step_args.update(watch_args(args))
     # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
     reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
     result = report(reply, args.json)
@@ -555,9 +582,104 @@ def cmd_step(args):
             for path in r.get("shots", []):
                 print(f"{prefix}  shot: {path}")
             print(describe_status(r["status"], prefix))
+    unmet = watched(reply, result, args)
     if args.shot:
         shot(session, ["normal"], "after-step", False, args.json, args.instance)
+    if unmet:
+        raise LiveError(unmet)
     return 0
+
+
+# Without --max or a frame count, the most frames a step with --until runs: a minute at 60 ticks a second.
+UNTIL_MAX = 3600
+# The most rows of a trace printed as text (--json and --trace-out have them all).
+TRACE_ROWS = 40
+
+
+def step_length(args, session):
+    """The frames a step runs: its count (1 if none), or with --until the most it runs: --max, else the count, else
+    UNTIL_MAX."""
+    if args.every is not None and not (args.until or args.trace):
+        raise LiveError("--every sets how often --until and --trace check (--shot-every saves frames).")
+    if args.trace_out and not args.trace:
+        raise LiveError("--trace-out writes the values of --trace.")
+    if args.until is None:
+        if args.max is not None:
+            raise LiveError("--max bounds a step with --until.")
+        return 1 if args.frames is None else args.frames
+    if len(instances(session)) > 1:
+        raise LiveError("--until needs a session of one instance: the instances step together, and each would stop "
+                        "on its own.")
+    return args.max or args.frames or UNTIL_MAX
+
+
+def watch_args(args):
+    """A step's --until, --trace and --every as the protocol's step arguments."""
+    out = {}
+    if args.until:
+        out["until"] = args.until
+    if args.trace:
+        out["trace"] = args.trace
+    if out:
+        out["every"] = args.every or 1
+    return out
+
+
+def watched(reply, result, args):
+    """Print a step's --until and --trace results (unless --json), and write --trace-out. Returns why --until didn't
+    hold, or None."""
+    unmet = None
+    parts = each(reply, result)
+    for i, (prefix, r) in enumerate(parts):
+        until, trace = r.get("until"), r.get("trace")
+        path = None
+        if trace and args.trace_out:
+            path = Path(args.trace_out) if len(parts) == 1 else Path(args.trace_out).with_suffix(f".{i}.csv")
+            write_trace(trace, path)
+        if trace:
+            for expr, error in trace.get("failed", {}).items():
+                sys.stdout.flush()
+                print(f"{prefix}note: trace {expr} failed (its value is null): {error}", file=sys.stderr)
+        if until and not until["met"]:
+            last = (f"its last check, at frame {until['frame']}, failed: {until['error']}" if until.get("error")
+                    else f"it was {json.dumps(until['value'])} at frame {until['frame']}")
+            unmet = f"{prefix}--until {until['expr']} didn't hold in {r['frames']} frames: {last}"
+        if args.json:
+            continue
+        if until and until["met"]:
+            print(f"{prefix}until held at frame {until['frame']}: {json.dumps(until['value'])}")
+        if trace:
+            print_trace(trace, prefix)
+        if path:
+            print(f"{prefix}trace: {path}")
+    return unmet
+
+
+def print_trace(trace, prefix=""):
+    """A trace's rows, leaving out a row that repeats the one before (the last is always shown), at most TRACE_ROWS."""
+    rows = trace["rows"]
+    shown = [row for i, row in enumerate(rows) if i in (0, len(rows) - 1) or row[1:] != rows[i - 1][1:]]
+    left = f", {len(shown)} of {len(rows)} rows: the rest repeat the row before" if len(shown) < len(rows) else ""
+    print(f"{prefix}trace every {trace['every']} frames{left}: frame: {' | '.join(trace['exprs'])}")
+    cut = len(shown) - TRACE_ROWS
+    if cut > 0:
+        shown = shown[:TRACE_ROWS // 2] + [None] + shown[-TRACE_ROWS // 2:]
+    for row in shown:
+        if row is None:
+            print(f"{prefix}  ... {cut} rows not shown (--json and --trace-out FILE.csv have every row)")
+        else:
+            print(f"{prefix}  {row[0]}: {' | '.join(json.dumps(v) for v in row[1:])}")
+
+
+def write_trace(trace, path):
+    """A trace as CSV: a frame column, then one per expression; a string as it is, anything else as JSON, and a value
+    that failed empty."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        out = csv.writer(f)
+        out.writerow(["frame", *trace["exprs"]])
+        for row in trace["rows"]:
+            out.writerow([row[0], *("" if v is None else v if isinstance(v, str) else json.dumps(v) for v in row[1:])])
 
 
 def shot(session, views, label, tiles, as_json, instance=0):
@@ -679,6 +801,205 @@ def session_alive(session):
     return all(pid_alive(g["pid"]) for g in instances(session))
 
 
+# --- Batches --------------------------------------------------------------------
+
+# Commands a list of command lines can't hold: they start a session, or read stdin themselves.
+NOT_IN_BATCH = ("start", "batch", "pipe")
+
+
+class LineParser(argparse.ArgumentParser):
+    """The CLI's parser for a command written as a line of text: a mistake raises LiveError, saying what's wrong in
+    one line, where the CLI would print its usage and exit."""
+
+    def error(self, message):
+        raise LiveError(f"{self.prog.removeprefix('gdh ')}: {message}")
+
+    def exit(self, status=0, message=None):
+        raise LiveError(message.strip() if message else f"{self.prog.removeprefix('gdh ')}: stopped")
+
+
+_line_parser = None
+
+
+def parse_command_line(line, session):
+    """A gdh live command written as on the command line ("step 30 --hold ui_right", with or without "gdh live"
+    before it), parsed as the CLI parses it, for `session` unless the line names its own. Returns the parsed
+    arguments, whose func runs it (run_command), or None for a blank line or a # comment. Raises LiveError for a line
+    that isn't a command a list of commands can hold."""
+    global _line_parser
+    try:
+        words = shlex.split(line, comments=True)
+    except ValueError as e:
+        raise LiveError(f"Can't split the line into words: {e}") from None
+    if words[:2] == ["gdh", "live"]:
+        words = words[2:]
+    elif words[:1] == ["live"]:
+        words = words[1:]
+    if not words:
+        return None
+    if words[0] in NOT_IN_BATCH:
+        raise LiveError(f"{words[0]} can't run from a list of commands.")
+    if _line_parser is None:
+        _line_parser = LineParser(prog="gdh")
+        add_parsers(_line_parser.add_subparsers(dest="command", required=True))
+    return _line_parser.parse_args(["live", words[0], "--session", session, *words[1:]])
+
+
+def run_command(args):
+    """Run parsed command arguments (parse_command_line) as the CLI would. Returns (exit code, error or None)."""
+    try:
+        return args.func(args) or 0, None
+    except (GdhError, OSError, ValueError) as e:
+        return 1, str(e)
+    except SystemExit as e:
+        if isinstance(e.code, str):
+            return 1, e.code.removeprefix("gdh: ")
+        return e.code or 0, None
+
+
+def json_documents(text):
+    """The JSON documents a command printed, one after another; text that isn't JSON as {"text": ...}."""
+    decoder = json.JSONDecoder()
+    docs = []
+    text = text.strip()
+    i = 0
+    while i < len(text):
+        try:
+            doc, i = decoder.raw_decode(text, i)
+        except ValueError:
+            docs.append({"text": text[i:]})
+            break
+        docs.append(doc)
+        while i < len(text) and text[i].isspace():
+            i += 1
+    return docs
+
+
+def cmd_batch(args):
+    """Command lines on stdin, in the CLI's own syntax, run one after another in this one process. Each prints what
+    it would print alone, after a "> LINE" header; with --json, each line's replies are one JSON line,
+    {"line", "ok", "replies", "error"?}. Exit status 1 if any command failed."""
+    session = load_session(args.session)
+    failed = []
+    ran = 0
+    for number, line in enumerate(sys.stdin, 1):
+        text = line.strip()
+        try:
+            parsed = parse_command_line(text, args.session)
+            code, error = 0, None
+        except LiveError as e:
+            parsed, code, error = None, 1, str(e)
+        if parsed is None and not error:
+            continue
+        ran += 1
+        if args.json:
+            output = io.StringIO()
+            if parsed:
+                parsed.json = True
+                parsed.strict = parsed.strict or args.strict
+                with contextlib.redirect_stdout(output):
+                    code, error = run_command(parsed)
+            print(json.dumps({"line": text, "ok": code == 0, "replies": json_documents(output.getvalue()),
+                              **({"error": error} if error else {})}), flush=True)
+        else:
+            print(f"> {text}", flush=True)
+            if parsed:
+                parsed.strict = parsed.strict or args.strict
+                code, error = run_command(parsed)
+            sys.stdout.flush()
+            if error:
+                print(f"gdh: {error}", file=sys.stderr, flush=True)
+        if not code:
+            continue
+        failed.append(number)
+        if args.stop_on_error:
+            break
+        if not session_path(args.session).exists() or not session_alive(session):
+            print(f"gdh: session '{args.session}' has ended, so the batch stops at line {number}.", file=sys.stderr)
+            break
+    raised.clear()  # each command was judged on its own (--strict)
+    if failed:
+        lines = ", ".join(map(str, failed))
+        stopped = f"; it stopped at line {failed[-1]}" if args.stop_on_error else ""
+        print(f"gdh: {len(failed)} of {ran} commands failed (line{'s' if len(failed) > 1 else ''} {lines}){stopped}.",
+              file=sys.stderr)
+        return 1
+    return 0
+
+
+# --- Listing --------------------------------------------------------------------
+
+def process_started(pid):
+    """When a process started, in seconds since the epoch, from /proc; None if it has gone."""
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        boot = next(int(line.split()[1]) for line in Path("/proc/stat").read_text().splitlines()
+                    if line.startswith("btime "))
+        return boot + int(fields[19]) / os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, IndexError, StopIteration):
+        return None
+
+
+def describe_age(seconds):
+    if seconds is None:
+        return "?"
+    seconds = int(seconds)
+    if seconds < 120:
+        return f"{seconds} s"
+    if seconds < 7200:
+        return f"{seconds // 60} min"
+    return f"{seconds // 3600} h {seconds % 3600 // 60} min"
+
+
+def cmd_list(args):
+    """Every live session of this user, whoever started it: its state, project, scene, pids, displays, how long its
+    game has run and how long since a command touched it. Reading the session files changes nothing: a session whose
+    game has ended is cleaned up by the next command on it."""
+    now = time.time()
+    rows = []
+    for path in sorted(SESSION_DIR.glob("*.json")):
+        try:
+            session = json.loads(path.read_text())
+            games = instances(session)
+            idle = now - path.stat().st_mtime
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue  # not a session file, or one going away
+        alive = [pid_alive(g["pid"]) for g in games]
+        started = process_started(games[0]["pid"]) if alive[0] else None
+        rows.append({"name": session.get("name", path.stem),
+                     "state": "running" if all(alive) else "ended" if not session_running(session) else
+                              "kept for the processes its game spawned",
+                     "project": session.get("project", ""), "scene": session.get("scene", ""),
+                     "pids": [g["pid"] for g in games], "displays": [g.get("display") for g in games],
+                     "age_s": None if started is None else round(now - started),
+                     "idle_s": round(idle), "out": session.get("out", "")})
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        print("No live sessions.")
+    for row in rows:
+        pids = ", ".join(map(str, row["pids"]))
+        shown = "; ".join(describe_display({"display": d}) for d in row["displays"])
+        print(f"{row['name']}: {row['state']}, pid {pids}, {shown}, up {describe_age(row['age_s'])}, last command "
+              f"{describe_age(row['idle_s'])} ago, scene {row['scene'] or '?'}, project {row['project'] or '?'}")
+    return 0
+
+
+def strictly(func):
+    """A command that, with --strict (or GDH_STRICT=1), fails when the game raised engine errors during it."""
+    def run(args):
+        raised.clear()
+        code = func(args)
+        if getattr(args, "strict", False) and raised:
+            first = raised[0]
+            count = sum(e.get("count", 1) for e in raised)
+            raise LiveError(f"--strict: the game raised {count} engine error{'s' if count > 1 else ''} during the "
+                            f"command, the first {first['type']}: {first['message']} at {first['where']}")
+        return code
+    return run
+
+
 def add_display_option(parser):
     parser.add_argument("--display", choices=CHOICES, default=None,
                         help="gpu: a virtual display the GPU presents to (weston and Xwayland); xvfb: Xvfb, which "
@@ -689,14 +1010,18 @@ def add_display_option(parser):
 def add_parsers(sub):
     live = sub.add_parser("live", help="Start a game off-screen and drive it step by step")
     commands = live.add_subparsers(dest="live_command", required=True)
+    strict = os.environ.get("GDH_STRICT", "") not in ("", "0")
 
     def command(name, func, help, instance=None):
         p = commands.add_parser(name, help=help)
         p.add_argument("--session", default="default", help="Session name (default: default)")
         p.add_argument("--json", action="store_true", help="Print the raw reply")
+        p.add_argument("--strict", action="store_true", default=strict,
+                       help="Exit 1 when the game raised engine errors during the command (default: on with "
+                            "GDH_STRICT=1)")
         if instance:
             p.add_argument("--instance", default="0", metavar="N", help=instance)
-        p.set_defaults(func=func)
+        p.set_defaults(func=strictly(func))
         return p
 
     one = "Which game instance: a number, or all (default 0)"
@@ -742,7 +1067,7 @@ def add_parsers(sub):
 
     p = command("step", cmd_step, "Run every instance for a number of frames, then hold",
                 instance="Which instance gets the input: a number, or all (default 0). Every instance steps")
-    p.add_argument("frames", type=int, nargs="?", default=1)
+    p.add_argument("frames", type=int, nargs="?", default=None, help="How many frames (default 1)")
     p.add_argument("--move", action="append", default=[], metavar="X,Y",
                    help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
     p.add_argument("--press", action="append", default=[], metavar="INPUT",
@@ -761,6 +1086,14 @@ def add_parsers(sub):
                    help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
     p.add_argument("--shot-every", type=int, default=0, metavar="K", help="Save a frame every K frames")
     p.add_argument("--shot", action="store_true", help="Save a frame after stepping")
+    p.add_argument("--until", metavar="EXPR",
+                   help="Run until EXPR (a Godot expression, as eval takes) is truthy, checked after every --every "
+                        "frames; the frame count, or --max, is the most it runs (default 3600). Exit 1 if it never is")
+    p.add_argument("--max", type=int, metavar="N", help="With --until: run at most N frames")
+    p.add_argument("--trace", action="append", default=[], metavar="EXPR",
+                   help="Record EXPR's value after every --every frames; repeatable")
+    p.add_argument("--every", type=int, metavar="K", help="Check --until and --trace every K frames (default 1)")
+    p.add_argument("--trace-out", metavar="FILE.csv", help="Also write the --trace values here as CSV")
 
     p = command("shot", cmd_shot, "Save the current frame", instance=one)
     p.add_argument("--view", action="append",
@@ -780,6 +1113,10 @@ def add_parsers(sub):
     command("run", cmd_run, "Let every instance run in real time")
     command("pause", cmd_pause, "Hold every instance")
     command("pipe", cmd_pipe, "Take requests as JSON lines on stdin and answer each on stdout (for scripts)")
+    p = command("batch", cmd_batch, "Run command lines from stdin, written as on the command line (\"step 30 --hold "
+                                    "ui_right\"), in one process, printing each one's output")
+    p.add_argument("--stop-on-error", action="store_true", help="Stop at the first command that fails")
+    command("list", cmd_list, "List every live session: project, scene, pids, displays, age")
 
     from gdh import measure_cli
     measure_cli.add_live_parsers(commands, command)

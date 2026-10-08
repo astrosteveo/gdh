@@ -12,6 +12,8 @@ gdh live shot --node UI/Inventory --zoom 2 --out inventory.png   # just that pan
 gdh live eval "get_node('Player').velocity"      # read any value
 gdh live probes                                  # run the probes on the current frame
 gdh live step --until "get_node('Ship').docked"  # run until it holds, at most 3600 frames
+gdh live reload                                  # put the GDScript you changed into the running game
+gdh live restart --replay                        # start again, back at this frame
 gdh live stop
 ```
 
@@ -232,7 +234,7 @@ eval "GameState.credits"
 END
 ```
 
-- A line is a `gdh live` command, with or without `gdh live` before it, split as a shell splits it. `#` comments and blank lines are skipped. Every command but `start`, `batch` and `pipe` can be on a line. Each line runs on the batch's `--session`, unless it gives its own.
+- A line is a `gdh live` command, with or without `gdh live` before it, split as a shell splits it. `#` comments and blank lines are skipped. Every command but `start`, `restart`, `batch` and `pipe` can be on a line. Each line runs on the batch's `--session`, unless it gives its own.
 - A command that fails says so on stderr, and the batch goes on; `--stop-on-error` stops it there. The batch exits 1 if any command failed, saying on which lines. If the session ends, the batch stops.
 - `--json` prints one JSON line per command: `{"line", "ok", "replies": [...], "error"}`, with the replies `--json` would print.
 - `--strict` applies to each command.
@@ -333,6 +335,56 @@ The program runs under `src/gdh/runner.py`, its parent, which records how it end
 - **Stopping:** `stop` asks the game to quit, then stops Godot and its display if they're still running, and removes the display's runtime directory. The display's own output is in `<out>/display.log`.
 - **Crashed games:** if a game dies, the next command says so, shows the end of its log, stops the session's other processes (and those the game spawned) and removes the session; with `--keep-children` that waits until what the game spawned has ended (above).
 
+## Starting again: restart, replays and recipes
+
+Starting a game takes seconds, and getting it back to where it was (logging in, flying to the hangar) takes more. A session can start again where it was, or where a recipe puts it.
+
+```sh
+gdh live start --project game --seed 42 --recipe recipes/hangar.txt   # held at frame 0, then the recipe's lines run
+gdh live restart                     # after a code change: started again as it was started, the recipe run again
+gdh live restart --replay            # started again, and the session's input replayed: the same frame and state
+gdh live start --project game --replay captures/live/default/inputs.jsonl   # a saved log, in a new session
+```
+
+- **The input log.** Every session writes `<out>/inputs.jsonl`: a header line, `{"gdh_input_log": 1, "session", "project", "scene", "seed", "started"}`, then a line for each command that changed the game, `{"cmd", "args", "instance", "frame", "ran"}`. `args` are the protocol's (below), `frame` is the game's frame after the command, and `ran` the frames a step ran. Steps, `eval` (which can set values), `camera`, `run` and `pause` are logged, however they came: a command, `batch`, `pipe`, a recipe or a replay. A command that failed isn't.
+- **`restart`** stops the session if it runs, and starts it again with what it was started with: the project, scene, resolution, display, instances, companions (on new ports, filled into the game's arguments again), the game's arguments, its seed, `--user-data`, `--replay` and `--recipe`, from the directory it was started in. It rebuilds a C# project and imports the project again only when they're stale (below). It works on a session that has ended too: gdh keeps what a session was started with in `$XDG_RUNTIME_DIR/gdh/starts/`, for a week after its last start. The new start writes a new log, and the old one stays beside it as `inputs-before-restart.jsonl`.
+- **`restart --replay`** replays the session's input log once the game is ready, and doesn't run its `--replay` log or recipe again, since the log holds what they sent. `start --replay FILE` replays a saved log, and takes its seed unless `--seed` gives one. A replay sends each command again in order: each step for the frames it ran, without its `--until`, `--trace` and saved frames, and the frames the game ran by itself after `run` as a step of their own, so the game comes back to the same frame. It prints `replayed N requests from LOG in S s: held at frame F`. A command that fails now (a `--click-text` whose button the new code moved off screen) stops the replay, and the start exits 1 saying which; the session stays, held there.
+- **The same frame is the same state** when the game does the same with the same input: physics at a fixed tick does, and the global random number generator does with the same seed. What a game reads from the clock, the network, or a `RandomNumberGenerator` it seeds itself, and anything that ran while the game was held, can differ: a node whose process mode ignores the pause, or code that awaits the tree's `process_frame` or `physics_frame` signals, which fire while it's held.
+- **`--seed N`** seeds the game's global random number generator (`randi`, `randf`, `randf_range`, `shuffle` and the rest) before the autoloads' `_ready` and the scene's, so its random choices repeat from one start to the next. Without it gdh picks a seed, so the game is as random as ever, and the log and `restart` keep it. A game that calls `randomize()`, or makes its own `RandomNumberGenerator`, isn't covered.
+- **`--recipe FILE`** runs command lines once the game is ready, after `--replay`, as `gdh live batch` runs them: one `gdh live` command a line, `#` comments, each printed after a `> LINE` header. Keep a project's "get to the hangar" in one. Each line is checked before the game starts, so a misspelt command fails at once. A line that fails stops the start with exit 1, naming the line and why; the lines after it don't run, and the session stays, held where it stopped. `restart` runs the recipe again, read afresh.
+
+### The session's own user data
+
+By default every session shares gdh's user data (below), so a game's saves and settings carry from one session to the next. A session can have `user://` of its own instead, made afresh at each start and restart, so every run begins the same:
+
+- **`--user-data fresh`**: an empty `user://`.
+- **`--user-data-from DIR`**: a copy of DIR as `user://`, such as a folder holding a save and a settings file. DIR itself is never written to.
+
+It is `<out>/user-data` (one for each instance, under `<out>/instance-K/`), which is Godot's data directory, so `user://` is `<out>/user-data/godot/app_userdata/<project name>/`, or the project's custom user directory under it. Its `shader_cache` and `vulkan` directories link to the shared user data's, so shaders compiled once stay compiled. gdh deletes `<out>/user-data` at each start of such a session.
+
+### C# builds
+
+Before it starts a C# project, gdh builds it with `dotnet build` only when the build is stale: when a `.cs`, `.csproj`, `.sln`, `.props` or `.targets` file in the project, or a `Directory.Build.props`, `global.json` or the like above it, has changed (its size or modification time) since gdh last built it, or the build's output (`.godot/mono/temp/bin`) is gone. The stamp of what it last built from is `.godot/mono/temp/gdh-build-stamp`, written after each build that succeeds. So there's no need to run `dotnet build` first, and an unchanged project starts without it. `start --rebuild` and `restart --rebuild` build anyway; `--no-build` never builds. Every gdh command that builds (`capture`, `import`, `movie`, `test`, `editor`, `export`) uses the same stamp.
+
+## Reloading scripts: `gdh live reload`
+
+`gdh live reload` puts the GDScript files that changed on disk into the running game, which keeps its state: the player stays where it is, and every member variable keeps its value.
+
+```sh
+gdh live reload                           # every loaded script whose file changed
+gdh live reload res://player/player.gd    # just these
+```
+
+Each changed script is compiled again in place, as the editor's Debug > "Synchronize Script Changes" does for a game it runs (`Script.reload(true)`), and the loaded scripts that extend it after it, so they see its new members. It goes to every instance (`--instance` picks one). It prints `reloaded res://...` for each, and exits 1 if one doesn't compile. A script is loaded when a node in the tree or an autoload has it, it's one they extend or preload as a constant, or it's a global class (`class_name`) that has been loaded; a script only loaded some other way can be named.
+
+- Member variables keep their values, and so do static variables. Functions, and methods and lambdas connected to signals, run the new code from the next frame.
+- A member variable a change adds starts at its initial value in the nodes in the tree, taken from a fresh instance of the script (unless its `_init` needs arguments); `@onready` ones, and those of objects outside the tree, start `null`. The reply says which were added.
+- A function waiting at an `await` in a reloaded script is cancelled, and Godot warns: `Canceling suspended execution of "..." due to a script reload`. A coroutine that loops forever (a state machine's) stops there.
+- A script that doesn't compile is put back to the version that ran, so the game never runs without it, and its parse error is on stderr. Fix it and reload again.
+- Scenes, resources and C# code aren't reloaded, and what `_ready` and the initializers have already done stays done: `restart --replay` starts the game again with them, back at the same frame.
+
+The spike behind it ran each of these in a game held between steps: a function changed, a member added (with an initializer), a static variable, a `class_name` script, a base script under a derived one, a lambda connected to a signal, a timer's method, a pending `await`, and a parse error.
+
 ## Protocol
 
 One JSON object per line over TCP.
@@ -342,12 +394,13 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `reload`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
 
 - `shot` takes `{"views": [...], "label": "shot", "out": FILE, "crop": [x, y, w, h], "node": PATH, "margin": PX, "zoom": K, "max_width": W, "no_ui": bool}`, all but `views` optional; a relative `out` is under the session's output directory. It returns `{"shots": {view: path}, "image_size": [w, h]}`, with `"crop"` and `"size"` when the shot is cropped or scaled.
 - `tree` takes `{"path", "depth", "visible_only": bool}`.
 - `find` takes `{"text", "name", "class"}`, at least one, and returns `{"matches": [{"path", "class", "text"?, "screen", "disabled"?}], "hidden": [{..., "why"}], "more": n}`.
 - `camera` takes `{"from": [x, y, z], "at": [x, y, z], "fov", "far"}` (3D), `{"at": [x, y], "zoom"}` (2D) or `{"release": true}`.
+- `reload` takes `{"paths": [...]}` (empty: every loaded script whose file changed) and returns `{"reloaded": [path], "failed": [{"path", "error"}], "unchanged": n, "filled": {path: [member]}}`.
 
 `frames` takes `{"reset": bool, "clear": bool, "others": [...]}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name, "others_at_start": [...]}`; `others`, the other games gdh found as the record starts over, is kept with the record. `monitors` returns one reading, `{"frame": n, "objects": n, ...}`, and `audio` what `gdh live audio --json` prints. In `step`, an event with `"at": k` is injected before frame k+1 of the step. `step` also takes `"warmup": seconds` (held frames drawn back to back first), `"clear_record": true` (the frame record started over just before the first frame) and `"monitors": K` (readings before the first frame, every K frames, and after the last, in the result's `"monitors"`; 0 for just the first and last). Event forms:
 - `{action, pressed, strength}`
@@ -388,6 +441,17 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - errors, `DEFECT:` lines and notes on stderr with only the result on stdout, and `--strict` and `GDH_STRICT=1`
 - the game's output in replies, merged and cut, and at `start`; a script error's backtrace without gdh's frames
 - `list`, and the one-line hint for options run together in one argument
+
+`tests/test_restart.py` runs `testbed/restart/walker.tscn`, which draws random numbers as it starts and moves its player by input and a random step every frame. It checks:
+
+- `restart` with the same resolution, seed and game arguments, its companion started again on a new port, from another directory, and after `stop`
+- `restart --replay` back at the same frame with the same positions, clicks and values, after steps with `--hold`, `--click-text` and `--until`, an `eval` that set a value, `run` and `pause`, `pipe` and `batch`; the log's lines; the steps as a scenario holds them; and `start --replay` of the saved log in a new session
+- `--seed` repeating `randi()` and the positions across starts, another seed drawing others, and the seed gdh picks kept by `restart`
+- `--recipe` running after start and again on `restart`, stopping with exit 1 at a failing line with the session held there, and a line that isn't a command failing before the game starts
+- `--user-data fresh` and `--user-data-from` giving the session its own `user://`, made afresh by `restart`, with the shader caches linked and the fixture and the shared user data untouched; and where Godot puts `user://`
+- `reload` putting a changed script in with the state kept and a new member at its initial value, and a script that doesn't compile leaving the one that ran
+
+`tests/test_csharp.py` also checks that a start of an unchanged C# project doesn't run `dotnet build`, a changed `.cs` builds and runs the new code, and `--rebuild` builds anyway.
 
 `tests/test_input.py` runs `testbed/input/devices.tscn`, which records each wheel notch, key, touch and drag its `_input` sees. It checks:
 
@@ -450,4 +514,4 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 
 ## The game's user data
 
-A game run under gdh (capture or live) keeps `user://` (its saves, settings, logs and caches) in gdh's own directory, `~/.local/share/gdh/user-data` (under `$XDG_DATA_HOME` when set), never in the player's `~/.local/share/godot`. So a test run can't touch a player's saves or rotate out their logs. The directory is kept between runs, so shader caches stay warm. `GDH_USER_DATA=<dir>` picks another one, and `GDH_USER_DATA=real` uses the player's own. `gdh import` keeps the real one, where the editor's settings are.
+A game run under gdh (capture or live) keeps `user://` (its saves, settings, logs and caches) in gdh's own directory, `~/.local/share/gdh/user-data` (under `$XDG_DATA_HOME` when set), never in the player's `~/.local/share/godot`. So a test run can't touch a player's saves or rotate out their logs. The directory is kept between runs, so shader caches stay warm. `GDH_USER_DATA=<dir>` picks another one, and `GDH_USER_DATA=real` uses the player's own. `gdh import` keeps the real one, where the editor's settings are. `live start --user-data fresh` and `--user-data-from DIR` give one session `user://` of its own ("The session's own user data", above).

@@ -104,3 +104,35 @@ def test_editor_runs_csharp_tool_scripts(project, tmp_path, monkeypatch):
     finally:
         tool.unlink()
         scene.unlink()
+
+
+def test_a_start_builds_only_when_the_code_changed(project, tmp_path, monkeypatch):
+    """gdh keeps a stamp of what it last built from: an unchanged project starts without dotnet build, a changed .cs
+    builds again, and --rebuild builds anyway."""
+    calls = tmp_path / "dotnet-calls"
+    shim = tmp_path / "bin" / "dotnet"
+    shim.parent.mkdir()
+    shim.write_text(f'#!/bin/sh\necho "$*" >> {calls}\nexec {shutil.which("dotnet")} "$@"\n')
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim.parent}{os.pathsep}{os.environ['PATH']}")
+
+    def builds():
+        return calls.read_text().count("build") if calls.exists() else 0
+
+    probe = project / "Probe.cs"
+    source = probe.read_text()
+    try:
+        run("live", "start", "--project", project, "--session", SESSION, "--out", tmp_path / "out")
+        built = builds()  # (once, if the tests before changed the code)
+        run("live", "restart", "--session", SESSION)
+        assert builds() == built
+        assert run("live", "eval", "scene.Answer()", "--session", SESSION).stdout.strip() == "42"
+        probe.write_text(source.replace("=> 42", "=> 43"))
+        run("live", "restart", "--session", SESSION)
+        assert builds() == built + 1
+        assert run("live", "eval", "scene.Answer()", "--session", SESSION).stdout.strip() == "43"
+        run("live", "restart", "--session", SESSION, "--rebuild")
+        assert builds() == built + 2
+    finally:
+        probe.write_text(source)
+        run("live", "stop", "--session", SESSION, check=False)

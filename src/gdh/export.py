@@ -4,13 +4,19 @@ Godot exports with the presets in export_presets.cfg (made in the editor's Proje
 templates for its exact version, in ~/.local/share/godot/export_templates/<version>. gdh checks both first and says
 what's missing, imports the project if its import cache is stale, runs the export, and reports the errors it raised
 and the files it wrote. --pack writes only the game's data (.pck), which needs no templates.
+
+--smoke SECONDS then runs the build as a --binary session runs a program (blackbox.py), on a display of gdh's, for that
+long, and fails on a crash, an early exit or engine errors in its log; it saves the screen at the end. A pack runs on
+gdh's Godot (--main-pack), which is the editor build, so OS.has_feature("editor") is true there as it isn't in an export.
 """
 import configparser
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
+from gdh import blackbox
 from gdh.api import godot_version
 from gdh.editor_bridge import parse_engine_errors
 from gdh.godot import GdhError, alert_shims, build_csharp, csharp_project, godot_binary, godot_env
@@ -33,11 +39,12 @@ def read_presets(project):
 
 
 def templates_dir(version, csharp):
-    """Where Godot looks for this build's export templates: <data>/godot/export_templates/<x.y.z.status[.mono]>."""
+    """Where Godot looks for this build's export templates: <data>/godot/export_templates/<x.y.z.status[.mono]>. The
+    .NET build (its version says mono) looks in the .mono directory for any project, C# or not."""
     base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
     parts = version.split(".")
     name = ".".join(parts[:4]) if len(parts) >= 4 and not parts[3].isdigit() else ".".join(parts[:3])
-    if csharp:
+    if csharp or "mono" in parts[3:5]:
         name += ".mono"
     return Path(base) / "godot" / "export_templates" / name
 
@@ -64,6 +71,8 @@ def cmd_export(args):
     out_path = (project / out).resolve() if not os.path.isabs(out) else Path(out)
     if args.pack and out_path.suffix not in (".pck", ".zip"):
         out_path = out_path.with_suffix(".pck")
+    if args.smoke is not None and not args.pack and chosen["platform"] not in ("Linux", "Linux/X11"):
+        raise GdhError(f"--smoke runs a Linux build, and the preset {args.preset!r} is for {chosen['platform']}.")
     binary = godot_binary(project)
     csharp = csharp_project(project) is not None
     if not args.pack:
@@ -99,10 +108,29 @@ def cmd_export(args):
         print(f"{len(errors)} errors while exporting:")
         for e in errors[:15]:
             print(f"  {e['type']}: {e['message']} at {e['where']}")
+    if args.smoke is not None:
+        return smoke(args, binary, out_path)
     return 0
 
 
-def add_parser(sub):
+def smoke(args, binary, out_path):
+    """Run the build black-box for --smoke seconds: a pack on gdh's Godot, an export as it is."""
+    if args.pack:
+        cmd = blackbox.command(shutil.which(binary) or binary, args.game_args, args.resolution, out_path)
+        cmd[1:1] = ["--main-pack", str(out_path)]
+    elif blackbox.export_pack(out_path):
+        cmd = blackbox.command(out_path, args.game_args, args.resolution, out_path)
+    else:
+        raise GdhError(f"--smoke found no pack in or beside {out_path}, so it isn't a Godot build it can run.")
+    out = Path(args.smoke_out or Path.cwd() / "captures" / "smoke" / re.sub(r"[^A-Za-z0-9_.-]", "_", args.preset))
+    passed, lines = blackbox.smoke(cmd, args.smoke, out.resolve(), args.display, args.resolution)
+    print(f"smoke: {'passed' if passed else 'FAILED'}: " + "\n".join(lines))
+    if not passed:
+        raise GdhError(f"The smoke run of {out_path.name} failed (above).")
+    return 0
+
+
+def add_parser(sub, add_display_option):
     p = sub.add_parser("export", help="Export the project with one of its presets, headless")
     p.add_argument("--project", required=True, help="Godot project directory")
     p.add_argument("--preset", help="The export preset's name (without it, the presets are listed)")
@@ -112,4 +140,10 @@ def add_parser(sub):
     p.add_argument("--list", action="store_true", help="List the project's presets")
     p.add_argument("--timeout", type=int, default=1800, help="Seconds before the export is stopped (default 1800)")
     p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
-    p.set_defaults(func=cmd_export)
+    p.add_argument("--smoke", type=float, metavar="SECONDS",
+                   help="Then run the build off-screen for SECONDS, and fail on a crash, an early exit or engine errors "
+                        "in its log; saves the screen at the end (arguments after -- go to the game)")
+    p.add_argument("--smoke-out", metavar="DIR", help="The smoke run's log and screen (default: ./captures/smoke/<preset>)")
+    p.add_argument("--resolution", default="1280x720", help="The smoke run's window (default 1280x720)")
+    add_display_option(p)
+    p.set_defaults(func=cmd_export, game_args=[])

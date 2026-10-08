@@ -392,7 +392,7 @@ class Session:
     def _write_header(self, start):
         live.SESSION_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
         with open(record_path(self.name), "w") as f:
-            f.write(json.dumps({"session": self.name, "pid": self._pid, "start": start}) + "\n")
+            f.write(json.dumps({"session": self.name, "pid": self._pid, "start": start}, default=str) + "\n")
 
     def _remember(self, step):
         if not self._record:
@@ -400,7 +400,7 @@ class Session:
         if recorded_header(self.name, self._pid) is None:
             self._write_header(None)
         with open(record_path(self.name), "a") as f:
-            f.write(json.dumps(step) + "\n")
+            f.write(json.dumps(step, default=str) + "\n")
 
 
 def as_list(value):

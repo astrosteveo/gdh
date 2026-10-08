@@ -181,7 +181,7 @@ def test_save_scenario_replays_to_the_same_state(tmp_path):
         assert "wrote" in saved.stdout and "8 steps" in saved.stdout
         refused = gdh("live", "save-scenario", "--session", name, path, check=False)
         assert refused.returncode == 1 and "--force" in refused.stderr
-        shot = game.shot(out=tmp_path / "live-end.png")
+        game.shot(out=tmp_path / "live-end.png")
     assert gone(name) and not (live.SESSION_DIR / f"{name}-client.jsonl").exists()
     assert state["clicks"] == 2 and state["GameState.jumps"] == 1 and state["get_node('UI/Field').text"] == "pilot"
     doc = json.loads(path.read_text())

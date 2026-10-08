@@ -5,7 +5,9 @@ extends Node
 ## Protocol: one JSON object per line over TCP on 127.0.0.1.
 ##   request  {"id": 1, "token": "...", "cmd": "step", "args": {...}}
 ##   reply    {"id": 1, "ok": true, "result": {...}, "errors": [...], "frame": 120, "held": true}
-## "errors" holds engine errors raised since the previous reply, merged by message.
+## "errors" holds engine errors raised since the previous reply, merged by message, each raised from a script with
+## its "backtrace". "output" holds what the game printed since the previous reply (errors.gd caps it, and
+## "output_cut" says how many lines it cut).
 ## "frame" counts game frames: frames in which the game ran. Rendered frames
 ## keep coming while it's held, and with --fixed-fps so do physics ticks.
 ##
@@ -79,6 +81,7 @@ func _start() -> void:
 		"error": "" if err == OK else error_string(err),
 		"status": _status(),
 		"errors": errors.drain(),
+		"output": errors.drain_output().output,
 	}
 	write_ready(info)
 	if err != OK:
@@ -192,6 +195,11 @@ func _reply(conn: Dictionary, id: Variant, ok: bool, payload: Variant) -> void:
 	if not _notes.is_empty():
 		reply.notes = _notes
 		_notes = []
+	var printed := errors.drain_output()
+	if not printed.output.is_empty():
+		reply.output = printed.output
+		if printed.output_cut > 0:
+			reply.output_cut = printed.output_cut
 	var peer: StreamPeerTCP = conn.peer
 	if peer.get_status() == StreamPeerTCP.STATUS_CONNECTED:
 		peer.put_data((JSON.stringify(reply) + "\n").to_utf8_buffer())
@@ -255,7 +263,7 @@ func _set_held(held: bool) -> void:
 
 
 ## args: frames, events [{at, ...event}], shot_every, views, cover_every (sample the panels over the screen's centre
-## every K frames: covered.gd).
+## every K frames: covered.gd), until, trace and every (_watch_start).
 ## Events with "at": k are injected before frame k+1 of the step (0 = before
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
@@ -270,6 +278,9 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		if event == null:
 			return {"error": "Bad input event: %s" % JSON.stringify(spec)}
 		timeline.get_or_add(clampi(int(spec.get("at", 0)), 0, frames), []).append(event)
+	var watch := _watch_start(args)
+	if watch.has("error"):
+		return {"error": watch.error}
 	_note_vsync()
 	_note_window_size()
 	var was_held := _held
@@ -290,11 +301,23 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			shots.append(_save_image("step-f%d" % (i + 1)))
 		if cover_every > 0 and (i + 1) % cover_every == 0:
 			cover_samples.append(Covered.sample(get_tree()))
+		if not watch.is_empty() and _watch_check(watch, i + 1):
+			# --until holds: the step ends here. The events due before the next frame go, and those at the step's end
+			# (a --hold's release), so nothing is left down that the step would have let go; later ones don't.
+			var due: Array = timeline.get(i + 1, [])
+			if i + 1 < frames:
+				due = due + timeline.get(frames, [])
+			for event in due:
+				Input.parse_input_event(event)
+			Input.flush_buffered_events()
+			break
 	_set_held(was_held)
 	Common.wait_saves()  # every frame written before the reply names it
 	var result := {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
 	if cover_every > 0:
 		result.cover_samples = cover_samples
+	if not watch.is_empty():
+		result.merge(_watch_result(watch))
 	return result
 
 
@@ -360,8 +383,20 @@ func _cmd_tree(args: Dictionary) -> Dictionary:
 func _cmd_eval(args: Dictionary) -> Dictionary:
 	var expression := Expression.new()
 	var scene := get_tree().current_scene
+	var inputs := _eval_inputs()
+	var err := expression.parse(args.get("expr", ""), inputs[0])
+	if err != OK:
+		return {"error": expression.get_error_text()}
+	var value: Variant = expression.execute(inputs[1], scene, false)
+	if expression.has_execute_failed():
+		return {"error": "Evaluation failed: %s" % expression.get_error_text()}
+	return {"value": _to_json(value)}
+
+
+## An expression's input names and their values: [names, values]. "scene" is the second.
+func _eval_inputs() -> Array:
 	var names := PackedStringArray(["tree", "scene", "root"])
-	var values := [get_tree(), scene, get_tree().root]
+	var values := [get_tree(), get_tree().current_scene, get_tree().root]
 	for setting in ProjectSettings.get_property_list():
 		var autoload: String = setting.name.trim_prefix("autoload/")
 		if setting.name.begins_with("autoload/") and get_tree().root.has_node(autoload):
@@ -371,13 +406,85 @@ func _cmd_eval(args: Dictionary) -> Dictionary:
 		if not names.has(singleton):
 			names.append(singleton)
 			values.append(Engine.get_singleton(singleton))
-	var err := expression.parse(args.get("expr", ""), names)
-	if err != OK:
-		return {"error": expression.get_error_text()}
-	var value: Variant = expression.execute(values, scene, false)
+	return [names, values]
+
+
+## A step's --until and --trace: Godot Expressions, evaluated as eval does after every `every` frames of the step.
+## args.until: the step ends after the first check where it's truthy (args.frames is then the most it runs).
+## args.trace: [expression, ...], each one's value at every check. Returns {} when there are neither, or {"error"}.
+func _watch_start(args: Dictionary) -> Dictionary:
+	var until: String = "" if args.get("until") == null else str(args.until)
+	var traces: Array = []
+	if args.get("trace") is String:
+		traces = [args.trace]
+	elif args.get("trace") is Array:
+		traces = args.trace
+	if until.is_empty() and traces.is_empty():
+		return {}
+	var inputs := _eval_inputs()
+	var watch := {"every": maxi(int(args.get("every", 1)), 1), "names": inputs[0], "values": inputs[1],
+			"traces": [], "texts": traces, "rows": [], "failed": {}}
+	for text in traces:
+		var expression := Expression.new()
+		if expression.parse(str(text), inputs[0]) != OK:
+			return {"error": "trace %s: %s" % [text, expression.get_error_text()]}
+		watch.traces.append(expression)
+	if not until.is_empty():
+		var expression := Expression.new()
+		if expression.parse(until, inputs[0]) != OK:
+			return {"error": "until %s: %s" % [until, expression.get_error_text()]}
+		watch.until = expression
+		watch.state = {"expr": until, "met": false, "value": null, "frame": _game_frames, "checks": 0}
+	return watch
+
+
+## Checks after the step's nth frame, when n is a multiple of every. Returns whether until holds.
+func _watch_check(watch: Dictionary, n: int) -> bool:
+	if n % watch.every != 0:
+		return false
+	var scene := get_tree().current_scene
+	watch.values[1] = scene
+	if not watch.traces.is_empty():
+		var row := [_game_frames]
+		for i in watch.traces.size():
+			row.append(_watch_value(watch, watch.traces[i], watch.texts[i], scene))
+		watch.rows.append(row)
+	if not watch.has("until"):
+		return false
+	var state: Dictionary = watch.state
+	state.checks += 1
+	state.frame = _game_frames
+	state.erase("error")
+	var expression: Expression = watch.until
+	var value: Variant = expression.execute(watch.values, scene, false)
 	if expression.has_execute_failed():
-		return {"error": "Evaluation failed: %s" % expression.get_error_text()}
-	return {"value": _to_json(value)}
+		# A node that isn't there yet, a scene changing: not yet, and the reply says why if it never holds.
+		state.value = null
+		state.error = expression.get_error_text()
+		return false
+	state.value = _to_json(value)
+	state.met = true if value else false
+	return state.met
+
+
+## A traced expression's value, or null when it fails (and the result's "failed" says why).
+func _watch_value(watch: Dictionary, expression: Expression, text: String, scene: Node) -> Variant:
+	var value: Variant = expression.execute(watch.values, scene, false)
+	if expression.has_execute_failed():
+		watch.failed[text] = expression.get_error_text()
+		return null
+	return _to_json(value)
+
+
+func _watch_result(watch: Dictionary) -> Dictionary:
+	var out := {}
+	if watch.has("until"):
+		out.until = watch.state
+	if not watch.traces.is_empty():
+		out.trace = {"exprs": watch.texts, "every": watch.every, "rows": watch.rows}
+		if not watch.failed.is_empty():
+			out.trace.failed = watch.failed
+	return out
 
 
 # --- Helpers --------------------------------------------------------------------

@@ -8,6 +8,7 @@ gdh live step 30 --hold ui_right --shot          # run 30 frames holding right, 
 gdh live tree Player                             # inspect nodes
 gdh live eval "get_node('Player').velocity"      # read any value
 gdh live probes                                  # run the probes on the current frame
+gdh live step --until "get_node('Ship').docked"  # run until it holds, at most 3600 frames
 gdh live stop
 ```
 
@@ -69,7 +70,35 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
 | `frames [--clear] [--reset] [--save FILE]` | Each game frame's GPU and CPU time since the record started over, and each render pass's with `start --gpu-passes`: the median, 99th percentile and worst |
 
-Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Their names start with a number that goes on from the highest already in the folder, so a session started again with the same `--out` never writes over earlier shots. An array in a reply (from `eval`, say) keeps its first 100 items and ends with a string saying how many more there were: `"... 150 more (250 in all)"`. Every reply lists the engine errors raised since the previous reply, with repeats merged, and resources that failed to load among them get a `DEFECT:` line of their own. Add `--json` to any command for the raw reply.
+Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Their names start with a number that goes on from the highest already in the folder, so a session started again with the same `--out` never writes over earlier shots. An array in a reply (from `eval`, say) keeps its first 100 items and ends with a string saying how many more there were: `"... 150 more (250 in all)"`. Add `--json` to any command for the raw reply.
+
+## Waiting and tracing
+
+A step can run until something holds, and record values as it goes, so waiting for a scene, a login or a landing takes one command instead of a loop of `step` and `eval`.
+
+```sh
+gdh live step --until "scene.name == 'Hangar'"                       # check after every frame, stop when it holds
+gdh live step --until "get_node('Ship').landed" --every 10 --max 1200 --hold ui_down
+gdh live step 120 --trace "get_node('Ship').position.y" --trace "GameState.fuel" --every 5 --trace-out fuel.csv
+```
+
+- **`--until EXPR`** runs until EXPR is truthy, checked after every `--every K` frames (default 1). EXPR is a Godot Expression with the same inputs as `eval`. The step stops at the first check that holds, and the reply has the frames run and the value (`"until": {"expr", "met", "value", "frame", "checks"}`). The frame count, or `--max N`, is the most it runs, 3600 frames if neither is given. If EXPR never holds, the step ends there and gdh exits 1, saying what EXPR was at the last check. A check whose evaluation fails (a node that isn't there yet, a scene changing) counts as not yet, and the reply says why (`"error"`).
+- **Input** works as in any step. When `--until` ends the step early, the inputs due at the step's end (a `--hold`'s release) go to the game then, so nothing is left held that the step would have let go. Inputs due later (the rest of a `--type`) don't.
+- **`--trace EXPR`** (repeatable) records each EXPR's value at every check: `"trace": {"exprs", "every", "rows": [[frame, value, ...], ...]}`, where `frame` is the game frame. As text, a row that repeats the one before is left out, and at most 40 rows are shown; `--json` and `--trace-out FILE.csv` have every row. In the CSV a string is as it is, anything else is JSON, and a value whose evaluation failed is empty (`null` in JSON, with the reason in `"failed"` and a note).
+- With several instances, `--until` is refused, since the instances step together and each would stop on its own. `--trace` records every instance's values.
+
+## Problems and the game's output
+
+Results go to stdout. Everything about what went wrong goes to stderr, so a command whose stdout is thrown away (`>/dev/null`, or read by a script) still shows it:
+
+- **Engine errors** raised since the previous reply, with repeats merged. An error raised from a script (a `push_error`, a call on a null instance, an engine error the script's call raised) has the script's backtrace under it, innermost call first: `  at res://player.gd:42 in _physics_process`. gdh's own frames are left out.
+- **`DEFECT:` lines** for resources that failed to load among them.
+- **Notes** (the game unpaused itself, turned V-Sync on, resized its window).
+- **What the game printed** (`print`, `printerr`) since the previous reply, each line as `game: LINE`. A line printed again at once is merged into one with a count, `again (x50)`. Past 40 lines, the first 10 and the last 30 are kept, with a line saying how many were cut. What the game prints while it loads is shown by `start`.
+
+With `--json` all of it is in the reply instead: `"errors"` (each with `"backtrace"` when it has one), `"notes"`, `"output"` and `"output_cut"`.
+
+**`--strict`**, on any command, or `GDH_STRICT=1` in the environment, makes a command exit 1 when the game raised engine errors during it (warnings don't count), after printing its results as usual. In a `batch`, each command is judged on its own.
 
 ## Companions
 
@@ -97,6 +126,26 @@ gdh live start --project client --session vs \
 - With one instance, every reply is the game's own. With more, a command sent to one instance gets that instance's reply, with `"instance": K`, and a command sent to several gets `{"ok": ..., "instances": [reply, ...]}`, with the first failure as its `"error"`. The CLI prefixes each instance's lines with `[K]`.
 - If any instance ends, the session has ended: the next command says which, and stops the rest.
 
+## Batches: `gdh live batch`
+
+`gdh live batch --session NAME` runs command lines from stdin, written as on the command line, one after another in one process, and prints each one's output after a `> LINE` header:
+
+```sh
+gdh live batch --session s <<'END'
+# log in, then fly
+step 2 --click 640,400
+step 6 --type "pilot1"
+step --until "scene.name == 'Hangar'" --max 1200
+shot --label hangar
+eval "GameState.credits"
+END
+```
+
+- A line is a `gdh live` command, with or without `gdh live` before it, split as a shell splits it. `#` comments and blank lines are skipped. Every command but `start`, `batch` and `pipe` can be on a line. Each line runs on the batch's `--session`, unless it gives its own.
+- A command that fails says so on stderr, and the batch goes on; `--stop-on-error` stops it there. The batch exits 1 if any command failed, saying on which lines. If the session ends, the batch stops.
+- `--json` prints one JSON line per command: `{"line", "ok", "replies": [...], "error"}`, with the replies `--json` would print.
+- `--strict` applies to each command.
+
 ## Scripts: `gdh live pipe`
 
 A script that drives many steps can keep one `gdh live pipe --session NAME` open instead of starting gdh for each command. It reads requests from stdin, one JSON object a line, and answers each on stdout, one a line:
@@ -106,7 +155,7 @@ A script that drives many steps can keep one `gdh live pipe --session NAME` open
 {"cmd": "eval", "args": {"expr": "get_node('Player').position"}, "instance": "all"}
 ```
 
-The commands and their arguments are the raw protocol's (below), and `"instance"` follows the rules above. A request waits for its reply for `"timeout"` seconds if it gives one, otherwise 300, or for a `step` two seconds a frame when that's longer, as `gdh live step` does. The replies are what `--json` prints. `quit` is refused: stop the session with `gdh live stop`, which stops its companions too. If the game ends, the pipe answers with how it ended and exits with status 1.
+The commands and their arguments are the raw protocol's (below), so a step takes `"until"`, `"trace"` and `"every"` there too, and `"instance"` follows the rules above. A request waits for its reply for `"timeout"` seconds if it gives one, otherwise 300, or for a `step` two seconds a frame when that's longer, as `gdh live step` does. The replies are what `--json` prints. `quit` is refused: stop the session with `gdh live stop`, which stops its companions too. If the game ends, the pipe answers with how it ended and exits with status 1.
 
 ## Processes the game spawns
 
@@ -120,6 +169,8 @@ A game can start other programs: a launcher that starts the game itself and exit
 ## Sessions
 
 - **Several games at once:** `--session NAME` runs more than one game side by side. The default name is `default`.
+- **Listing them:** `gdh live list` shows every session of yours, whoever started it: running or ended, its pids and displays, the project and the scene it started in, how long its game has run and how long since a command on it (`--json` for a list). It only reads the session files, so it doesn't keep a game from its idle timeout, and a session whose game has ended stays listed until a command on it cleans it up.
+- **Options in one argument:** zsh doesn't split an unquoted variable, so `S="--session x --json"; gdh live step 10 $S` passes `--session x --json` as one argument. gdh says so in one line and exits 2. Use `${=S}` or an array.
 - **Session files:** each is kept in `$XDG_RUNTIME_DIR/gdh/` and can be read only by you. It holds the port and a random token that every request must carry. The game gets the token through its environment, which other users can't read. Keeping it off the command line keeps it out of the process list.
 - **Local only:** the game listens on 127.0.0.1.
 - **Idle timeout:** a game quits after 30 minutes without a request, which ends the session. Change this with `--idle-timeout SECONDS`, or set 0 to turn it off. With `--keep-children`, the game's quitting doesn't end the session, so once every game has exited the watchdog keeps the timeout instead: when no `gdh live` command has been run on the session for that long, counted from the later of the last command and the game's exit, it stops the processes the game spawned, then the display, and notes why at the end of the game's `godot.log`. Every `gdh live` command on the session counts, `status` included, and so do ones that fail because the game has exited; `start` and `stop` don't.
@@ -135,7 +186,7 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `eval`, `frames`, `run`, `pause` and `quit`. `frames` takes `{"reset": bool, "clear": bool}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name}`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `eval`, `frames`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`. `frames` takes `{"reset": bool, "clear": bool}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name}`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
 - `{action, pressed, strength}`
 - `{key, pressed}`
 - `{mouse_button, position, pressed}`
@@ -152,6 +203,15 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - screenshots, the tree, error reporting and the unpause note
 - an array of over 100 items in a reply saying how many were left out, shots numbered on from an earlier session's in the same out dir, and a pipe step's wait growing with its frames
 - a bad scene, the idle timeout and cleanup after a crash
+
+`tests/test_live_loop.py` runs `testbed/chatty/chatty.tscn`, which counts its frames, prints every 10 frames and on request, and raises an error two calls down. It checks:
+
+- `--until` stopping at the first check that holds, with `--every`; giving up at `--max` with exit 1, and with an expression that fails; and letting go of a `--hold` when it ends early
+- `--trace` rows and their CSV, the text leaving out repeated rows, and `--until` and `--trace` through `pipe`
+- `batch`: its headers and outputs, going on after an error or stopping with `--stop-on-error`, and `--json`
+- errors, `DEFECT:` lines and notes on stderr with only the result on stdout, and `--strict` and `GDH_STRICT=1`
+- the game's output in replies, merged and cut, and at `start`; a script error's backtrace without gdh's frames
+- `list`, and the one-line hint for options run together in one argument
 
 `tests/test_companions.py` runs two instances of `testbed/live/lockstep.tscn` beside `testbed/live/barrier.py`, a companion every instance waits at each frame, as clients of a server on a test clock do. It checks:
 

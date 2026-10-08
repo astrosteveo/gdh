@@ -31,7 +31,7 @@ Each request is an HTTP POST of a JSON object, with the token in an `X-Gdh-Token
 | `exec` | `code` | compiles the GDScript, calls its `run(EditorInterface)`, and answers `result` (as JSON), `output` (what it printed); a compile error is `ok: false` with the parse error in `errors` |
 | `quit` | | ends gdh's headless editor (refused in a person's editor) |
 
-`gdh bridge check` with no bridge running parses each script with `godot --headless --check-only` instead.
+`gdh bridge check` with no bridge running loads each script in a headless Godot instead (`harness/check.gd`), as the game would, and reports its errors in the same form. It runs as the game's `SceneTree`, so a script that names an autoload compiles, which `godot --check-only` can't do. Godot creates the autoloads (their `_init` runs), but they're taken off the root before the tree starts, so their `_ready` and `_process` never run. The project is imported first when its import cache is stale, as before `capture` (README, "Importing"). That includes the class cache: a game knows global class names only from `.godot/global_script_class_cache.cfg`, which an import brings up to date, so a `class_name` added since the last import resolves too. A check takes about half a second, and the import a few seconds when one is needed.
 
 ## The hooks
 

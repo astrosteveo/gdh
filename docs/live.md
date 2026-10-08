@@ -69,7 +69,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
 | `frames [--clear] [--reset] [--save FILE]` | Each game frame's GPU and CPU time since the record started over, and each render pass's with `start --gpu-passes`: the median, 99th percentile and worst |
 
-Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Every reply lists the engine errors raised since the previous reply, with repeats merged, and resources that failed to load among them get a `DEFECT:` line of their own. Add `--json` to any command for the raw reply.
+Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Their names start with a number that goes on from the highest already in the folder, so a session started again with the same `--out` never writes over earlier shots. An array in a reply (from `eval`, say) keeps its first 100 items and ends with a string saying how many more there were: `"... 150 more (250 in all)"`. Every reply lists the engine errors raised since the previous reply, with repeats merged, and resources that failed to load among them get a `DEFECT:` line of their own. Add `--json` to any command for the raw reply.
 
 ## Companions
 
@@ -106,7 +106,7 @@ A script that drives many steps can keep one `gdh live pipe --session NAME` open
 {"cmd": "eval", "args": {"expr": "get_node('Player').position"}, "instance": "all"}
 ```
 
-The commands and their arguments are the raw protocol's (below), and `"instance"` follows the rules above. The replies are what `--json` prints. `quit` is refused: stop the session with `gdh live stop`, which stops its companions too. If the game ends, the pipe answers with how it ended and exits with status 1.
+The commands and their arguments are the raw protocol's (below), and `"instance"` follows the rules above. A request waits for its reply for `"timeout"` seconds if it gives one, otherwise 300, or for a `step` two seconds a frame when that's longer, as `gdh live step` does. The replies are what `--json` prints. `quit` is refused: stop the session with `gdh live stop`, which stops its companions too. If the game ends, the pipe answers with how it ended and exits with status 1.
 
 ## Processes the game spawns
 
@@ -150,6 +150,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - held input across steps
 - button clicks at the positions `tree` reports, with no stretching and in both stretch modes
 - screenshots, the tree, error reporting and the unpause note
+- an array of over 100 items in a reply saying how many were left out, shots numbered on from an earlier session's in the same out dir, and a pipe step's wait growing with its frames
 - a bad scene, the idle timeout and cleanup after a crash
 
 `tests/test_companions.py` runs two instances of `testbed/live/lockstep.tscn` beside `testbed/live/barrier.py`, a companion every instance waits at each frame, as clients of a server on a test clock do. It checks:
@@ -169,7 +170,9 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 
 `tests/test_imports_and_size.py` checks the import cache's check and the window's size:
 
-- a fresh copy of the testbed (no `.godot`) imported before its first capture, which then loads every texture, and not imported again on the second; a touched but unchanged texture not counted as stale, and a changed, a new or a deleted import counted
+- a fresh copy of the testbed (no `.godot`) imported before its first capture, which then loads every texture, and not imported again on the second; a touched but unchanged texture not counted as stale, and a changed, a new or a deleted import counted, a VRAM-compressed texture's included (its record is `name.png-<hash>.md5` beside `name.png-<hash>.s3tc.ctex`)
+- a stale asset found though another is remembered as one an import can't fix
+- the class cache counted as stale when a script declares a class it lacks, or it has a class no script declares
 - resources that fail to load (their imported copies deleted, `--no-import`) printed as a `DEFECT:` and listed in `report.json`, and each way Godot words a failed load read as one
 - `report.json`'s `window_size`, and a scene that resizes its own window failing `capture` and refused by `live start`, with no session left behind
 
@@ -181,6 +184,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - the watchdog stopping both instances' displays when one game is killed
 - the fallback to Xvfb, with its note, when weston isn't installed, when weston has only a software renderer, and when it can't start at all; and `--display gpu` failing instead
 - a bad `GDH_DISPLAY`, and the sweep of runtime directories left by killed runs
+- a display stopping as soon as its processes have exited, an exited child of gdh's reaped rather than waited on, and a capture of `arena.tscn` on the GPU display taking under 2.5 s with Godot's exit code kept
 
 ## The game's user data
 

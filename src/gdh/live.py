@@ -661,7 +661,7 @@ def cmd_pipe(args):
             if req["cmd"] == "quit":
                 raise LiveError("Stop the session with gdh live stop, which stops its companions too.")
             reply = call(session, req["cmd"], req.get("args") or {}, instance=req.get("instance", 0),
-                         timeout=req.get("timeout", 300))
+                         timeout=req.get("timeout") or reply_timeout(req["cmd"], req.get("args") or {}))
         except (GdhError, OSError, ValueError) as e:
             reply = {"ok": False, "error": str(e)}
             if not session_alive(session):
@@ -673,6 +673,12 @@ def cmd_pipe(args):
                 return 1
         print(json.dumps(reply), flush=True)
     return 0
+
+
+def reply_timeout(cmd, args):
+    """How long a request waits for its reply, in seconds: a step's grows with its frames, as `gdh live step`'s does."""
+    frames = args.get("frames") if isinstance(args, dict) else None
+    return max(300, 2 * int(frames)) if cmd == "step" and isinstance(frames, (int, float)) else 300
 
 
 def session_alive(session):

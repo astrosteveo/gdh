@@ -203,6 +203,50 @@ def test_auto_falls_back_to_xvfb_without_a_gpu_to_composite_on(tmp_path, egl, re
     assert not runtime_dirs() - before
 
 
+def test_stopping_a_group_reaps_our_own_children_without_waiting():
+    """A child of ours that has exited stays in its process group until it's reaped: kill_groups reaps it, rather
+    than waiting out its SIGTERM and SIGKILL grace (3 s and 1 s) on it."""
+    from gdh.godot import kill_groups
+    exited = subprocess.Popen(["sh", "-c", "exit 7"], start_new_session=True)
+    assert exited.wait() == 7
+    running = subprocess.Popen(["sleep", "30"], start_new_session=True)
+    unreaped = subprocess.Popen(["true"], start_new_session=True)
+    time.sleep(0.2)
+    started = time.monotonic()
+    kill_groups(exited.pid, running.pid, unreaped.pid)
+    assert time.monotonic() - started < 1
+    assert not pid_alive(running.pid) and not pid_alive(unreaped.pid)
+    assert exited.returncode == 7  # read before: kept
+
+
+@pytest.mark.parametrize("kind", ["gpu", "xvfb"])
+def test_a_display_stops_as_soon_as_its_processes_have_exited(kind):
+    if kind == "gpu" and not GPU_DISPLAY:
+        pytest.skip("the GPU display needs weston and Xwayland")
+    from gdh.display import open_display
+    display = open_display(kind, "640x360")
+    record = display.record()
+    started = time.monotonic()
+    display.stop()
+    assert time.monotonic() - started < 1  # (it waited 4 s on its own exited processes)
+    assert gone(record)
+
+
+@needs_gpu_display
+def test_a_capture_takes_little_more_than_godots_run(tmp_path):
+    def capture():
+        started = time.monotonic()
+        proc = gdh("capture", "--project", TESTBED, "--scene", "res://live/arena.tscn", "--modes", "normal",
+                   "--display", "gpu", "--out", tmp_path)
+        assert "exit=0" in proc.stdout
+        return time.monotonic() - started
+    assert min(capture(), capture()) < 2.5  # (5.7 s while each stop waited on the display's exited processes)
+    # A Godot exit code is kept: a scene that doesn't load exits 3.
+    proc = gdh("capture", "--project", TESTBED, "--scene", "res://no/such.tscn", "--modes", "normal",
+               "--display", "gpu", "--out", tmp_path / "missing", check=False)
+    assert "exit=3" in proc.stdout and proc.returncode == 1
+
+
 def test_unknown_display_is_refused(tmp_path):
     proc = run("capture", "--project", TESTBED, "--scene", "res://smoke/smoke.tscn", "--out", tmp_path,
                env={**os.environ, "GDH_DISPLAY": "wayland"})

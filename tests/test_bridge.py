@@ -9,7 +9,7 @@ import sys
 
 import pytest
 
-from conftest import ROOT, gdh
+from conftest import GPU_DISPLAY, ROOT, TESTBED, gdh
 
 HOOK = ROOT / "hooks" / "gdh_hook.py"
 PLAYER = 'extends Node2D\n\nfunc _ready() -> void:\n\tprint("ready")\n'
@@ -178,6 +178,40 @@ def test_check_without_a_bridge_parses_headlessly(tmp_path, project):
     reply = hook("post", "Write", other / "broken.gd")
     assert reply["decision"] == "block"
     assert denied(hook("pre", "Write", other / "x.tscn", content='[ext_resource uid="uid://madeup1"]'))
+
+
+def test_check_without_a_bridge_knows_autoloads_and_class_names(tmp_path, display):
+    """With no editor, the check loads scripts as the game does: an autoload (a script or a scene) and a global class
+    name resolve, a class added since the last import too, and the autoloads never enter the tree."""
+    if display == "xvfb" and GPU_DISPLAY:
+        pytest.skip("headless: once is enough")
+    reply = bridge(TESTBED, "check", "res://live/arena.gd")  # names the autoload GameState
+    assert reply["ok"] and reply["checked"]["res://live/arena.gd"] == []
+    assert hook("post", "Edit", TESTBED / "live" / "arena.gd") is None
+    other = make_project(tmp_path / "autoloads")
+    with open(other / "project.godot", "a") as f:
+        f.write('\n[autoload]\n\nState="*res://state.gd"\nHud="*res://hud.tscn"\n')
+    (other / "state.gd").write_text('extends Node\n\nvar jumps := 0\n\nfunc _ready() -> void:\n'
+                                    '\tFileAccess.open("res://ready_ran.txt", FileAccess.WRITE).store_string("ran")\n')
+    (other / "hud.gd").write_text("extends CanvasLayer\n\nvar score := 0\n\nfunc flash() -> void:\n\tpass\n")
+    (other / "hud.tscn").write_text('[gd_scene format=3]\n\n[ext_resource type="Script" path="res://hud.gd" id="1"]\n\n'
+                                    '[node name="Hud" type="CanvasLayer"]\nscript = ExtResource("1")\n')
+    (other / "enemy.gd").write_text("class_name Enemy\nextends Node2D\n\nvar hp := 3\n")
+    (other / "uses.gd").write_text("extends Node\n\nfunc _ready() -> void:\n\tState.jumps += 1\n\tHud.score += 1\n"
+                                   "\tHud.flash()\n\tvar e := Enemy.new()\n\te.hp -= 1\n")
+    (other / "bad.gd").write_text("extends Node\n\nfunc _ready() -> void:\n\tNoSuchThing.go()\n")
+    reply = bridge(other, "check", "res://uses.gd", "res://bad.gd", "res://state.gd", check=False)
+    assert reply["ok"] is False
+    assert reply["checked"]["res://uses.gd"] == [] and reply["checked"]["res://state.gd"] == []
+    assert any('"NoSuchThing" not declared' in e["message"] and "res://bad.gd:4" in e["where"]
+               for e in reply["checked"]["res://bad.gd"])
+    assert not (other / "ready_ran.txt").exists()
+    # A class added since the import: the check imports first, so the class cache knows it.
+    (other / "boss.gd").write_text("@tool\nclass_name Boss extends Enemy\n\nvar rage := 1\n")
+    (other / "fight.gd").write_text("extends Node\n\nfunc _ready() -> void:\n\tvar b := Boss.new()\n"
+                                    "\tb.rage += State.jumps + b.hp\n")
+    reply = bridge(other, "check", "res://fight.gd")
+    assert reply["ok"] and reply["checked"]["res://fight.gd"] == []
 
 
 def test_the_addon_runs_the_bridge_and_stop_puts_editor_state_back(tmp_path, project):

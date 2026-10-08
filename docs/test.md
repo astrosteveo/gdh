@@ -16,7 +16,7 @@ gdh's own runner takes every `test*.gd` file under the paths (default `res://tes
 
 ## Running
 
-Before running, gdh builds a C# project, imports the project if its import cache is stale, and imports it if the editor's class cache (`.godot/global_script_class_cache.cfg`) is missing, since the frameworks find classes by `class_name`. Tests run headless by default; `--display gpu`, `xvfb` or `auto` runs them on a display of gdh's, for tests that render or need input events. Games under gdh keep `user://` in gdh's own directory. `--timeout` stops a run that hangs (default 600 s).
+Before running, gdh builds a C# project, imports the project if its import cache is stale, and imports it if the editor's class cache (`.godot/global_script_class_cache.cfg`) is missing or lacks a `class_name` a script declares, since the frameworks find classes by `class_name`. Tests run headless by default; `--display gpu`, `xvfb` or `auto` runs them on a display of gdh's, for tests that render or need input events. Games under gdh keep `user://` in gdh's own directory. `--timeout` stops a run that hangs (default 600 s).
 
 ## Output
 

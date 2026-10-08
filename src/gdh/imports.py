@@ -21,8 +21,11 @@ IMPORTABLE = {
     "wav", "ogg", "mp3",
     "ttf", "otf", "woff", "woff2", "fnt",
 }
-# What an import that couldn't fix the cache last time left as its reason: the same reason again doesn't import again.
+# What an import couldn't fix last time, a reason a line: those reasons alone don't import again.
 UNFIXABLE = ".godot/gdh-import-unfixable"
+CLASS_CACHE = ".godot/global_script_class_cache.cfg"
+# A GDScript's class_name, after any annotations (@tool, @icon(...), @abstract) on its line.
+CLASS_NAME = re.compile(r"^(?:@\w+(?:\([^)]*\))?\s+)*class_name\s+([A-Za-z_]\w*)", re.M)
 SKIPPED_DIRS = {".godot", ".git", ".import", "node_modules", "__pycache__"}
 
 # Engine errors that mean a resource didn't load. A missing imported copy shows as the first two; a never-imported
@@ -59,27 +62,45 @@ def md5_of(path):
 
 def stale_reason(project):
     """Why the project needs importing, in a phrase, or None when its import cache is up to date."""
+    return next(stale_reasons(project), None)
+
+
+def stale_reasons(project):
+    """Every reason the project needs importing, one phrase each: none when its import cache is up to date."""
     project = Path(project)
     godot_dir = project / ".godot"
     if not godot_dir.is_dir():
-        return "it has no .godot directory (never imported here)"
+        yield "it has no .godot directory (never imported here)"
+        return
     if not (godot_dir / "uid_cache.bin").exists():
-        return ".godot/uid_cache.bin is missing"
+        yield ".godot/uid_cache.bin is missing"
     imports = set()
     sources = []
+    scripts = []
     for path in project_files(project):
         if path.suffix == ".import":
             imports.add(path)
         elif path.suffix[1:].lower() in IMPORTABLE:
             sources.append(path)
+        elif path.suffix == ".gd":
+            scripts.append(path)
     for source in sources:
         if source.with_name(source.name + ".import") not in imports:
-            return f"{source.relative_to(project)} has never been imported"
+            yield f"{source.relative_to(project)} has never been imported"
     for imp in sorted(imports):
         reason = import_file_stale(project, imp)
         if reason:
-            return reason
-    return None
+            yield reason
+    reason = class_cache_stale(project, scripts)
+    if reason:
+        yield reason
+
+
+def import_record(res):
+    """The .md5 file Godot keeps for an imported copy, which holds its source's hash. It's named for the source's
+    import base (<file>-<md5 of its res:// path>), without the copy's extensions: name.png-<hash>.md5 for
+    name.png-<hash>.ctex, and for a VRAM-compressed texture's name.png-<hash>.bptc.ctex (or .s3tc, .etc2, .astc) too."""
+    return re.sub(r"(-[0-9a-f]{32})\.[^/]*$", r"\1.md5", res)
 
 
 def import_file_stale(project, imp):
@@ -97,7 +118,7 @@ def import_file_stale(project, imp):
     source = imp.with_suffix("")
     if not source.exists():
         return None  # a stray .import; Godot drops it on its next import
-    md5 = res_path(project, files[0]).with_suffix(".md5")
+    md5 = res_path(project, import_record(files[0]))
     try:
         if source.stat().st_mtime <= md5.stat().st_mtime:
             return None
@@ -107,6 +128,37 @@ def import_file_stale(project, imp):
         return f"{source.relative_to(project)} has no import record"
     if not stored or stored.group(1) != md5_of(source):
         return f"{source.relative_to(project)} changed since it was imported"
+    return None
+
+
+def class_cache_stale(project, scripts):
+    """Why the class cache (.godot/global_script_class_cache.cfg) doesn't match the class_name each GDScript in scripts
+    declares, or None. A game knows global class names only from it, and only the editor (or an import) writes it, so
+    a class added since is unknown: "Identifier not declared"."""
+    declared = {}
+    for path in scripts:
+        try:
+            match = CLASS_NAME.search(path.read_text(errors="replace"))
+        except OSError:
+            continue
+        if match:
+            declared["res://" + path.relative_to(project).as_posix()] = match.group(1)
+    try:
+        text = (Path(project) / CLASS_CACHE).read_text(errors="replace")
+    except OSError:
+        return f"{CLASS_CACHE} is missing" if declared else None
+    cached = {}
+    for entry in re.findall(r"\{(.*?)\}", text, re.S):
+        name = re.search(r'"class": &"([^"]+)"', entry)
+        path = re.search(r'"path": "([^"]+)"', entry)
+        if name and path and '"language": &"GDScript"' in entry:
+            cached[path.group(1)] = name.group(1)
+    for path, name in sorted(declared.items()):
+        if cached.get(path) != name:
+            return f"{path.removeprefix('res://')} declares class {name}, which the class cache lacks"
+    for path, name in sorted(cached.items()):
+        if path not in declared:
+            return f"the class cache has class {name}, which {path.removeprefix('res://')} no longer declares"
     return None
 
 
@@ -130,22 +182,26 @@ def run_import(project, quiet=False):
 def ensure_imported(project):
     """Import the project when its import cache is missing or stale; do nothing (but stat its files) when it isn't.
 
-    Says on stderr why it imports. An import that leaves the same reason behind (an asset Godot can't import, say) is
-    remembered, so later runs don't import again for it."""
+    Says on stderr why it imports. What an import leaves out of date (an asset Godot can't import, say) is remembered,
+    so later runs don't import again for it, but still do for anything else."""
     project = Path(project)
-    reason = stale_reason(project)
-    if reason is None:
-        return
     unfixable = project / UNFIXABLE
-    if unfixable.exists() and unfixable.read_text().strip() == reason:
+    try:
+        remembered = set(unfixable.read_text().splitlines())
+    except OSError:
+        remembered = set()
+    reason = next((r for r in stale_reasons(project) if r not in remembered), None)
+    if reason is None:
         return
     print(f"gdh: importing the project first: {reason}", file=sys.stderr)
     run_import(project, quiet=True)
-    after = stale_reason(project)
+    after = list(stale_reasons(project))
     if after:
-        print(f"gdh: note: still out of date after importing ({after}); not importing again for it", file=sys.stderr)
+        shown = "; ".join(after[:3]) + (f"; and {len(after) - 3} more" if len(after) > 3 else "")
+        print(f"gdh: note: still out of date after importing ({shown}); not importing again for "
+              f"{'it' if len(after) == 1 else 'them'}", file=sys.stderr)
         (project / ".godot").mkdir(exist_ok=True)
-        unfixable.write_text(after + "\n")
+        unfixable.write_text("\n".join(after) + "\n")
     else:
         unfixable.unlink(missing_ok=True)
 

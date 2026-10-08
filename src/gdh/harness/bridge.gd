@@ -24,6 +24,8 @@ const Probes := preload("probes.gd")
 # own frame limiter, so Engine.max_fps does nothing.
 const HELD_FPS := 20
 const TREE_MAX_NODES := 300
+## An array in a reply keeps this many items, then says how many more there were.
+const JSON_MAX_ITEMS := 100
 
 signal _frame_done
 
@@ -69,6 +71,8 @@ func _start() -> void:
 		await get_tree().process_frame
 	for i in warmup_frames:
 		await get_tree().process_frame
+	# Shots number on from the highest already there, so a session started again in the same out dir keeps them.
+	_shot_count = _last_shot_number()
 	var err := _server.listen(0, "127.0.0.1")
 	var info := {
 		"port": _server.get_local_port() if err == OK else 0,
@@ -79,6 +83,18 @@ func _start() -> void:
 	write_ready(info)
 	if err != OK:
 		get_tree().quit(4)
+
+
+## The highest number among the shots in out_dir/shots, or 0.
+func _last_shot_number() -> int:
+	var dir := out_dir.path_join("shots")
+	var last := 0
+	if DirAccess.dir_exists_absolute(dir):
+		for file in DirAccess.get_files_at(dir):
+			var number := file.get_slice("-", 0)
+			if number.is_valid_int():
+				last = maxi(last, number.to_int())
+	return last
 
 
 ## Writes the ready file in one step (temp file, then rename), so the CLI never
@@ -536,7 +552,11 @@ func _to_json(v: Variant) -> Variant:
 		TYPE_VECTOR3, TYPE_VECTOR3I:
 			return [snappedf(v.x, 0.001), snappedf(v.y, 0.001), snappedf(v.z, 0.001)]
 		TYPE_ARRAY, TYPE_PACKED_STRING_ARRAY, TYPE_PACKED_INT32_ARRAY, TYPE_PACKED_FLOAT32_ARRAY:
-			return Array(v).slice(0, 100).map(_to_json)
+			var items := Array(v)
+			var kept := items.slice(0, JSON_MAX_ITEMS).map(_to_json)
+			if items.size() > JSON_MAX_ITEMS:
+				kept.append("... %d more (%d in all)" % [items.size() - JSON_MAX_ITEMS, items.size()])
+			return kept
 		TYPE_DICTIONARY:
 			var out := {}
 			for key in v:

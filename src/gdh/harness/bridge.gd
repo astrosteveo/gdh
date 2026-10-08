@@ -20,6 +20,7 @@ const Common := preload("common.gd")
 const Covered := preload("covered.gd")
 const ErrorCollector := preload("errors.gd")
 const Probes := preload("probes.gd")
+const Reload := preload("reload.gd")
 const Screen := preload("screen.gd")
 
 # Frame rate caps. Held: rendering continues, so cap it to spare the GPU.
@@ -84,6 +85,7 @@ func _start() -> void:
 		"status": _status(),
 		"errors": errors.drain(),
 		"output": errors.drain_output().output,
+		"user_dir": OS.get_user_data_dir(),
 	}
 	write_ready(info)
 	if err != OK:
@@ -247,6 +249,8 @@ func _handle(item: Dictionary) -> void:
 		"pause":
 			_set_held(true)
 			result = _status()
+		"reload":
+			result = Reload.command(get_tree(), args)
 		"quit":
 			_reply(item.conn, request.get("id"), true, {"quitting": true})
 			get_tree().quit.call_deferred()

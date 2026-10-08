@@ -30,7 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from gdh import companions, spawned
+from gdh import companions, restart, spawned
 from gdh.display import CHOICES, open_display, parse_resolution, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
                        size_mismatch, write_alert_shims)
@@ -199,6 +199,7 @@ def call(session, cmd, args=None, instance=0, timeout=300):
     else:
         with ThreadPoolExecutor(len(sends)) as pool:
             replies = list(pool.map(lambda s: request(games[s[0]], cmd, s[1], timeout), sends))
+    restart.log_input(session, cmd, args, instance, replies)
     if len(games) == 1:
         return replies[0]
     for (i, _), reply in zip(sends, replies):
@@ -310,6 +311,8 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
                  "--idle-timeout", str(args.idle_timeout), "--ticks", str(ticks)]
     if args.scene:
         user_args += ["--scene", args.scene]
+    if getattr(args, "seed", None) is not None:
+        user_args += ["--seed", str(args.seed)]
     game_args = [companions.expand(a, ports, instance=index) for a in args.game_args]
     # --fixed-fps matching the tick rate makes every frame exactly one physics tick.
     # --gpu-profile makes the renderer capture a timestamp at each pass, which `frames` reads (harness/frames.gd).
@@ -317,6 +320,7 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     cmd = godot_cmd(project, args.resolution, [*profile, "--fixed-fps", str(ticks), "--script", str(LIVE_SCRIPT)], game_args)
     out.mkdir(parents=True, exist_ok=True)
     log_path = out / "godot.log"
+    own_user_data = restart.user_data_env(args, project, out)  # before the display, which a failure would leave
     display = open_display(args.display, args.resolution, out / "display.log")
     user_args += ["--display", display.kind]
     # The token goes in the environment, which only this user can read. The
@@ -324,6 +328,7 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     env = godot_env(shims, display.name, user_args)
     env["GDH_TOKEN"] = token
     env[spawned.VAR] = mark  # everything the game spawns inherits it (spawned.py)
+    env.update(own_user_data)
     try:
         with open(log_path, "w") as log:
             proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
@@ -398,8 +403,9 @@ def cmd_start(args):
         companions.expand(arg, ports, instance=0)
     project = Path(args.project).resolve()
     parse_resolution(args.resolution)
+    restart.prepare_start(args, name)
     if not args.no_build:
-        build_csharp(project)
+        build_csharp(project, force=args.rebuild)
     if not args.no_import:
         ensure_imported(project)
     out = Path(args.out or Path.cwd() / "captures" / "live" / name).resolve()
@@ -447,6 +453,7 @@ def cmd_start(args):
                     "keep_children": args.keep_children,
                     "groups": [*started_groups, watchdog]})
     session["scene"] = infos[0].get("status", {}).get("scene", "")  # the scene it started in, for list
+    restart.begin_log(args, session, infos)
     fd = os.open(session_path(name), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(session, f)
@@ -457,7 +464,7 @@ def cmd_start(args):
             print(f"{prefix}pid {record['pid']}, {describe_display(record)}, output in {record['out']}")
     print(f"session '{name}': pid {first['pid']}"
           f"{', ' + describe_display(first) if len(games) == 1 else ''}, output in {out}")
-    return 0
+    return restart.after_start(args, session)
 
 
 # --- Commands -----------------------------------------------------------------
@@ -1036,7 +1043,7 @@ def session_alive(session):
 # --- Batches --------------------------------------------------------------------
 
 # Commands a list of command lines can't hold: they start a session, or read stdin themselves.
-NOT_IN_BATCH = ("start", "batch", "pipe")
+NOT_IN_BATCH = ("start", "batch", "pipe", "restart")
 
 
 class LineParser(argparse.ArgumentParser):
@@ -1293,6 +1300,23 @@ def add_parsers(sub):
     p.add_argument("--gpu-passes", action="store_true",
                    help="Have the renderer time each of its passes, for `frames` (Godot's --gpu-profile; it also "
                         "prints a GPU profile to the log each second)")
+    p.add_argument("--seed", type=int, metavar="N",
+                   help="Seed the game's global random number generator (randi, randf...) before its autoloads and "
+                        "scene load (default: a seed gdh picks, which restart keeps)")
+    p.add_argument("--replay", metavar="FILE.jsonl",
+                   help="Replay an input log (a session's <out>/inputs.jsonl) once the game is ready, back to the "
+                        "frame it ended at; its seed too, unless --seed gives one")
+    p.add_argument("--recipe", metavar="FILE",
+                   help="Run these command lines, written as for gdh live batch, once the game is ready (after "
+                        "--replay); a line that fails stops the start, with exit 1, and leaves the session there")
+    p.add_argument("--user-data", choices=["shared", "fresh"], default="shared",
+                   help="fresh: user:// of the session's own, empty at each start, in <out>/user-data (its shader "
+                        "caches stay shared). Default shared: gdh's user data, kept between runs")
+    p.add_argument("--user-data-from", metavar="DIR",
+                   help="user:// of the session's own, a copy of DIR at each start (saves, settings: a fixture)")
+    p.add_argument("--rebuild", action="store_true",
+                   help="Build a C# project's assemblies even if no code or project file has changed since the last "
+                        "build")
 
     command("stop", cmd_stop, "Quit the game and its companions, and clean up")
     command("status", cmd_status, "Show frame, hold state and scene of each instance, and the companions")
@@ -1408,3 +1432,4 @@ def add_parsers(sub):
 
     from gdh import measure_cli
     measure_cli.add_live_parsers(commands, command)
+    restart.add_live_parsers(commands, command)

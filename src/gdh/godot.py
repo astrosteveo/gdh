@@ -90,7 +90,11 @@ def pid_alive(pid):
 
 
 def kill_groups(*pgids):
-    """Stop process groups: first SIGTERM, then SIGKILL for any that remain."""
+    """Stop process groups: first SIGTERM, then SIGKILL for any that remain.
+
+    A group's leader that is our own child (Godot, a display) stays in its group until it's reaped, so this reaps any
+    of ours that have exited: read a child's exit code (Popen.wait or poll) before stopping its group, since
+    Popen.wait() after this returns 0."""
     for sig, wait in ((signal.SIGTERM, 3.0), (signal.SIGKILL, 1.0)):
         remaining = [p for p in pgids if _group_alive(p)]
         if not remaining:
@@ -106,6 +110,11 @@ def kill_groups(*pgids):
 
 
 def _group_alive(pgid):
+    try:
+        while os.waitpid(-pgid, os.WNOHANG)[0]:
+            pass
+    except ChildProcessError:
+        pass  # none of the group's processes is our child
     try:
         os.killpg(pgid, 0)
     except ProcessLookupError:

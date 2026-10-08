@@ -55,6 +55,8 @@ CRASH_SIGNALS = {signal.SIGSEGV, signal.SIGABRT, signal.SIGBUS, signal.SIGILL, s
 # What a --binary session takes, besides start; anything else needs the harness (PASS goes to live as it is).
 COMMANDS = ("stop", "status", "shot", "input", "wait")
 PASS = ("list",)
+# The engine errors (not warnings) the program raised during this command, for --strict.
+raised = []
 
 
 # --- The program and its environment ---------------------------------------------------------------------------------
@@ -300,6 +302,7 @@ def new_errors(session):
 
 def report_errors(session, as_json=False):
     errors = new_errors(session)
+    raised.extend(e for e in errors if e["type"] != "warning")
     save_session(session)
     if errors and not as_json:
         print(describe_errors(errors))
@@ -669,7 +672,13 @@ def route(name, func):
             raise LiveError(f"gdh live {name} needs gdh's harness in the game, and session '{args.session}' runs a "
                             f"program as it is (--binary). It takes {', '.join(COMMANDS)}; start the project with "
                             f"--project to step, inspect and evaluate it.")
-        return handler(args, session)
+        raised.clear()
+        code = handler(args, session)
+        if getattr(args, "strict", False) and raised:
+            count = sum(e["count"] for e in raised)
+            raise LiveError(f"--strict: the program raised {count} engine error{'s' if count > 1 else ''} during the "
+                            f"command, the first {raised[0]['type']}: {raised[0]['message']} at {raised[0]['where']}")
+        return code
     return run_command
 
 

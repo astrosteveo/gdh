@@ -1,0 +1,19 @@
+{
+  "description": "The arena's player walks right, Go is clicked, the player jumps: each checked as it happens.",
+  "start": {"scene": "res://live/arena.tscn", "resolution": "640x360", "args": ["--level", "3"]},
+  "steps": [
+    "# half a second right, at 120 px/s",
+    "step 30 --hold ui_right",
+    {"expect": "get_node('Player').position.x", "approx": 260, "name": "half a second right is 60 px"},
+    {"step": 2, "click_text": "Go"},
+    {"expect": "clicks", "equals": 1, "name": "Go was clicked once"},
+    {"until": "get_node('Player').position.x >= 300", "hold": "ui_right", "max": 600, "every": 5},
+    {"step": 1, "tap": "ui_accept"},
+    {"shot": "after-jump"},
+    {"shot": "go-button", "node": "UI/GoButton", "zoom": 2}
+  ],
+  "expect": [
+    "GameState.jumps == 1",
+    {"expect": "OS.get_cmdline_user_args()", "equals": ["--level", "3"]}
+  ]
+}

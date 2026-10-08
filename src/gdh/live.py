@@ -1408,3 +1408,6 @@ def add_parsers(sub):
 
     from gdh import measure_cli
     measure_cli.add_live_parsers(commands, command)
+
+    from gdh import scenario
+    scenario.add_live_parsers(commands, command)

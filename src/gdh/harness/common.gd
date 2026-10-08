@@ -86,9 +86,12 @@ static func max_pending_saves() -> int:
 	return clampi(OS.get_processor_count() - 2, 2, 16)
 
 
-## Reads the root viewport's frame back now and saves it as a PNG at path on a worker thread.
-static func save_frame(tree: SceneTree, path: String) -> void:
+## Reads the root viewport's frame back now and saves it as a PNG at path on a worker thread. edit, given, makes the
+## image saved from the frame (a crop, a zoom: screen.gd's framing).
+static func save_frame(tree: SceneTree, path: String, edit := Callable()) -> void:
 	var image := tree.root.get_texture().get_image()
+	if edit.is_valid():
+		image = edit.call(image)
 	while _pending.size() >= max_pending_saves():
 		WorkerThreadPool.wait_for_task_completion(_pending.pop_front())
 	_pending.append(WorkerThreadPool.add_task(func() -> void: image.save_png(path), false, "gdh: save a frame"))
@@ -100,10 +103,10 @@ static func wait_saves() -> void:
 		WorkerThreadPool.wait_for_task_completion(_pending.pop_front())
 
 
-## Renders `views` of the root viewport and saves each as <dir>/<prefix><view>.png.
-## Waits a few frames after switching modes so the new mode is drawn. No game
+## Renders `views` of the root viewport and saves each as <dir>/<prefix><view>.png, or where paths says ({view:
+## path}), each made by edit (save_frame). Waits a few frames after switching modes so the new mode is drawn. No game
 ## time passes while the tree is paused. Returns {view: path}.
-static func save_views(tree: SceneTree, views: Array, dir: String, prefix := "") -> Dictionary:
+static func save_views(tree: SceneTree, views: Array, dir: String, prefix := "", edit := Callable(), paths := {}) -> Dictionary:
 	var saved := {}
 	var root := tree.root
 	DirAccess.make_dir_recursive_absolute(dir)
@@ -115,8 +118,8 @@ static func save_views(tree: SceneTree, views: Array, dir: String, prefix := "")
 		for i in 3:
 			await tree.process_frame
 		await RenderingServer.frame_post_draw
-		var path := dir.path_join("%s%s.png" % [prefix, view])
-		save_frame(tree, path)
+		var path: String = paths.get(view, dir.path_join("%s%s.png" % [prefix, view]))
+		save_frame(tree, path, edit)
 		saved[view] = path
 	root.debug_draw = Viewport.DEBUG_DRAW_DISABLED
 	wait_saves()

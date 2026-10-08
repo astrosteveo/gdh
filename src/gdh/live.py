@@ -545,6 +545,13 @@ def cmd_step(args):
             events += [{"mouse_motion": [x, y], "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": True, "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": False, "at": until}]
+    # A click on a node, or on what shows a text: the game finds where it shows before the step's first frame.
+    for key, targets in (("text", args.click_text), ("node", args.click_node)):
+        for target in targets:
+            on = {key: target}
+            events += [{"mouse_motion": [0, 0], "on": on, "at": 0},
+                       {"mouse_button": 1, "on": on, "pressed": True, "at": 0},
+                       {"mouse_button": 1, "on": on, "pressed": False, "at": 1}]
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
     # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
     reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
@@ -552,6 +559,8 @@ def cmd_step(args):
     if not args.json:
         for prefix, r in each(reply, result):
             print(f"{prefix}stepped {r['frames']} frames")
+            for target in r.get("aimed", []):
+                print(f"{prefix}  clicked {describe_match(target)} at {target['at'][0]:g},{target['at'][1]:g}")
             for path in r.get("shots", []):
                 print(f"{prefix}  shot: {path}")
             print(describe_status(r["status"], prefix))
@@ -560,13 +569,17 @@ def cmd_step(args):
     return 0
 
 
-def shot(session, views, label, tiles, as_json, instance=0):
-    reply = call(session, "shot", {"views": views, "label": label}, instance=instance)
+def shot(session, views, label, tiles, as_json, instance=0, framing=None):
+    reply = call(session, "shot", {"views": views, "label": label, **(framing or {})}, instance=instance)
     result = report(reply, as_json)
     for prefix, r in each(reply, result):
         for view, path in r["shots"].items():
             if not as_json:
-                print(f"{prefix}{view}: {path}")
+                region = ""
+                if "crop" in r:
+                    x, y, w, h = r["crop"]
+                    region = f" (the screen's {x},{y} {w}x{h}, saved at {r['size'][0]}x{r['size'][1]})"
+                print(f"{prefix}{view}: {path}{region}")
             if tiles and view == "normal":
                 for tile in save_tiles(path, Path(path).with_suffix("")):
                     if not as_json:
@@ -576,7 +589,108 @@ def shot(session, views, label, tiles, as_json, instance=0):
 
 def cmd_shot(args):
     session = load_session(args.session)
-    shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance)
+    framing = {}
+    if args.out:
+        if len(pick(session, args.instance)) > 1:
+            raise LiveError("--out names one file: give it one instance (--instance K).")
+        framing["out"] = str(Path(args.out).resolve())
+    if args.crop:
+        framing["crop"] = numbers(args.crop, 4, "--crop")
+    if args.node:
+        framing.update({"node": args.node, "margin": args.margin})
+    elif args.margin:
+        raise LiveError("--margin goes with --node.")
+    if args.zoom != 1:
+        framing["zoom"] = args.zoom
+    if args.max_width:
+        framing["max_width"] = args.max_width
+    if args.no_ui:
+        framing["no_ui"] = True
+    shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance, framing)
+    return 0
+
+
+def numbers(text, count, option):
+    """`count` numbers from comma-separated text, or an error naming the option."""
+    try:
+        values = [float(v) for v in text.split(",")]
+    except ValueError:
+        values = []
+    if len(values) != count:
+        raise LiveError(f"{option} takes {count} numbers separated by commas, not {text!r}.")
+    return values
+
+
+def describe_match(m):
+    """One node `find` found, as a line: path (class) text="..." screen=[x, y, w, h]."""
+    extras = [f"text={json.dumps(m['text'])}"] if "text" in m else []
+    if "screen" in m:
+        extras.append(f"screen={m['screen']}")
+    if m.get("disabled"):
+        extras.append("disabled")
+    if "why" in m:
+        extras.append(m["why"])
+    return f"{m['path']} ({m['class']}){' ' + ' '.join(extras) if extras else ''}"
+
+
+def cmd_find(args):
+    session = load_session(args.session)
+    filters = {key: value for key, value in (("text", args.text), ("name", args.name), ("class", args.class_name))
+               if value}
+    if not filters:
+        raise LiveError("find takes a TEXT, --name or --class.")
+    reply = call(session, "find", filters, instance=args.instance)
+    result = report(reply, args.json)
+    found = False
+    for prefix, r in each(reply, result):
+        found = found or bool(r["matches"])
+        if args.json:
+            continue
+        for m in r["matches"]:
+            print(f"{prefix}{describe_match(m)}")
+        if r.get("more"):
+            print(f"{prefix}... {r['more']} more; narrow it with TEXT, --name or --class")
+        if r["hidden"]:
+            print(f"{prefix}not showing: {'; '.join(describe_match(m) for m in r['hidden'])}")
+    if not found:
+        raise LiveError("No node that shows matches.")
+    return 0
+
+
+def cmd_camera(args):
+    session = load_session(args.session)
+    if bool(args.view) == args.release:
+        raise LiveError("camera takes --view or --release.")
+    if args.release:
+        request_args = {"release": True}
+    else:
+        points = args.view.split(":")
+        if len(points) == 2:
+            if args.zoom is not None:
+                raise LiveError("--zoom is for a 2D view (--view X,Y); a 3D one takes --fov.")
+            request_args = {"from": numbers(points[0], 3, "--view"), "at": numbers(points[1], 3, "--view")}
+            request_args.update({k: v for k, v in (("fov", args.fov), ("far", args.far)) if v is not None})
+        elif len(points) == 1:
+            if args.fov is not None or args.far is not None:
+                raise LiveError("--fov and --far are for a 3D view (--view X,Y,Z:X,Y,Z); a 2D one takes --zoom.")
+            request_args = {"at": numbers(points[0], 2, "--view"), "zoom": args.zoom or 1.0}
+        else:
+            raise LiveError(f"--view takes X,Y,Z:X,Y,Z (3D) or X,Y (2D), not {args.view!r}.")
+    reply = call(session, "camera", request_args, instance=args.instance)
+    result = report(reply, args.json)
+    if not args.json:
+        for prefix, r in each(reply, result):
+            if args.release:
+                said = "released gdh's camera" if r["released"] else "no gdh camera to release"
+                again = f"; {', '.join(r['restored'])} is the camera again" if r["restored"] else ""
+                print(f"{prefix}{said}{again}")
+                continue
+            instead = f", in place of {r['replaced']}" if r["replaced"] else ""
+            if r["camera"] == "3d":
+                print(f"{prefix}looking from {','.join(f'{v:g}' for v in r['from'])} at {','.join(f'{v:g}' for v in r['at'])}"
+                      f", fov {r['fov']:g}, far {r['far']:g}{instead}")
+            else:
+                print(f"{prefix}centred on {','.join(f'{v:g}' for v in r['at'])} at zoom {r['zoom']:g}{instead}")
     return 0
 
 
@@ -601,7 +715,8 @@ def cmd_probes(args):
 
 def cmd_tree(args):
     session = load_session(args.session)
-    reply = call(session, "tree", {"path": args.path or "", "depth": args.depth}, instance=args.instance)
+    reply = call(session, "tree", {"path": args.path or "", "depth": args.depth, "visible_only": args.visible_only},
+                 instance=args.instance)
     result = report(reply, args.json)
     if not args.json:
         for prefix, r in each(reply, result):
@@ -759,6 +874,11 @@ def add_parsers(sub):
                    help="Press the left button at screenshot pixel X,Y at the start, release it at the end")
     p.add_argument("--right-hold", action="append", default=[], metavar="X,Y",
                    help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
+    p.add_argument("--click-text", action="append", default=[], metavar="TEXT",
+                   help="Left click the node that shows TEXT (exactly, in any case; else the one whose text holds it), "
+                        "at the centre of what shows of it. None, or several, fails, naming them")
+    p.add_argument("--click-node", action="append", default=[], metavar="PATH",
+                   help="Left click a node (a path from the current scene, or /root/...) at the centre of what shows of it")
     p.add_argument("--shot-every", type=int, default=0, metavar="K", help="Save a frame every K frames")
     p.add_argument("--shot", action="store_true", help="Save a frame after stepping")
 
@@ -767,12 +887,40 @@ def add_parsers(sub):
                    help="normal, unshaded, lighting, normals, wireframe or overdraw; repeatable")
     p.add_argument("--label", default="shot")
     p.add_argument("--tiles", action="store_true", help="Also save 2x2 tiles at 2x zoom")
+    p.add_argument("--out", metavar="FILE.png",
+                   help="Save to this file (with the view's name added when there are several), not a numbered one")
+    p.add_argument("--crop", metavar="X,Y,W,H", help="Keep only this part of the screen (screenshot pixels)")
+    p.add_argument("--node", metavar="PATH", help="Keep only this node's box on screen (as find reports it)")
+    p.add_argument("--margin", type=float, default=0, metavar="PX", help="With --node: grow its box by PX on each side")
+    p.add_argument("--zoom", type=int, default=1, metavar="K", help="Scale up K times, nearest neighbour (1 to 16)")
+    p.add_argument("--max-width", type=int, default=0, metavar="W",
+                   help="Scale down to at most W pixels wide, for reading the image (never up)")
+    p.add_argument("--no-ui", action="store_true",
+                   help="Leave the UI out of this shot: hide every CanvasLayer over the game (layer 1 and up) for it")
 
     command("probes", cmd_probes, "Run the probes on the current frame", instance=one)
 
     p = command("tree", cmd_tree, "Show the scene tree", instance=one)
     p.add_argument("path", nargs="?", help="Node path relative to the current scene")
     p.add_argument("--depth", type=int, default=4)
+    p.add_argument("--visible-only", action="store_true", help="Leave out hidden nodes and everything under them")
+
+    p = command("find", cmd_find, "Find the nodes that show on screen by their text, name or class, with their boxes",
+                instance=one)
+    p.add_argument("text", nargs="?", help="Text the node shows (any case; part of it will do)")
+    p.add_argument("--name", metavar="PATTERN", help="The node's name; * and ? match anything (any case)")
+    p.add_argument("--class", dest="class_name", metavar="CLASS",
+                   help="The node's class, built in or a script's class_name, or one it extends")
+
+    p = command("camera", cmd_camera, "Look through a camera of gdh's own, without game code, or give the view back",
+                instance=one)
+    p.add_argument("--view", metavar="X,Y,Z:X,Y,Z",
+                   help="3D: look from the first point at the second. 2D: X,Y, the point to centre on. Write "
+                        "--view=-1,2,3:0,0,0 for a negative first number")
+    p.add_argument("--fov", type=float, help="3D: the field of view in degrees (default: the game camera's)")
+    p.add_argument("--far", type=float, help="3D: the far plane in metres (default: the game camera's)")
+    p.add_argument("--zoom", type=float, help="2D: the zoom (2 is twice as close; default 1)")
+    p.add_argument("--release", action="store_true", help="Free gdh's camera: the game's camera is current again")
 
     p = command("eval", cmd_eval, "Evaluate a Godot expression against the current scene", instance=one)
     p.add_argument("expr", help="e.g. \"get_node('Player').position\" (inputs: scene, tree, root)")

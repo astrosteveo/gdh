@@ -17,6 +17,7 @@ const Common := preload("common.gd")
 const Covered := preload("covered.gd")
 const ErrorCollector := preload("errors.gd")
 const Probes := preload("probes.gd")
+const Monitors := preload("monitors.gd")
 
 # Frame rate caps. Held: rendering continues, so cap it to spare the GPU.
 # Running: about real time. Stepping, or answering a command: uncapped.
@@ -39,6 +40,7 @@ var display := ""
 ## The window size gdh asked for (--resolution), or zero: a step notes once if the game's window isn't that size.
 var resolution := Vector2i.ZERO
 var recorder: Node  # frames.gd: each game frame's render times
+var listener: Node  # audio.gd: the buses' levels and the players over the last step
 
 var _server := TCPServer.new()
 var _conns: Array[Dictionary] = []
@@ -209,6 +211,10 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_tree(args)
 		"frames":
 			result = recorder.command(args)
+		"monitors":
+			result = Monitors.read(_game_frames)
+		"audio":
+			result = listener.command(args)
 		"eval":
 			result = _cmd_eval(args)
 		"run":
@@ -239,7 +245,9 @@ func _set_held(held: bool) -> void:
 
 
 ## args: frames, events [{at, ...event}], shot_every, views, cover_every (sample the panels over the screen's centre
-## every K frames: covered.gd).
+## every K frames: covered.gd), warmup (seconds of held frames drawn back to back first, so the GPU has clocked up),
+## clear_record (start the frame record over just before the first frame), monitors (-1: none; 0: the Performance
+## monitors before the first frame and after the last; K: every K frames too).
 ## Events with "at": k are injected before frame k+1 of the step (0 = before
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
@@ -254,6 +262,14 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		if event == null:
 			return {"error": "Bad input event: %s" % JSON.stringify(spec)}
 		timeline.get_or_add(clampi(int(spec.get("at", 0)), 0, frames), []).append(event)
+	# gdh live bench: no gap for the GPU to idle and clock down between the warm-up, the record's start and the step.
+	var warm_until := Time.get_ticks_msec() + int(float(args.get("warmup", 0.0)) * 1000.0)
+	while Time.get_ticks_msec() < warm_until:
+		await _frame_done
+	if args.get("clear_record", false):
+		recorder.command({"clear": true})
+	var monitors_every := int(args.get("monitors", -1))
+	var monitor_samples := [Monitors.read(_game_frames)] if monitors_every >= 0 else []
 	_note_vsync()
 	_note_window_size()
 	var was_held := _held
@@ -274,11 +290,15 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			shots.append(_save_image("step-f%d" % (i + 1)))
 		if cover_every > 0 and (i + 1) % cover_every == 0:
 			cover_samples.append(Covered.sample(get_tree()))
+		if monitors_every >= 0 and ((monitors_every > 0 and (i + 1) % monitors_every == 0) or i + 1 == frames):
+			monitor_samples.append(Monitors.read(_game_frames))
 	_set_held(was_held)
 	Common.wait_saves()  # every frame written before the reply names it
 	var result := {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
 	if cover_every > 0:
 		result.cover_samples = cover_samples
+	if monitors_every >= 0:
+		result.monitors = monitor_samples
 	return result
 
 

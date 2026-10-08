@@ -11,6 +11,7 @@ const Bridge := preload("bridge.gd")
 const Common := preload("common.gd")
 const ErrorCollector := preload("errors.gd")
 const Frames := preload("frames.gd")
+const Audio := preload("audio.gd")
 
 
 func _initialize() -> void:
@@ -41,6 +42,10 @@ func _initialize() -> void:
 	frames.name = "GdhFrames"
 	bridge.recorder = frames
 	root.add_child(frames, false, Node.INTERNAL_MODE_BACK)
+	var audio := Audio.new()
+	audio.name = "GdhAudio"
+	bridge.listener = audio
+	root.add_child(audio, false, Node.INTERNAL_MODE_BACK)
 	if scene.is_empty() or change_scene_to_file(scene) != OK:
 		push_error("Can't load scene \"%s\"." % scene)
 		# The bridge waits for a current scene, so report the failure directly.

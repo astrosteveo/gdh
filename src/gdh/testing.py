@@ -12,6 +12,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from gdh import scenario
 from gdh.editor_bridge import parse_engine_errors, to_res
 from gdh.godot import HARNESS, GdhError, alert_shims, build_csharp, godot_binary, godot_cmd, godot_env, kill_groups
 from gdh.imports import ensure_imported, run_import
@@ -94,6 +95,9 @@ def cmd_test(args):
         raise GdhError(f"No project.godot in {project}.")
     framework = args.framework if args.framework != "auto" else detect(project)
     paths = [to_res(project, p) for p in args.paths]
+    # Scenario files among the paths, or under them, run after the framework's tests, each in a live session.
+    scenarios = scenario.files_under(project, paths or default_paths(project))
+    paths = [p for p in paths if not p.endswith(scenario.SUFFIX)]
     if not args.no_build:
         build_csharp(project)
     if not args.no_import:
@@ -103,9 +107,68 @@ def cmd_test(args):
             run_import(project, quiet=True)
     out = Path(args.out).resolve() if args.out else Path(tempfile.mkdtemp(prefix="gdh-test-"))
     out.mkdir(parents=True, exist_ok=True)
-    shutil.rmtree(project / GDUNIT_REPORTS.removeprefix("res://"), ignore_errors=True)
     junit = out / "junit.xml"
     junit.unlink(missing_ok=True)
+    if paths or not args.paths:
+        result = run_framework(args, project, framework, paths, out, junit)
+    else:  # scenario files alone
+        result = {"tests": 0, "failed": 0, "skipped": 0, "failures": [], "framework": framework, "exit": 0,
+                  "junit": str(junit), "log": None, "engine_errors": []}
+    code = result["exit"]
+    if scenarios:
+        result = with_scenarios(result, scenarios, args, out, junit)
+    (out / "report.json").write_text(json.dumps(result, indent=2))
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        passed = result["tests"] - result["failed"] - result["skipped"]
+        print(f"gdh test ({framework}): {result['tests']} tests, {passed} passed, {result['failed']} failed, "
+              f"{result['skipped']} skipped -> {out}")
+        if scenarios:
+            s = result["scenarios"]
+            print(f"  of them {s['checks']} checks in {s['count']} scenario files, {s['failed']} failed: "
+                  f"{s['results']}")
+        for f in result["failures"]:
+            print(f"FAILED {f['suite']} > {f['test']}")
+            for line in f["message"].splitlines()[:8]:
+                print(f"    {line}")
+        if code == "timeout":
+            print(f"note: the run took over {args.timeout} s and was stopped; the results may be partial")
+        shown = result["engine_errors"][:10]
+        if shown:
+            print(f"{len(result['engine_errors'])} engine errors during the run (see report.json):")
+            for e in shown:
+                print(f"  {e['type']}: {e['message']} at {e['where']}")
+    ok = result["failed"] == 0 and result["tests"] > 0 and code != "timeout"
+    if result["tests"] == 0:
+        print("note: no tests ran. Tests live in res://test or res://tests, or pass paths.")
+    return 0 if ok else 1
+
+
+def with_scenarios(result, files, args, out, junit):
+    """The framework's result with the scenario files' checks added: each check a test, each scenario a suite,
+    appended to junit.xml too (scenario.py). A scenario runs on gdh test's --display, or, headless, on the default."""
+    doc = scenario.run_files(files, out / "scenarios", display=None if args.display == "none" else args.display,
+                             start_extra={"no_build": True, "no_import": True}, quiet=args.json)
+    root = ET.parse(junit).getroot() if junit.exists() else ET.Element("testsuites")
+    if root.tag != "testsuites":
+        whole = ET.Element("testsuites")
+        whole.append(root)
+        root = whole
+    root.extend(ET.parse(doc["junit"]).getroot())
+    ET.ElementTree(root).write(junit, encoding="utf-8", xml_declaration=True)
+    merged = read_junit(junit)
+    checks = [c for r in doc["scenarios"] for c in r["checks"]]
+    result.update({k: merged[k] for k in ("tests", "failed", "skipped", "failures")})
+    result.update({"junit": str(junit), "scenarios": {
+        "count": len(files), "checks": len(checks), "failed": sum(c["passed"] is False for c in checks),
+        "passed": doc["passed"], "results": doc["results"], "junit": doc["junit"]}})
+    return result
+
+
+def run_framework(args, project, framework, paths, out, junit):
+    """Run the framework's tests on `paths`; its result, read from its JUnit XML."""
+    shutil.rmtree(project / GDUNIT_REPORTS.removeprefix("res://"), ignore_errors=True)
     extra, harness = framework_args(framework, project, paths, junit)
     log_path = out / "godot.log"
     display = None
@@ -145,34 +208,14 @@ def cmd_test(args):
                    "engine_errors": engine_errors[:50]})
     if code == "timeout":
         result["timed_out"] = True
-    (out / "report.json").write_text(json.dumps(result, indent=2))
-    if args.json:
-        print(json.dumps(result, indent=2))
-    else:
-        passed = result["tests"] - result["failed"] - result["skipped"]
-        print(f"gdh test ({framework}): {result['tests']} tests, {passed} passed, {result['failed']} failed, "
-              f"{result['skipped']} skipped -> {out}")
-        for f in result["failures"]:
-            print(f"FAILED {f['suite']} > {f['test']}")
-            for line in f["message"].splitlines()[:8]:
-                print(f"    {line}")
-        if code == "timeout":
-            print(f"note: the run took over {args.timeout} s and was stopped; the results may be partial")
-        shown = engine_errors[:10]
-        if shown:
-            print(f"{len(engine_errors)} engine errors during the run (see report.json):")
-            for e in shown:
-                print(f"  {e['type']}: {e['message']} at {e['where']}")
-    ok = result["failed"] == 0 and result["tests"] > 0 and code != "timeout"
-    if result["tests"] == 0:
-        print("note: no tests ran. Tests live in res://test or res://tests, or pass paths.")
-    return 0 if ok else 1
+    return result
 
 
 def add_parser(sub):
     p = sub.add_parser("test", help="Run the project's tests (GUT, gdUnit4, or gdh's own runner) and report failures")
     p.add_argument("--project", required=True, help="Godot project directory")
-    p.add_argument("paths", nargs="*", help="Test files or directories (default: res://test and res://tests)")
+    p.add_argument("paths", nargs="*", help="Test files, scenario files (*.scenario.json) or directories (default: "
+                                            "res://test and res://tests)")
     p.add_argument("--framework", choices=["auto", "gut", "gdunit4", "gdh"], default="auto",
                    help="auto: GUT if addons/gut exists, gdUnit4 if addons/gdUnit4 does, else gdh's own runner")
     p.add_argument("--out", help="Where to keep junit.xml, report.json and godot.log (default: a new temporary directory)")

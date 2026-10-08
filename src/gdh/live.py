@@ -1447,3 +1447,6 @@ def add_parsers(sub):
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)
     restart.add_live_parsers(commands, command)
+
+    from gdh import scenario
+    scenario.add_live_parsers(commands, command)

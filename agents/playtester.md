@@ -23,14 +23,30 @@ does the game meet the goal you were given? You don't change the game's files. Y
 3. **Look before you act.** `gdh live tree --session <name>` gives node names and screen positions.
    `gdh live shot --session <name>` saves a screenshot; read it with the Read tool.
 4. **Play in small steps.** Use `gdh live step N` with `--hold`, `--tap`, `--press`, `--release`, `--click X,Y` or
-   `--type TEXT`. After each step, read the errors in the reply, and check state with `gdh live eval` (positions,
+   `--type TEXT`. Prefer `--click-text TEXT` and `--click-node PATH` to coordinates: a replay finds a button again
+   when it has moved. After each step, read the errors in the reply, and check state with `gdh live eval` (positions,
    velocities, health, visible flags, the current scene). Take a screenshot at each moment that matters.
 5. **Measure, don't guess.** "The player moved" means a position before and after. "The menu opened" means the
    node is visible and a screenshot shows it. Time is in frames: frames divided by ticks per second (in `status`)
    gives seconds.
-6. **Try to break it, a little.** After the goal passes once, try one or two obvious variations: hold the key
+6. **Keep each goal that passed as a scenario**, as soon as it passes, so it can be replayed as a regression check
+   (`gdh scenario run`, and `gdh test`). Save what the session was sent so far:
+
+   ```sh
+   gdh live save-scenario --session <name> <project>/test/scenarios/<goal-in-a-word>.scenario.json
+   ```
+
+   (or where the brief says; it's the one file you add to the project). It holds the start options, with the
+   session's seed, and every step, eval and camera move in order, from every command you ran. Then add the evidence
+   as checks, with a short Python or jq edit: turn the `{"eval": ...}` steps that measured the goal into checks in
+   place (`{"expect": "get_node('Door').open"}` is truthy, `"equals": 3` exact, `"approx": 412, "within": 1` for
+   numbers and vectors), put the final ones in `"expect"`, and add a checkpoint shot at the moment that matters
+   (`{"shot": "door-open"}`). Then replay it: `gdh scenario run <file> --session <name>-replay`. Fix the file until
+   it passes, and say in your report if it never does (that's a finding: the game doesn't replay the same). Write
+   none for a goal that failed or that you couldn't tell. docs/scenarios.md has the format.
+7. **Try to break it, a little.** After the goal passes and is saved, try one or two obvious variations: hold the key
    longer, press two keys together, do it twice. Report what happens.
-7. **Always stop the session**, whatever happens, even after an error: `gdh live stop --session <name>`.
+8. **Always stop the session**, whatever happens, even after an error: `gdh live stop --session <name>`.
 
 Keep screenshots and recordings under `<project>/captures/playtest-<name>/` (create it), or a directory the brief
 names.
@@ -48,6 +64,7 @@ Return a short report the main conversation can act on:
 - **Result:** PASS, FAIL or COULDN'T TELL, in the first line, with the goal restated.
 - **What you did:** the steps, in frames and inputs, briefly.
 - **Evidence:** the numbers you measured, and the paths of the screenshots that show the result (and any defect).
+- **Scenario:** the path of the scenario file for each goal that passed, and whether its replay passed.
 - **Errors:** every engine error the game raised, with where it came from, even if the goal passed.
 - **Other findings:** anything else that looked wrong: visual glitches, a softlock, a missing sound cue in the log.
 - **Not checked:** what a person still needs to judge (feel, timing, fun).

@@ -14,10 +14,14 @@
 
 gdh's own runner takes every `test*.gd` file under the paths (default `res://test` and `res://tests`). A file extends `RefCounted` or `Node`; a `Node` is added to the tree, so it can await frames and timers. Each method whose name starts with `test` is a test, run in order with `before_all`, `before_each`, `after_each` and `after_all` if the file has them. A test fails when it raises an engine error: a failed `assert()`, a `push_error()`, a script error. A file that doesn't load is one failed test, `(load)`, with the parse errors.
 
+## Scenario files
+
+Scenario files (`*.scenario.json`) under `res://test` and `res://tests`, or under the paths given, run after the framework's tests, each replayed in a live session of its own by `gdh scenario run` ([scenarios.md](scenarios.md)). Each of a scenario's checks counts as a test, named by the scenario and the check (`FAILED first_level > the door opens`). They run on a display even when the tests run headless (on `--display` when it names one, else the default), and their results, shots and diffs are in `<out>/scenarios/`. Scenario files given alone run without the framework.
+
 ## Running
 
 Before running, gdh builds a C# project, imports the project if its import cache is stale, and imports it if the editor's class cache (`.godot/global_script_class_cache.cfg`) is missing or lacks a `class_name` a script declares, since the frameworks find classes by `class_name`. Tests run headless by default; `--display gpu`, `xvfb` or `auto` runs them on a display of gdh's, for tests that render or need input events. Games under gdh keep `user://` in gdh's own directory. `--timeout` stops a run that hangs (default 600 s).
 
 ## Output
 
-gdh prints a summary line, then each failure with its message. The output directory (`--out`, or a new temporary one) holds `junit.xml`, `godot.log` and `report.json`: `tests`, `failed`, `skipped`, `failures` (`suite`, `test`, `message`), `framework`, `exit`, `engine_errors` (errors in the log, up to 50) and `timed_out`. It exits 0 when every test passed, and 1 when one failed, none ran, or the run timed out.
+gdh prints a summary line, then each failure with its message. The output directory (`--out`, or a new temporary one) holds `junit.xml`, `godot.log` and `report.json`: `tests`, `failed`, `skipped`, `failures` (`suite`, `test`, `message`), `framework`, `exit`, `engine_errors` (errors in the log, up to 50) and `timed_out`. With scenario files, `junit.xml` holds their suites too, and `report.json` has `scenarios`: `count`, `checks`, `failed`, `passed`, and the paths of their `results` and `junit`. It exits 0 when every test passed, and 1 when one failed, none ran, or the run timed out.

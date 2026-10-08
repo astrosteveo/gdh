@@ -63,7 +63,7 @@ def main():
     api.add_parser(sub)
     testing.add_parser(sub)
     scenario.add_parser(sub)
-    export.add_parser(sub)
+    export.add_parser(sub, live.add_display_option)
     movie.add_parser(sub, live.add_display_option)
     measure_cli.add_parsers(sub)
 
@@ -79,7 +79,7 @@ def main():
                            f"an argument of its own (in zsh, ${{=VAR}} or an array splits a variable).\n")
     args = parser.parse_args(argv)
     if game_args and not hasattr(args, "game_args"):
-        parser.error("arguments after -- go to the game: only capture, live start and movie take them")
+        parser.error("arguments after -- go to the game: only capture, live start, movie and export take them")
     if hasattr(args, "game_args"):
         args.game_args = game_args
     try:

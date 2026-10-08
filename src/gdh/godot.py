@@ -140,19 +140,69 @@ def godot_binary(project):
     return "godot"
 
 
-def build_csharp(project):
+def build_csharp(project, force=False):
     """Build a C# project's assemblies with `dotnet build`: Godot loads them
     from .godot/mono but never builds them when run from the command line, so
-    a stale build would run old code. Does nothing for a GDScript project."""
+    a stale build would run old code. Does nothing for a GDScript project.
+
+    Skipped when nothing the build reads has changed since gdh's last successful build (build_inputs), unless force.
+    Returns whether it built: None for a GDScript project."""
     csproj = csharp_project(project)
     if csproj is None:
-        return
+        return None
+    stamp = Path(project) / BUILD_STAMP
+    inputs = build_inputs(project)
+    if not force and stamp.is_file() and stamp.read_text() == inputs and (Path(project) / BUILD_OUTPUT).is_dir():
+        return False
     if not shutil.which("dotnet"):
         raise GdhError("This is a C# project, which needs the .NET SDK to build. Install it (dotnet) or pass --no-build.")
     proc = subprocess.run(["dotnet", "build", str(csproj), "-nologo", "-v:q"], capture_output=True, text=True)
     if proc.returncode != 0:
+        stamp.unlink(missing_ok=True)
         lines = [line for line in (proc.stdout + proc.stderr).splitlines() if "error" in line.lower()]
         raise GdhError(f"dotnet build {csproj.name} failed:\n" + "\n".join(dict.fromkeys(lines[-20:] or [proc.stdout[-2000:]])))
+    if (Path(project) / BUILD_OUTPUT).is_dir():
+        stamp.write_text(inputs)
+    return True
+
+
+# Where Godot's C# build puts its assemblies, and where gdh keeps the stamp of what it built them from: deleting the
+# build deletes the stamp, so the next run builds again.
+BUILD_OUTPUT = ".godot/mono/temp/bin"
+BUILD_STAMP = ".godot/mono/temp/gdh-build-stamp"
+# What a C# build reads: the code and the project files in the project, and the files MSBuild and the SDK look for in
+# the directories above it.
+BUILD_SUFFIXES = (".cs", ".csproj", ".sln", ".slnx", ".props", ".targets")
+BUILD_FILES = ("global.json", "nuget.config", "packages.lock.json", ".editorconfig")
+BUILD_FILES_ABOVE = ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", *BUILD_FILES)
+
+
+def build_inputs(project):
+    """A stamp of the files a C# build reads: each one's path, size and modification time, one a line. Leaves out
+    hidden directories (.godot, .git) and bin and obj."""
+    project = Path(project).resolve()
+    lines = []
+    for directory, dirs, files in os.walk(project):
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in ("bin", "obj"))
+        for name in sorted(files):
+            if name.endswith(BUILD_SUFFIXES) or name.lower() in BUILD_FILES:
+                path = Path(directory) / name
+                try:
+                    st = path.stat()
+                except OSError:
+                    continue
+                lines.append(f"{path.relative_to(project)}\t{st.st_size}\t{st.st_mtime_ns}")
+    for parent in project.parents:
+        try:
+            names = sorted(os.listdir(parent))
+        except OSError:
+            continue
+        for name in names:
+            path = parent / name
+            if (name in BUILD_FILES_ABOVE or name.lower() in BUILD_FILES) and path.is_file():
+                st = path.stat()
+                lines.append(f"{path}\t{st.st_size}\t{st.st_mtime_ns}")
+    return "\n".join(lines) + "\n"
 
 
 def godot_cmd(project, resolution, extra, game_args=()):

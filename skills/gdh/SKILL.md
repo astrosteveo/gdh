@@ -105,9 +105,12 @@ gdh live stop --session <name>
 - Send a sequence in one call: `gdh live batch --session <name> <<'END'` with one CLI line each, then `END`; `--stop-on-error` stops at the first failure.
 - `gdh live list` shows every session, yours and any left running.
 
+**Don't replay by hand after a code change.** For GDScript, `gdh live reload` loads the changed scripts into the running game and keeps its state (a pending `await` is cancelled; scenes, resources and C# aren't reloaded). Otherwise `gdh live restart --replay` starts the session again, rebuilt, with the same options and companions, and replays its input to the same frame. Keep "get to X" steps in a file of batch lines and start with `--recipe FILE`. `--seed N` makes `randi()` repeat; restart keeps the seed. `--user-data fresh` or `--user-data-from DIR` give a session its own `user://`. C# builds only when code changed, so don't run `dotnet build` yourself.
+
 - **Session names.** Give each task its own `--session` name. Another agent or task may be using `default`.
 - **Stop when done.** Always run `gdh live stop`, because a running game keeps the GPU busy. It stops the game's display too. The game quits by itself after 30 idle minutes (`--idle-timeout`). With `--keep-children`, once the game has exited the session ends after 30 minutes with no `gdh live` command on it (`status` counts).
 - **Processes the game spawns** (a launcher that starts the game and exits, a server) run on the session's display and end with the session; `status` lists them. For a launcher that hands off, use `gdh live start --keep-children`: the session and display last until the spawned processes exit, or until it has gone 30 idle minutes without a `gdh live` command, and `status` shows them. Don't wrap gdh in your own `xvfb-run` for this. gdh can't step or capture the handed-off game (its harness is in the launcher), so to drive it, start the game directly with `gdh live start` and the launcher's arguments.
+- **An exported build, a launcher or any X program** runs as it is with `gdh live start --binary PATH [-- args]`: `wait --log REGEX`, `shot`, `input --click X,Y --type T --key Return --shot`, `status`, `stop`. Use it where `OS.has_feature("editor")` changes what runs. `gdh export --preset Linux --smoke 10` is the quick release check.
 - **Time.** The game is held between commands, so take as long as you need. `step N` runs exactly N frames, and each frame is one physics tick. Game seconds are frames divided by ticks per second, shown in `status`. This makes measurements exact. For example, a player at 120 px/s moves exactly 60 px in 30 frames at 60 ticks per second.
 - **Input.** An INPUT is an action from the Input Map, such as `ui_right` or `jump`, a key such as `key:Space` or a shortcut such as `key:ctrl+s`, or a gamepad button such as `joy:a`.
   - `--press`: press and keep pressed.
@@ -156,6 +159,9 @@ gdh live frames --clear --session <name>; gdh live step 600 --session <name>; gd
 ```
 
 - **Compare like with like.** Moving edges count in `shimmer`, so compare a shot against the same shot changed one way, never two different shots. `term WITHOUT WITH` measures what one setting adds from two runs of the same held frames.
+- **Budgets in one call:** `gdh live bench 600 --budget-p99 8.3` warms the GPU up, times 600 frames and exits 1 over budget. Time budgets in a session started without `--gpu-passes` (it inflates times), and re-time if the summary names other games on the machine.
+- **Leaks:** `gdh live monitors --leak` exits 1 when nodes, orphan nodes, objects, resources or video memory grow steadily; `step N --monitors` shows how the counts changed over a step.
+- **Audio:** `gdh live audio` after a step gives each bus's peak and which players played what. Mixing runs in real time, so step a few hundred frames before reading levels.
 - **Frame times** count only frames the game ran, each measured frame once; the summary says how many were measured of the frames run. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. Under Xvfb the GPU idles between frames, so times read slower than in play: say which display ran, and compare runs with each other, alone on the GPU.
 - **`black` and `crush` have blind spots:** a black object on purpose in front of something lit reads as a NaN's hole, and which regions should hold detail is yours to choose (`--box`, `--mask`).
 

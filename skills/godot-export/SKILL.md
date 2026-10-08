@@ -41,14 +41,13 @@ gdh export --project <dir> --preset Linux --pack             # only the game's d
 ## After exporting
 
 - Report the files written and their sizes (`gdh export` prints them).
-- A Linux build can be smoke-tested: run it headless with a time limit, from a scratch directory, and read its
-  output for errors:
-
-  ```sh
-  timeout 20 build/game.x86_64 --headless --quit-after 300 2>&1 | grep -E "ERROR|SCRIPT ERROR" | head
-  ```
-
-  A Windows or macOS build can't be run here; say so.
+- Smoke-test a Linux build: `gdh export --project <dir> --preset Linux --smoke 10` exports, runs the build off-screen
+  for 10 s, and fails on a crash, an early exit or engine errors in its log; look at the `smoke.png` it saves.
+  Arguments after `--` go to the game. A Windows or macOS build can't be run here; say so.
+- To drive the build itself (a menu, a launcher; where `OS.has_feature("editor")` matters), run it as a black box:
+  `gdh live start --binary build/game.x86_64`, then `gdh live wait --log REGEX`, `shot`, `input --click X,Y`,
+  `status` and `stop` (docs/live.md, "Programs as they are"). Never run the build bare: it would open on the
+  user's desktop.
 - `--debug` builds print script errors and warnings; use them to chase a problem that only shows in the exported
   game.
 

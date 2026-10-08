@@ -31,7 +31,7 @@ Use `snake_case` for files and folders and `PascalCase` for node names and `clas
 
 - **One job per scene.** A player, an enemy, a door, a HUD. Compose levels by instancing them.
 - **A scene works on its own.** Pass in what it needs with `@export` vars and signals; avoid reaching up with
-  `get_parent()` or long `../..` paths. Run any scene alone with `gdh capture` or `gdh live --scene`.
+  `get_parent()` or long `../..` paths. Run any scene alone with `gdh capture` or `gdh live start --scene`.
 - **Call down, signal up.** A parent calls methods on its children. A child emits signals its parent connects to.
   Siblings talk through their parent, or through an autoload for game-wide events.
 - **Instance, don't copy.** Make a base scene and use inherited scenes or exported properties for variants.

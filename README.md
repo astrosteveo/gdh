@@ -18,7 +18,7 @@ Linux only for now.
 
 ## C# projects
 
-A project with a `.csproj` is a C# project. Before `capture`, `live start` and `import`, gdh builds its assemblies with `dotnet build`, since Godot run from the command line loads them but never builds them. It runs `godot-mono` unless `GODOT` names another binary. A failed build stops gdh with the compiler's errors. `--no-build` skips the build.
+A project with a `.csproj` is a C# project. Before `capture`, `live start` and `import`, gdh builds its assemblies with `dotnet build`, since Godot run from the command line loads them but never builds them. It builds only when a `.cs`, `.csproj`, `.sln` or props/targets file changed since its last build, so don't build by hand first; `--rebuild` forces a build. It runs `godot-mono` unless `GODOT` names another binary. A failed build stops gdh with the compiler's errors. `--no-build` skips the build.
 
 C# objects are invisible to `eval` unless the game hands them over as Godot values, so give the project a node or autoload with methods that return dictionaries and arrays.
 
@@ -143,6 +143,8 @@ gdh live step 2 --click-text Play                              # click it, no co
 gdh live shot --node UI/Inventory --zoom 2 --out inv.png       # that part of the frame, zoomed
 gdh live batch --session s < commands.txt                      # many commands, one process
 ```
+
+After a code change, `gdh live reload` loads changed GDScript into the running game with its state kept, and `gdh live restart --replay` starts the session again with the same options and companions and replays its input log back to the same frame. `start --recipe FILE` runs lines written as for `batch` once the game is ready (a project's "get to the hangar"), `--seed N` makes the global random numbers repeat, and `--user-data fresh` or `--user-data-from DIR` give the session a `user://` of its own.
 
 Results go to stdout. Engine errors (with a script's backtrace), `DEFECT:` lines, notes and what the game printed go to stderr, so they survive a discarded stdout; `--strict` exits 1 when the game raised engine errors. `gdh live list` lists every session.
 
@@ -308,6 +310,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/imports.py` | `gdh import`, and the import cache's check before a run |
 | `src/gdh/override.py` | The `override.cfg` written into a project for one run |
+| `src/gdh/restart.py` | `gdh live restart`, replays and input logs, recipes, and `gdh live reload` |
 | `src/gdh/blackbox.py`, `perf.py` | `--binary` sessions (any program, its shots and XTest input), and `live bench`, `monitors` and `audio` |
 | `src/gdh/companions.py`, `spawned.py`, `watchdog.py` | A live session's companion processes, the processes its game spawns, and the watchdog that stops them when its game ends |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |

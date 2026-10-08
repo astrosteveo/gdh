@@ -276,7 +276,7 @@ It is `<out>/user-data` (one for each instance, under `<out>/instance-K/`), whic
 
 ### C# builds
 
-Before it starts a C# project, gdh builds it with `dotnet build` only when the build is stale: when a `.cs`, `.csproj`, `.sln`, `.props` or `.targets` file in the project, or a `Directory.Build.props`, `global.json` or the like above it, has changed (its size or modification time) since gdh last built it, or the build's output (`.godot/mono/temp/bin`) is gone. The stamp of what it last built from is `.godot/mono/temp/gdh-build-stamp`, written after each build that succeeds. So there's no need to run `dotnet build` first, and an unchanged project starts without it. `start --rebuild` and `restart --rebuild` build anyway; `--no-build` never builds. Every gdh command that builds (`capture`, `import`, `movie`, `test`, `editor`, `export`) uses the same stamp.
+Before it starts a C# project, gdh builds it with `dotnet build` only when the build is stale: when a `.cs`, `.csproj`, `.sln`, `.props` or `.targets` file has changed (its size or modification time) since gdh last built it, or the build's output (`.godot/mono/temp/bin`) is gone. It looks in the project's folder and in the folder of every project its `.csproj` references (`<ProjectReference>`, followed through their own references, so code shared with a server counts), at the files the `.csproj` files import or compile by a path outside those folders, and at the `Directory.Build.props`, `global.json` and the like in the folders above each, leaving out `bin`, `obj` and hidden folders. A reference it can't follow (a project that isn't there, a path made of MSBuild properties) makes it build every time. The stamp of what it last built from is `.godot/mono/temp/gdh-build-stamp`, written after each build that succeeds. So there's no need to run `dotnet build` first, and an unchanged project starts without it. `start --rebuild` and `restart --rebuild` build anyway; `--no-build` never builds. Every gdh command that builds (`capture`, `import`, `movie`, `test`, `editor`, `export`) uses the same stamp.
 
 ## Reloading scripts: `gdh live reload`
 
@@ -363,7 +363,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - `--user-data fresh` and `--user-data-from` giving the session its own `user://`, made afresh by `restart`, with the shader caches linked and the fixture and the shared user data untouched; and where Godot puts `user://`
 - `reload` putting a changed script in with the state kept and a new member at its initial value, and a script that doesn't compile leaving the one that ran
 
-`tests/test_csharp.py` also checks that a start of an unchanged C# project doesn't run `dotnet build`, a changed `.cs` builds and runs the new code, and `--rebuild` builds anyway.
+`tests/test_csharp.py` also checks that a start of an unchanged C# project doesn't run `dotnet build`, a changed `.cs` builds and runs the new code, and `--rebuild` builds anyway; that a change in a project the `.csproj` references from outside the Godot folder builds again; and that the stamp follows references (written with `\` or `/`, one reached twice), leaves out `obj`, counts the build files above a referenced folder, and gives up on a property in a path or a missing project.
 
 `tests/test_input.py` runs `testbed/input/devices.tscn`, which records each wheel notch, key, touch and drag its `_input` sees. It checks:
 

@@ -27,6 +27,17 @@ Run Godot only through gdh: `uv run gdh ...` from this folder. A bare `godot` ru
 - Update `README.md`, the matching file in `docs/`, and `skills/gdh/SKILL.md` along with any change users will see.
 - Keep gdh generic. It serves any Godot project, not only the one that found the problem.
 
+## Splitting work across agents
+
+The test lock limits parallel work, not the number of agents: one test run at a time, and the full suite takes about 11 minutes.
+
+- Each agent runs only the test files it adds or touches. The coordinator merges the ready branches in an integration worktree (`integrate/<name>`, each branch still its own `Merge <branch>: ...` commit), runs the full suite once for the batch, then fast-forwards `main` and pushes.
+- Merge first, and alone, any change that makes the others' test runs faster.
+- `skills/gdh/SKILL.md` and `README.md` conflict across parallel branches. Agents update their own file in `docs/` and give the coordinator a few lines for the skill and the README, which go in once.
+- Branches that add to the same code (`step` options in `live.py` and `bridge.gd`, say) add contiguous blocks and merge one after another, or go to one agent.
+- Fix a small problem you've already diagnosed yourself. An agent would first have to learn the codebase.
+- Start work that builds on another branch once that branch has merged.
+
 ## This machine
 
 - `rsync` isn't installed. Copy with `cp -a`, or `shutil.copytree` in Python.

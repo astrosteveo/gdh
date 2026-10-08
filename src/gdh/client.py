@@ -17,8 +17,8 @@ goes through. Session.attach(name) drives a session started some other way, and 
 Requests that fail raise ClientError. What the game printed, its engine errors and notes go to stderr as the CLI
 prints them (echo=False keeps them quiet), and the engine errors (not warnings) collect in Session.errors.
 
-The inputs sent through a Session (steps, camera moves, and the stepping lines of batch) are recorded beside the
-session, so `gdh live save-scenario` can write them as a scenario (docs/scenarios.md).
+Like every way into a session, what a Session sends goes in the session's input log, so `gdh live save-scenario`
+can write it as a scenario (docs/scenarios.md).
 """
 import contextlib
 import io
@@ -37,8 +37,6 @@ from gdh.godot import GdhError
 # The options of a step, by their CLI names with underscores (move is --move, click_text is --click-text).
 STEP_INPUTS = ("move", "press", "release", "hold", "tap", "type", "click", "right_click", "left_hold", "right_hold",
                "click_text", "click_node", "wheel", "wheel_at", "mod", "axis", "touch", "touch_drag", "look")
-# The commands that move the game on or change what it shows: what a recording keeps.
-RECORDED = ("step", "camera", "record", "measure")
 _names = itertools.count()
 
 
@@ -81,11 +79,6 @@ def option_args(options):
     return out
 
 
-def record_path(name):
-    """Where the inputs sent through gdh.client to session `name` are recorded: a header line, then a step a line."""
-    return live.SESSION_DIR / f"{name}-client.jsonl"
-
-
 # Start's stderr lines for engine errors, as live.problems prints them: "error: MESSAGE (xN) at WHERE".
 ERROR_LINE = re.compile(r"^(?:\(instance \d+\) )?(error|script|shader): (.*?)(?: \(x(\d+)\))? at (.*)$")
 
@@ -93,7 +86,7 @@ ERROR_LINE = re.compile(r"^(?:\(instance \d+\) )?(error|script|shader): (.*?)(?:
 class Session:
     """A gdh live session, driven over one `gdh live pipe`. Use Session.start or Session.attach."""
 
-    def __init__(self, name, owned=False, echo=True, record=True, command=None):
+    def __init__(self, name, owned=False, echo=True, command=None):
         self.name = name
         self.owned = owned
         self.echo = echo
@@ -101,17 +94,18 @@ class Session:
         self.frame = None  # the game frame of the latest reply
         self.start_output = ""
         self._command = list(command or gdh_command())
-        self._record = record
         self._pipe = None
-        session = live.load_session(name)
-        self._pid = session["pid"]
+        path = live.session_path(name)
+        if path.exists() and json.loads(path.read_text()).get("kind") == "binary":
+            raise ClientError(f"Session '{name}' runs a program as it is (--binary), with no harness in it to step or "
+                              f"evaluate: drive it with gdh live input, wait and shot.")
+        live.load_session(name)
         self._open()
 
     # --- Starting and stopping ---------------------------------------------------------------------------------
 
     @classmethod
-    def start(cls, project, scene=None, name=None, *, args=(), cwd=None, echo=True, record=True, command=None,
-              **options):
+    def start(cls, project, scene=None, name=None, *, args=(), cwd=None, echo=True, command=None, **options):
         """Start a session (gdh live start) and open a pipe to it. `options` are start's options by name (out,
         resolution, display, instances, companion...), `args` the game's arguments (after --), and `cwd` where gdh
         runs, which relative paths are taken from. The session is named `name`, or client-<pid>-<n>."""
@@ -131,27 +125,18 @@ class Session:
             said = proc.stderr.strip() or proc.stdout.strip()
             raise ClientError(f"gdh live start failed (exit {proc.returncode}): {said.removeprefix('gdh: ')}")
         try:
-            session = cls(name, owned=True, echo=echo, record=record, command=command)
+            session = cls(name, owned=True, echo=echo, command=command)
         except BaseException:
             subprocess.run([*command, "live", "stop", "--session", name], capture_output=True, timeout=120)
             raise
         session.start_output = proc.stdout
         session.errors += load_errors(proc.stderr)
-        if record:
-            base = Path(cwd or ".")
-            start = {"project": str((base / project).resolve()), **({"scene": scene} if scene else {}),
-                     **{k: v for k, v in options.items() if k not in ("out", "display") and v not in (None, False)},
-                     **({"args": list(map(str, args))} if args else {})}
-            session._write_header(start)
         return session
 
     @classmethod
-    def attach(cls, name, echo=True, record=True, command=None):
+    def attach(cls, name, echo=True, command=None):
         """Open a pipe to a running session. Closing it leaves the session running; stop() stops it."""
-        session = cls(name, owned=False, echo=echo, record=record, command=command)
-        if record and recorded_header(name, session._pid) is None:
-            session._write_header(None)
-        return session
+        return cls(name, owned=False, echo=echo, command=command)
 
     def _open(self):
         self._pipe = subprocess.Popen([*self._command, "live", "pipe", "--session", self.name], stdin=subprocess.PIPE,
@@ -174,10 +159,6 @@ class Session:
         """Close the pipe and stop the session (gdh live stop), with its companions."""
         self.close(wait=2)
         subprocess.run([*self._command, "live", "stop", "--session", self.name], capture_output=True, timeout=120)
-        if self._record:
-            header = recorded_header(self.name, self._pid)
-            if header is not None:
-                record_path(self.name).unlink(missing_ok=True)
 
     def __enter__(self):
         return self
@@ -192,11 +173,8 @@ class Session:
 
     def request(self, cmd, args=None, instance=0, timeout=None):
         """Send one request of the raw protocol (docs/live.md) and return the whole reply. Raises ClientError when
-        it fails. A step or camera request is recorded."""
-        reply = self._send(cmd, args, instance, timeout)
-        if cmd in ("step", "camera"):
-            self._remember({"request": cmd, "args": args or {}, **({"instance": instance} if instance != 0 else {})})
-        return reply
+        it fails."""
+        return self._send(cmd, args, instance, timeout)
 
     def _send(self, cmd, args=None, instance=0, timeout=None):
         if self._pipe is None:
@@ -259,8 +237,6 @@ class Session:
         an until that doesn't hold is in the result (until.met false), as the protocol has it: until() raises."""
         args = self._step_args(frames, until, every, max, trace, shot_every, events, inputs)
         reply = self._send("step", args, instance, timeout=live.reply_timeout("step", args))
-        self._remember({"step": frames, **step_options(until, every, max, trace, shot_every, events, inputs),
-                        **({"instance": instance} if instance != 0 else {})})
         return self._result(reply)
 
     def until(self, expr, max=None, every=1, *, instance=0, **inputs):
@@ -269,8 +245,6 @@ class Session:
         it never held."""
         args = self._step_args(None, expr, every, max, (), 0, (), inputs)
         reply = self._send("step", args, instance, timeout=live.reply_timeout("step", args))
-        self._remember({"until": expr, **step_options(None, every if every != 1 else None, max, (), 0, (), inputs),
-                        **({"instance": instance} if instance != 0 else {})})
         result = self._result(reply)
         if isinstance(result, list):
             result = result[0]
@@ -351,9 +325,6 @@ class Session:
             replies = live.json_documents(output.getvalue())
             for reply in replies:
                 self._problems(reply)
-            ran = any(isinstance(r, dict) and (r.get("result") or {}).get("frames") for r in replies)
-            if parsed.live_command in RECORDED and parsed.session == self.name and (code == 0 or ran):
-                self._remember(text)
             entry = {"line": text, "ok": code == 0, "replies": replies, **({"error": error} if error else {})}
             done.append(entry)
             if code and stop_on_error:
@@ -387,20 +358,6 @@ class Session:
             args["every"] = every or 1
         return args
 
-    # --- Recording ---------------------------------------------------------------------------------------------
-
-    def _write_header(self, start):
-        live.SESSION_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
-        with open(record_path(self.name), "w") as f:
-            f.write(json.dumps({"session": self.name, "pid": self._pid, "start": start}, default=str) + "\n")
-
-    def _remember(self, step):
-        if not self._record:
-            return
-        if recorded_header(self.name, self._pid) is None:
-            self._write_header(None)
-        with open(record_path(self.name), "a") as f:
-            f.write(json.dumps(step, default=str) + "\n")
 
 
 def as_list(value):
@@ -477,20 +434,6 @@ def step_events(inputs, n):
     return events
 
 
-def step_options(until, every, most, trace, shot_every, events, inputs):
-    """A step's options as a scenario's structured step holds them, leaving out the ones not given."""
-    out = {k: v for k, v in inputs.items() if v not in (None, (), [])}
-    for key, value in (("until", until), ("every", every), ("max", most), ("shot_every", shot_every or None)):
-        if value is not None:
-            out[key] = value
-    trace = [trace] if isinstance(trace, str) else list(trace)
-    if trace:
-        out["trace"] = trace
-    if events:
-        out["events"] = [dict(e) for e in events]
-    return out
-
-
 def describe_unmet(until):
     if until.get("error"):
         return f"its last check, at frame {until.get('frame')}, failed: {until['error']}"
@@ -508,31 +451,3 @@ def load_errors(stderr):
             errors.append({"type": m.group(1), "message": m.group(2), "where": m.group(4),
                            "count": int(m.group(3) or 1)})
     return errors
-
-
-def recorded_header(name, pid=None):
-    """The header of session `name`'s record ({"session", "pid", "start"}), or None when there's none, or it's
-    another session's of that name (another pid)."""
-    try:
-        with open(record_path(name)) as f:
-            header = json.loads(f.readline())
-    except (OSError, ValueError):
-        return None
-    if not isinstance(header, dict) or (pid is not None and header.get("pid") != pid):
-        return None
-    return header
-
-
-def recorded(name, pid):
-    """(the start options, or None, and the steps) recorded through gdh.client for session `name`, whose game is
-    `pid`."""
-    header = recorded_header(name, pid)
-    if header is None:
-        return None, []
-    steps = []
-    with open(record_path(name)) as f:
-        next(f)
-        for line in f:
-            with contextlib.suppress(ValueError):
-                steps.append(json.loads(line))
-    return header.get("start"), steps

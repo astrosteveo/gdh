@@ -113,7 +113,9 @@ def test_failing_checks_exit_1_naming_them_and_the_session_stops(tmp_path):
         "step 3", "step 1 --click-text Nowhere", {"expect": "true", "name": "never reached"}]})
     not_json = tmp_path / "garbled.scenario.json"
     not_json.write_text("{steps: [")
-    proc = run_scenarios(wrong, broken_step, not_json, out=tmp_path / "out", session=session)
+    binary = tmp_path / "binary.scenario.json"
+    binary.write_text(json.dumps({"start": {"binary": "/bin/true"}, "steps": ["step 1"]}))
+    proc = run_scenarios(wrong, broken_step, not_json, binary, out=tmp_path / "out", session=session)
     assert proc.returncode == 1
     out = proc.stdout
     assert "  FAIL  the player is far right: get_node('Player').position.x was 220.0, expected 999" in out
@@ -124,10 +126,11 @@ def test_failing_checks_exit_1_naming_them_and_the_session_stops(tmp_path):
     assert "  FAIL  step 2: step 1 --click-text Nowhere:" in out
     assert "  skip  never reached: not reached: step 2 failed" in out
     assert "  FAIL  load:" in out and "isn't JSON" in out
+    assert "start.binary runs a program without one (--binary)" in out
     assert "wrong: FAILED (the player is far right, until clicks > 0)" in out
-    assert "gdh scenario: 3 of 3 failed" in out
+    assert "gdh scenario: 4 of 4 failed" in out
     results = json.loads((tmp_path / "out" / "results.json").read_text())
-    assert [r["passed"] for r in results["scenarios"]] == [False, False, False]
+    assert [r["passed"] for r in results["scenarios"]] == [False, False, False, False]
     cases = {c.get("name"): c for c in ET.parse(tmp_path / "out" / "junit.xml").getroot().iter("testcase")}
     assert cases["the player is far right"].find("failure") is not None
     assert cases["the player moved"].find("failure") is None
@@ -162,12 +165,14 @@ def test_checkpoint_baselines_pass_unchanged_and_fail_changed(tmp_path):
 
 
 def test_save_scenario_replays_to_the_same_state(tmp_path):
+    """A session driven every way in (the client, gdh live step, a batch line), saved from its input log."""
     name = f"s10-record-{PID}"
     with Session.start(TESTBED, scene=ARENA, name=name, out=tmp_path / "live", resolution="640x360",
                        echo=False) as game:
+        seed = json.loads(live.session_path(name).read_text())["seed"]
         game.step(30, hold="ui_right")
         game.click(text="Go", frames=2)
-        game.step(3, tap="ui_accept")
+        gdh("live", "step", "3", "--tap", "ui_accept", "--session", name)
         game.click(node="UI/Field", frames=2)
         game.step(5, type="pilot")
         game.batch("step 7 --hold ui_right\neval clicks")
@@ -175,21 +180,24 @@ def test_save_scenario_replays_to_the_same_state(tmp_path):
         game.request("camera", {"at": [320, 180], "zoom": 2.0})
         state = {expr: game.eval(expr) for expr in (
             "get_node('Player').position.x", "clicks", "GameState.jumps", "get_node('UI/Field').text")}
-        frame = game.frame
+        frame = game.status()["frame"]
         path = tmp_path / "replay.scenario.json"
         saved = gdh("live", "save-scenario", "--session", name, path)
-        assert "wrote" in saved.stdout and "8 steps" in saved.stdout
+        assert "wrote" in saved.stdout and "13 steps" in saved.stdout
         refused = gdh("live", "save-scenario", "--session", name, path, check=False)
         assert refused.returncode == 1 and "--force" in refused.stderr
         game.shot(out=tmp_path / "live-end.png")
-    assert gone(name) and not (live.SESSION_DIR / f"{name}-client.jsonl").exists()
+    assert gone(name)
     assert state["clicks"] == 2 and state["GameState.jumps"] == 1 and state["get_node('UI/Field').text"] == "pilot"
     doc = json.loads(path.read_text())
-    assert doc["start"] == {"project": os.path.relpath(TESTBED, tmp_path), "scene": ARENA, "resolution": "640x360"}
-    assert doc["steps"][0] == {"step": 30, "hold": "ui_right"}
-    assert doc["steps"][5] == "step 7 --hold ui_right"  # the eval line, which changes nothing, isn't kept
-    assert doc["steps"][6]["until"] == "get_node('Player').position.x >= 330"
-    assert doc["steps"][7] == {"request": "camera", "args": {"at": [320, 180], "zoom": 2.0}}
+    assert doc["start"] == {"project": os.path.relpath(TESTBED, tmp_path), "scene": ARENA, "resolution": "640x360",
+                            "seed": seed}
+    assert doc["steps"][0] == {"step": 30, "events": [{"action": "ui_right", "pressed": True, "at": 0},
+                                                      {"action": "ui_right", "pressed": False, "at": 30}]}
+    assert doc["steps"][2]["step"] == 3  # gdh live step's
+    assert doc["steps"][6] == {"eval": "clicks"}  # the batch's eval
+    assert "until" not in doc["steps"][7]  # the frames the until ran
+    assert doc["steps"][8] == {"request": "camera", "args": {"at": [320, 180], "zoom": 2.0}}
     doc["expect"] = [{"expect": expr, "equals": value} for expr, value in state.items()]
     doc["steps"].append({"shot": "end", "baseline": str(tmp_path / "live-end.png")})
     path.write_text(json.dumps(doc))

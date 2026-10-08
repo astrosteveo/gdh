@@ -254,7 +254,7 @@ From Python, `gdh.client` keeps one pipe open and wraps it: `Session.start(...)`
 
 ## Scenarios: `gdh live save-scenario`
 
-`gdh live save-scenario --session NAME FILE` writes the session's start options and the inputs sent to it through `gdh.client` so far as a scenario file. Add checks to it, and `gdh scenario run FILE` replays it in a session of its own, frame for frame, and says which checks passed ([scenarios.md](scenarios.md)). `--force` writes over FILE.
+`gdh live save-scenario --session NAME FILE` writes the session's start options (with its seed) and its input log so far (below) as a scenario file. Add checks to it, and `gdh scenario run FILE` replays it in a session of its own, frame for frame, and says which checks passed ([scenarios.md](scenarios.md)). `--force` writes over FILE.
 
 ## Processes the game spawns
 

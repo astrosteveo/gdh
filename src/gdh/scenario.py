@@ -4,8 +4,8 @@ A scenario file holds the options its session starts with, then its steps in ord
 structured steps, checks (expect), and checkpoint shots, which can be compared with baselines. `gdh scenario run
 FILE...` runs each in a session of its own, prints each check's verdict, writes results.json and junit.xml, stops the
 session however the run ends, and exits 1 when a check failed. gdh's steps are frame-exact, so a replay reaches the
-same state each time. `gdh live save-scenario` writes the inputs sent through gdh.client as a scenario to fill in.
-docs/scenarios.md describes the format.
+same state each time. `gdh live save-scenario` writes a session's start options and input log (restart.py) as a
+scenario to add checks to. docs/scenarios.md describes the format.
 """
 import json
 import os
@@ -18,7 +18,7 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from gdh import client, live
+from gdh import client, live, restart
 from gdh.display import CHOICES
 from gdh.godot import GdhError
 
@@ -32,6 +32,7 @@ KINDS = {
     "until": (*client.STEP_INPUTS, "every", "max"),
     "expect": ("equals", "approx", "within"),
     "shot": ("baseline", "tolerance", "threshold", *FRAMING),
+    "eval": (),
     "request": ("args", "timeout"),
 }
 # How far apart an approx check lets numbers be, when it doesn't say (a vector's parts are rounded to this).
@@ -72,6 +73,10 @@ def load(path):
     for key in ("session", "out"):
         if key in start:
             raise ScenarioError(f"{path}: start can't set {key}: gdh scenario run sets it (--session, --out).")
+    if start.get("binary"):
+        raise ScenarioError(f"{path}: a scenario drives a game through gdh's harness, and start.binary runs a program "
+                            f"without one (--binary): its input isn't frame-exact, so it can't replay. Give "
+                            f"start.project, or the folder holding the file.")
     if not isinstance(start.get("args", []), list):
         raise ScenarioError(f"{path}: start.args is a list of the game's arguments.")
     steps = doc.get("steps", [])
@@ -143,6 +148,8 @@ def label(kind, spec):
         return f"shot {spec['shot']}"
     if kind == "request":
         return f"request {spec['request']}"
+    if kind == "eval":
+        return f"eval {spec['eval']}"
     return json.dumps(spec)[:120]
 
 
@@ -307,7 +314,7 @@ def run_scenario(scenario, out, session, display=None, project=None, start_extra
             options["display"] = display
         try:
             game = client.Session.start(project_of(scenario, project), scene=start.get("scene"), name=session,
-                                        args=start.get("args", []), out=str(out), echo=echo, record=False, **options)
+                                        args=start.get("args", []), out=str(out), echo=echo, **options)
         except GdhError as e:
             run.check("start", "start", False, str(e))
             run.skip_rest(steps, expects, "the session didn't start")
@@ -359,6 +366,9 @@ def run_step(run, game, item, where, out, update):
             return True
         if kind == "request":
             game.request(spec["request"], spec.get("args", {}), instance, spec.get("timeout"))
+            return True
+        if kind == "eval":
+            game.eval(spec["eval"], instance)
             return True
         if kind == "step":
             options = {k: v for k, v in spec.items() if k not in ("step", "name", "instance")}
@@ -523,53 +533,67 @@ def add_parser(sub):
 
 # --- gdh live save-scenario -----------------------------------------------------------------------------------------
 
-def start_from_session(session):
-    """Start options for a session gdh.client didn't start: its project and first scene, its window's size, the
-    game's arguments and its instances. Returns (options, notes)."""
-    start = {"project": session["project"]}
-    if session.get("scene"):
-        start["scene"] = session["scene"]
-    status = live.report(live.call(session, "status"), True, echo=False)
-    status = status[0] if isinstance(status, list) else status
-    start["resolution"] = "x".join(map(str, status["window_size"]))
-    args = live.report(live.call(session, "eval", {"expr": "OS.get_cmdline_user_args()"}), True, echo=False)
-    args = args[0] if isinstance(args, list) else args
-    if args.get("value"):
-        start["args"] = args["value"]
-    if len(live.instances(session)) > 1:
-        start["instances"] = len(live.instances(session))
+# The start options a saved scenario leaves out: the runner's own (out, display, the build and import), and a
+# --replay log and --recipe, whose requests the input log already holds.
+NOT_SAVED = ("project", "out", "display", "no_build", "no_import", "rebuild", "replay", "recipe", "game_args", "seed")
+
+
+def recorded_steps(name):
+    """What session `name` has been sent, from its input log (restart.logged_steps), as scenario steps: a step as
+    {"step": frames, "events": [...]}, an eval as {"eval": EXPR}, a camera move as {"request": "camera", ...}."""
+    steps = []
+    for step in restart.logged_steps(name):
+        instance = {"instance": step["instance"]} if "instance" in step else {}
+        if "step" in step:  # the frames and events replay it; what a step measured (monitors, say) doesn't matter
+            step = {"step": step["step"], **({"events": step["events"]} if step.get("events") else {}), **instance}
+        elif step.get("request") == "eval":
+            step = {"eval": step["args"]["expr"], **instance}
+        steps.append(step)
+    return steps
+
+
+def start_options(name, folder):
+    """Session `name`'s start options as a scenario's start, from its start record: those not at their defaults, its
+    seed, and its project, left out when `folder` (the scenario's) is inside it. Returns (start, notes)."""
+    record = restart.read_record(name)
+    options = record["options"]
+    defaults = vars(restart.start_args(name, {"options": {"project": options["project"]}}))
+    start = {key: value for key, value in options.items()
+             if key not in NOT_SAVED and key in defaults and value != defaults[key]}
+    if options.get("game_args"):
+        start["args"] = options["game_args"]
+    if options.get("seed") is not None:
+        start["seed"] = options["seed"]
+    if start.get("user_data_from"):
+        start["user_data_from"] = os.path.relpath(start["user_data_from"], folder)
+    project = Path(options["project"])
+    if folder != project and project not in folder.parents:
+        start = {"project": os.path.relpath(project, folder), **start}
     notes = []
-    if session.get("companions"):
-        notes.append(f"the session's companions ({', '.join(c['name'] for c in session['companions'])}) aren't "
-                     f"saved: add them to start (\"companion\": [\"NAME=COMMAND\"])")
+    if options.get("recipe") or options.get("replay"):
+        notes.append("the requests of the session's --recipe and --replay are steps of the scenario, as its input log "
+                     "holds them")
+    if options.get("companion") and Path(record.get("cwd", folder)) != folder:
+        notes.append(f"the companions started from {record['cwd']}, and the scenario's start from {folder}: check "
+                     f"their paths")
     return start, notes
 
 
 def cmd_save_scenario(args):
-    session = live.load_session(args.session)
+    live.load_session(args.session)
     path = Path(args.file).resolve()
     if path.exists() and not args.force:
         raise live.LiveError(f"{path} exists; --force writes over it.")
-    start, steps = client.recorded(args.session, session["pid"])
-    notes = []
-    if start is None:
-        start, notes = start_from_session(session)
-    start = dict(start)
-    project = Path(start.pop("project"))
-    # A file inside its project finds it; one elsewhere names it from its own folder.
-    if path.parent != project and project not in path.parent.parents:
-        start = {"project": os.path.relpath(project, path.parent), **start}
+    start, notes = start_options(args.session, path.parent)
+    steps = recorded_steps(args.session)
     doc = {"start": start, "steps": steps, "expect": []}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc, indent=2) + "\n")
     if args.json:
         print(json.dumps({"file": str(path), "steps": len(steps), "start": start}))
     else:
-        print(f"wrote {path}: {len(steps)} steps; add checks to \"expect\" (or expect steps between the others) and "
+        print(f"wrote {path}: {len(steps)} steps; add checks to \"expect\" (or turn an eval step into an expect) and "
               f"run it with gdh scenario run {args.file}")
-    if not steps:
-        notes.append("no steps were recorded: save-scenario saves the inputs sent through gdh.client (Session), "
-                     "not those of gdh live step")
     if not path.name.endswith(SUFFIX):
         notes.append(f"gdh test runs files named *{SUFFIX}")
     sys.stdout.flush()
@@ -580,6 +604,6 @@ def cmd_save_scenario(args):
 
 def add_live_parsers(commands, command):
     p = command("save-scenario", cmd_save_scenario,
-                "Write the inputs sent to the session through gdh.client as a scenario file, to add checks to")
+                "Write the session's start options and input log so far as a scenario file, to add checks to")
     p.add_argument("file", metavar="FILE", help="The scenario file to write (NAME.scenario.json)")
     p.add_argument("--force", action="store_true", help="Write over FILE if it exists")

@@ -9,7 +9,7 @@ gdh scenario run test/menus.scenario.json --update-baselines     # write the che
 gdh test --project game                                          # runs res://test(s)/**/*.scenario.json too
 ```
 
-`gdh.client` drives a session from Python, for a playthrough that needs logic a file can't hold ([below](#the-python-client)), and `gdh live save-scenario` writes the inputs a client sent as a scenario to add checks to.
+`gdh.client` drives a session from Python, for a playthrough that needs logic a file can't hold ([below](#the-python-client)), and `gdh live save-scenario` writes what a session was sent as a scenario to add checks to.
 
 ## A scenario file
 
@@ -34,7 +34,7 @@ gdh test --project game                                          # runs res://te
 
 | Key | What it holds |
 |---|---|
-| `start` | `gdh live start`'s options by their long names, underscores for dashes: `"resolution": "640x360"` is `--resolution 640x360`, `"no_build": true` is `--no-build`, a list repeats the option (`"companion": ["server=..."]`). `project` is the project (default: the nearest folder holding the file with a `project.godot`), `scene` the scene (default: the main scene), and `args` the game's arguments (after `--`). `session` and `out` are the runner's |
+| `start` | `gdh live start`'s options by their long names, underscores for dashes: `"resolution": "640x360"` is `--resolution 640x360`, `"seed": 7` is `--seed 7`, `"user_data": "fresh"`, `"recipe": "to-hangar.txt"`, `"no_build": true` is `--no-build`, a list repeats the option (`"companion": ["server=..."]`). `project` is the project (default: the nearest folder holding the file with a `project.godot`), `scene` the scene (default: the main scene), and `args` the game's arguments (after `--`). `session` and `out` are the runner's, and `binary` is refused: a `--binary` session has no harness to step frame by frame, so it can't replay |
 | `steps` | What happens, in order: command lines and structured steps (below) |
 | `expect` | Checks made after the last step, each as an `expect` step takes it, or a string, an expression that must be truthy |
 | `name` | The scenario's name, for its results and output folder (default: the file's name without `.scenario.json`) |
@@ -56,6 +56,7 @@ An object is a structured step, named by its one kind key:
 | `{"until": EXPR, ...}` | Steps until EXPR is truthy, checked every `every` frames (default 1), at most `max` frames (default 3600), with input as `step` takes it. A check: it passes when EXPR held |
 | `{"expect": EXPR, ...}` | A check of EXPR's value, below |
 | `{"shot": NAME, ...}` | A checkpoint shot, below |
+| `{"eval": EXPR}` | Evaluates EXPR, as `eval` does, and checks nothing: an expression that sets a value (`get_node('Door').set('locked', false)`), or one to turn into an `expect` |
 | `{"request": CMD, "args": {...}}` | One request of the raw protocol ([live.md](live.md#protocol)), with an optional `timeout` |
 
 Any step also takes `name`, the name its check is reported by, and `instance`, the game instance it goes to in a session of several.
@@ -118,11 +119,11 @@ What the game printed, its engine errors and notes go to stderr as `gdh live` pr
 gdh live save-scenario --session s first_level.scenario.json
 ```
 
-writes the session's start options and the inputs sent to it through `gdh.client` so far, as a scenario with an empty `expect` list to fill in. Steps keep the form they were sent in: `step()` and `until()` calls as structured steps with their input (`{"step": 30, "hold": "ui_right"}`), `batch()` lines that step the game or move gdh's camera (`step`, `camera`, `record`, `measure`) as lines, and raw `step` and `camera` requests as `request` steps. Replayed, they reach the same frame and state; add `expect` checks for what the playthrough showed, and run it.
+writes what session `s` has been sent so far as a scenario, with an empty `expect` list to fill in. It reads the session's input log, which every way in writes: `gdh live step` and the other commands, `batch`, `pipe`, `gdh.client`, a recipe and a replay ([live.md](live.md#starting-again-restart-replays-and-recipes)). Each logged step is a step of the frames it ran with its events (`{"step": 30, "events": [...]}`), an `--until` step one of the frames it took; each `eval` an `eval` step; each camera move a `request` step. Replayed, they reach the same frame and state. Add `expect` checks for what the playthrough showed (an `eval` step of a value worth checking becomes one with `"expect"` and `"equals"`), and run it.
 
-- The start options are those the client started the session with. For a session started otherwise, they're its project, the scene it started in, its window's size, the game's arguments and the number of instances; companions aren't saved, and a note says to add them.
-- Inputs sent by `gdh live step` and `gdh live batch` on their own aren't recorded, and neither is an `eval` that changes the game; a note says when no steps were recorded.
+- `start` holds the options the session was started with that aren't their defaults, its seed (so the game draws the same random numbers), its project, and the game's arguments. The runner's own options are left out (`out`, `display`, the build and the import), and so are a `--recipe` and a `--replay` log, whose requests are steps already.
 - A file inside the project leaves `start.project` out, since the runner finds it; one elsewhere names it from the file's folder. `--force` writes over an existing file.
+- A `--binary` session has no input log of this kind, and save-scenario says so.
 
 ## The Python client
 
@@ -157,7 +158,7 @@ with Session.start("path/to/game", scene="res://level.tscn", resolution="1280x72
 | `request(cmd, args, instance, timeout)` | One request of the raw protocol; the whole reply |
 | `stop()`, `close()` | Stops the session, or closes the pipe and leaves it running |
 
-Every call that takes `instance` sends to that instance (default 0, or `"all"`, which returns a list). A request that fails raises `ClientError`, whose `reply` is the reply. What the game printed, its engine errors (with backtraces) and notes go to stderr as the CLI prints them; `echo=False` keeps them quiet. `errors` lists the engine errors (not warnings) seen so far, and `frame` is the game frame of the latest reply.
+Every call that takes `instance` sends to that instance (default 0, or `"all"`, which returns a list). A request that fails raises `ClientError`, whose `reply` is the reply. What the game printed, its engine errors (with backtraces) and notes go to stderr as the CLI prints them; `echo=False` keeps them quiet. `errors` lists the engine errors (not warnings) seen so far, and `frame` is the game frame of the latest reply. A `--binary` session can't be driven this way, having no harness in it: `attach` raises `ClientError`, saying to use `gdh live input`, `wait` and `shot`.
 
 ## Tests
 
@@ -165,8 +166,8 @@ Every call that takes `instance` sends to that instance (default 0, or `"all"`, 
 
 - the client starting the arena, stepping, waiting with `until` and raising `Unmet`, clicking by text, finding, shooting whole and framed, running batch lines, failing on a bad line and a bad expression, a second pipe by `attach`, and stopping the session; a start that fails leaving no session
 - `testbed/scenarios/arena.scenario.json` passing, with its checks' lines, `results.json`, `junit.xml` and its checkpoint shots
-- failing checks exiting 1 and naming them: an `equals`, an `until` that never held (the checks after it skipped), a step that failed, a file that isn't JSON; a failed expect not stopping the scenario; the session stopped each time
+- failing checks exiting 1 and naming them: an `equals`, an `until` that never held (the checks after it skipped), a step that failed, a file that isn't JSON, a `start.binary`; a failed expect not stopping the scenario; the session stopped each time
 - checkpoint baselines written by `--update-baselines` with a `.gdignore`, passing unchanged, failing with the changed pixels and their box when the baseline was painted on, and failing when it's missing
-- `save-scenario` recording `step`, `click`, `until`, `batch` and `camera` inputs, refusing to write over a file, and its file, with checks of the state added, replaying to the same frame, values and shot
+- `save-scenario` of a session driven by the client, `gdh live step` and a batch line: its start options with the seed, its steps, evals and camera move, refusing to write over a file, and its file, with checks of the state added, replaying to the same frame, values and shot
 - a run stopped with SIGTERM stopping its session and game
 - `gdh test` running a project's scenario files beside its framework test, counting their checks and naming the failure, and scenario files given alone running without the framework

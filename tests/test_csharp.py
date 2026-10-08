@@ -136,3 +136,99 @@ def test_a_start_builds_only_when_the_code_changed(project, tmp_path, monkeypatc
     finally:
         probe.write_text(source)
         run("live", "stop", "--session", SESSION, check=False)
+
+
+def library(folder, name, code, references=()):
+    """A plain C# library project in folder, referencing the projects given as paths written as in a .csproj."""
+    folder.mkdir(parents=True, exist_ok=True)
+    items = "".join(f'    <ProjectReference Include="{r}" />\n' for r in references)
+    (folder / f"{name}.csproj").write_text(f"""<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>{dotnet_framework()}</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+{items}  </ItemGroup>
+</Project>
+""")
+    (folder / f"{name}.cs").write_text(code)
+
+
+def test_the_build_stamp_follows_project_references(tmp_path):
+    from gdh.godot import build_inputs
+    game = tmp_path / "game"
+    game.mkdir()
+    (game / "project.godot").write_text("config_version=5\n")
+    sim = tmp_path / "libs" / "sim"
+    library(sim, "Sim", "public static class Rules {}\n")
+    library(tmp_path / "view", "View", "public static class Lens {}\n", [r"..\libs\sim\Sim.csproj"])
+    (sim / "obj").mkdir()
+    (sim / "obj" / "Generated.cs").write_text("// built\n")
+    csproj = game / "Game.csproj"
+    csproj.write_text('<Project Sdk="Godot.NET.Sdk/4.4.0">\n  <ItemGroup>\n'
+                      '    <ProjectReference Include="../libs/sim/Sim.csproj" />\n'
+                      '    <ProjectReference Include="..\\view\\View.csproj" />\n  </ItemGroup>\n</Project>\n')
+    stamp = build_inputs(game)
+    paths = [line.split("\t")[0] for line in stamp.splitlines()]
+    # Each project's folder once, though sim is reached twice, without its obj.
+    assert paths.count(str(sim / "Sim.cs")) == 1 and str(tmp_path / "view" / "View.cs") in paths
+    assert str(sim / "obj" / "Generated.cs") not in paths
+    assert build_inputs(game) == stamp
+    # The build files above a referenced project's folder, though not above the game's.
+    (tmp_path / "libs" / "Directory.Build.props").write_text("<Project />\n")
+    assert str(tmp_path / "libs" / "Directory.Build.props") in build_inputs(game)
+    # A reference gdh can't follow builds every time.
+    csproj.write_text(csproj.read_text().replace("../libs/sim/Sim.csproj", "$(Shared)/Sim.csproj"))
+    assert build_inputs(game) is None
+    csproj.write_text(csproj.read_text().replace("$(Shared)/Sim.csproj", "../gone/Gone.csproj"))
+    assert build_inputs(game) is None
+
+
+def test_a_change_in_a_referenced_project_builds_again(tmp_path, monkeypatch):
+    """A game whose .csproj references projects outside its Godot folder, as one sharing its simulation with a server
+    does: a change there builds again, and a start with nothing changed doesn't."""
+    game = tmp_path / "repo" / "client" / "game"
+    shutil.copytree(ROOT / "testbed_cs", game, ignore=shutil.ignore_patterns(".godot"))
+    shared = tmp_path / "repo" / "shared"
+    library(shared / "sim", "Sim", "public static class Rules\n{\n    public static int Answer() => 42;\n}\n")
+    library(shared / "view", "View", "public static class Lens\n{\n    public static int Answer() => Rules.Answer();\n}\n",
+            [r"..\sim\Sim.csproj"])
+    (game / "GdhCsTestbed.csproj").write_text(f"""<Project Sdk="Godot.NET.Sdk/{godot_version()}">
+  <PropertyGroup>
+    <TargetFramework>{dotnet_framework()}</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\\..\\shared\\sim\\Sim.csproj" />
+    <ProjectReference Include="../../shared/view/View.csproj" />
+  </ItemGroup>
+</Project>
+""")
+    probe = game / "Probe.cs"
+    probe.write_text(probe.read_text().replace("Answer() => 42", "Answer() => Lens.Answer()"))
+    calls = tmp_path / "dotnet-calls"
+    shim = tmp_path / "bin" / "dotnet"
+    shim.parent.mkdir()
+    shim.write_text(f'#!/bin/sh\necho "$*" >> {calls}\nexec {shutil.which("dotnet")} "$@"\n')
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim.parent}{os.pathsep}{os.environ['PATH']}")
+
+    def builds():
+        return calls.read_text().count("build") if calls.exists() else 0
+
+    name = f"{SESSION}-refs"
+    run("import", "--project", game)
+    try:
+        run("live", "start", "--project", game, "--session", name, "--out", tmp_path / "out")
+        built = builds()
+        assert run("live", "eval", "scene.Answer()", "--session", name).stdout.strip() == "42"
+        run("live", "restart", "--session", name)
+        assert builds() == built
+        rules = shared / "sim" / "Sim.cs"
+        rules.write_text(rules.read_text().replace("=> 42", "=> 43"))
+        run("live", "restart", "--session", name)
+        assert builds() == built + 1
+        assert run("live", "eval", "scene.Answer()", "--session", name).stdout.strip() == "43"
+        run("live", "restart", "--session", name)
+        assert builds() == built + 1
+    finally:
+        run("live", "stop", "--session", name, check=False)

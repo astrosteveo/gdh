@@ -152,7 +152,8 @@ def build_csharp(project, force=False):
         return None
     stamp = Path(project) / BUILD_STAMP
     inputs = build_inputs(project)
-    if not force and stamp.is_file() and stamp.read_text() == inputs and (Path(project) / BUILD_OUTPUT).is_dir():
+    if (not force and inputs is not None and stamp.is_file() and stamp.read_text() == inputs
+            and (Path(project) / BUILD_OUTPUT).is_dir()):
         return False
     if not shutil.which("dotnet"):
         raise GdhError("This is a C# project, which needs the .NET SDK to build. Install it (dotnet) or pass --no-build.")
@@ -161,8 +162,10 @@ def build_csharp(project, force=False):
         stamp.unlink(missing_ok=True)
         lines = [line for line in (proc.stdout + proc.stderr).splitlines() if "error" in line.lower()]
         raise GdhError(f"dotnet build {csproj.name} failed:\n" + "\n".join(dict.fromkeys(lines[-20:] or [proc.stdout[-2000:]])))
-    if (Path(project) / BUILD_OUTPUT).is_dir():
+    if inputs is not None and (Path(project) / BUILD_OUTPUT).is_dir():
         stamp.write_text(inputs)
+    else:
+        stamp.unlink(missing_ok=True)
     return True
 
 
@@ -170,39 +173,107 @@ def build_csharp(project, force=False):
 # build deletes the stamp, so the next run builds again.
 BUILD_OUTPUT = ".godot/mono/temp/bin"
 BUILD_STAMP = ".godot/mono/temp/gdh-build-stamp"
-# What a C# build reads: the code and the project files in the project, and the files MSBuild and the SDK look for in
-# the directories above it.
+# What a C# build reads: the code and the project files in each project's folder, and the files MSBuild and the SDK
+# look for in the folders above it.
 BUILD_SUFFIXES = (".cs", ".csproj", ".sln", ".slnx", ".props", ".targets")
 BUILD_FILES = ("global.json", "nuget.config", "packages.lock.json", ".editorconfig")
 BUILD_FILES_ABOVE = ("Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props", *BUILD_FILES)
 
 
 def build_inputs(project):
-    """A stamp of the files a C# build reads: each one's path, size and modification time, one a line. Leaves out
-    hidden directories (.godot, .git) and bin and obj."""
+    """A stamp of the files a C# build reads, one a line (path, size, modification time): the code and project files
+    in the Godot project's folder and in the folder of every project its .csproj references (followed through their
+    own references), the files they import or compile by a path outside those folders, and the build files MSBuild
+    looks for in the folders above each. Leaves out hidden folders (.godot, .git) and bin and obj.
+
+    None when a reference can't be followed (a project that isn't there, a path made of MSBuild properties or items),
+    so that gdh builds every time rather than run stale code."""
     project = Path(project).resolve()
-    lines = []
-    for directory, dirs, files in os.walk(project):
-        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in ("bin", "obj"))
-        for name in sorted(files):
-            if name.endswith(BUILD_SUFFIXES) or name.lower() in BUILD_FILES:
-                path = Path(directory) / name
-                try:
-                    st = path.stat()
-                except OSError:
-                    continue
-                lines.append(f"{path.relative_to(project)}\t{st.st_size}\t{st.st_mtime_ns}")
-    for parent in project.parents:
-        try:
-            names = sorted(os.listdir(parent))
-        except OSError:
+    folders, files = [project], []
+    queue = [p for p in [csharp_project(project)] if p]
+    seen = set()
+    while queue:
+        csproj = queue.pop().resolve()
+        if csproj in seen:
             continue
-        for name in names:
-            path = parent / name
-            if (name in BUILD_FILES_ABOVE or name.lower() in BUILD_FILES) and path.is_file():
-                st = path.stat()
-                lines.append(f"{path}\t{st.st_size}\t{st.st_mtime_ns}")
-    return "\n".join(lines) + "\n"
+        seen.add(csproj)
+        found = msbuild_paths(csproj)
+        if found is None:
+            return None
+        references, more_folders, more_files = found
+        for reference in references:
+            if not reference.is_file():
+                return None
+            folders.append(reference.parent)
+            queue.append(reference)
+        folders += more_folders
+        files += more_files
+    lines = {}
+    roots = []
+    for folder in sorted(set(folders), key=lambda f: (len(f.parts), str(f))):
+        if not any(folder == root or root in folder.parents for root in roots):
+            roots.append(folder)
+    for root in roots:
+        for directory, dirs, names in os.walk(root):
+            dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in ("bin", "obj"))
+            for name in sorted(names):
+                if name.endswith(BUILD_SUFFIXES) or name.lower() in BUILD_FILES:
+                    lines[Path(directory) / name] = None
+        for parent in root.parents:
+            try:
+                names = sorted(os.listdir(parent))
+            except OSError:
+                continue
+            for name in names:
+                if name in BUILD_FILES_ABOVE or name.lower() in BUILD_FILES:
+                    lines[parent / name] = None
+    for path in files:
+        lines[path] = None
+    out = []
+    for path in lines:
+        try:
+            st = path.stat()
+            out.append(f"{path}\t{st.st_size}\t{st.st_mtime_ns}")
+        except OSError:
+            out.append(f"{path}\tmissing")
+    return "\n".join(out) + "\n"
+
+
+def msbuild_paths(csproj):
+    """What a .csproj names outside itself, as paths: ([project it references], [folder a wildcard compiles from],
+    [file it imports or compiles]). None when it can't be read, or names a path through an MSBuild property or item
+    other than the project's own folder."""
+    import xml.etree.ElementTree as ET
+    try:
+        root = ET.parse(csproj).getroot()
+    except (ET.ParseError, OSError):
+        return None
+    references, folders, files = [], [], []
+    for element in root.iter():
+        tag = element.tag.rsplit("}", 1)[-1]
+        if tag == "Import" and not element.get("Sdk"):
+            spec = element.get("Project")
+        elif tag in ("ProjectReference", "Compile"):
+            spec = element.get("Include")
+        else:
+            continue
+        for item in (spec or "").split(";"):
+            item = item.strip()
+            if not item:
+                continue
+            for name in ("MSBuildThisFileDirectory", "MSBuildProjectDirectory"):
+                item = item.replace(f"$({name})", str(csproj.parent) + "/")
+            if any(mark in item for mark in ("$(", "@(", "%(")):
+                return None
+            path = Path(os.path.normpath(csproj.parent / item.replace("\\", "/")))
+            if tag == "ProjectReference":
+                references.append(path)
+            elif any(ch in item for ch in "*?"):
+                cut = next(i for i, part in enumerate(path.parts) if "*" in part or "?" in part)
+                folders.append(Path(*path.parts[:cut]))
+            else:
+                files.append(path)
+    return references, folders, files
 
 
 def godot_cmd(project, resolution, extra, game_args=()):

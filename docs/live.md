@@ -193,6 +193,30 @@ gdh runs Godot with the Dummy audio driver, which mixes the game's audio as a so
 
 The driver mixes a block of 4096 samples at a time (93 ms at 44.1 kHz) by the clock on the wall, not game time. A step that runs faster than real time mixes less sound than the game time it covers: 120 frames, two seconds of game time, can run in 80 ms and mix one block, so a player's position reads about a tenth of a second in. A step shorter than a block may mix none, and then the levels aren't measured; step longer to read them. Held, the game's players pause with it, so the levels are taken only from blocks mixed while the game ran.
 
+## A debug autoload
+
+`eval` reaches whatever the game exposes, so a game that is more than a scene or two is quicker to check with an autoload made for it: a node whose methods return the state you check, as dictionaries and arrays, and take the game straight to a state. `eval` and `--until` call it, a `--recipe` starts from it, and a scenario's checks read it. It's also the only way `eval` sees C# objects.
+
+```gdscript
+# debug.gd, the autoload "Debug"
+extends Node
+
+func state() -> Dictionary:
+	var player := get_tree().get_first_node_in_group("player")
+	return {"scene": get_tree().current_scene.name, "position": player.global_position, "health": player.health}
+
+func goto(where: String) -> void:
+	get_tree().change_scene_to_file({"hangar": "res://levels/hangar.tscn"}[where])
+```
+
+```sh
+gdh live eval "Debug.state()" --session s
+gdh live eval "Debug.goto('hangar')" --session s
+gdh live step --until "Debug.state().scene == 'Hangar'" --max 600 --session s
+```
+
+Keep it to reading state and jumping to it; what it skips (a login, a tutorial) still needs a playthrough of its own now and then.
+
 ## Companions
 
 A session can start other programs beside the game, such as a game server, and stop them with it:

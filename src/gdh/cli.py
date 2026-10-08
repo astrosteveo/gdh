@@ -11,19 +11,22 @@ first.
 Arguments after `--` go to the game (capture, live start and movie), where
 OS.get_cmdline_user_args() returns exactly them. `gdh editor` opens scenes in
 the Godot editor itself and saves what it shows.
+
+An agent new to gdh: `gdh guide` prints a one-page cheat sheet.
 """
 import argparse
 import re
 import sys
 
-from gdh import api, editor, editor_bridge, export, live, measure_cli, movie, scenario, testing
+from gdh import api, editor, editor_bridge, export, guide, live, measure_cli, movie, scenario, testing
 from gdh.capture import cmd_capture
 from gdh.display import default_choice
 from gdh.godot import GdhError
 from gdh.imports import cmd_import
 
 
-def main():
+def build_parser():
+    """The gdh command's parser, every subcommand on it."""
     parser = argparse.ArgumentParser(prog="gdh", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -66,7 +69,12 @@ def main():
     export.add_parser(sub, live.add_display_option)
     movie.add_parser(sub, live.add_display_option)
     measure_cli.add_parsers(sub)
+    guide.add_parser(sub)
+    return parser
 
+
+def main():
+    parser = build_parser()
     argv = sys.argv[1:]
     game_args = []
     if "--" in argv:

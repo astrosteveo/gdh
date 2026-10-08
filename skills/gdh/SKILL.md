@@ -1,69 +1,67 @@
 ---
 name: gdh
-description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, see what the Godot editor itself shows a scene as (tool scripts included), and measure what it draws (flicker, shimmer, line width, NaN and crushed pixels, frame time, per-pass GPU cost). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
+description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, wait for conditions, find and click UI by its text, keep playthroughs as replayable scenarios, run exported builds off-screen, see what the Godot editor itself shows a scene as (tool scripts included), and measure what it draws (flicker, shimmer, line width, NaN and crushed pixels, frame time and budgets, per-pass GPU cost, leaks, audio levels). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
 ---
 
 # gdh: seeing and driving a Godot game
 
-`gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. It has four modes:
-
-- `gdh capture` renders a scene once. You get six views, the engine errors and the probe findings.
-- `gdh live` starts the game held at frame 0. You step it an exact number of frames with input, and you can look at it between steps.
-- `gdh movie` records a video (MP4 with the game's audio) at any size, 4K included, with a contact sheet of the run.
-- `gdh editor` opens scenes in the Godot editor itself and saves what it shows: the 3D (or 2D) viewport, the whole editor window and a report. Use it to check what a user will see when they open a scene, above all a scene with tool scripts.
-
-Other parts of this plugin cover the rest of making a game: the `godot-editor` skill for changing files with the editor open (`gdh bridge`, UIDs), `gdh test` for the project's tests, `gdh api` for API names (below), `gdh export` for builds (the `godot-export` skill), and the `playtester` agent, which plays a scene against a goal and reports back.
+`gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. `gdh capture` renders a scene once: six views, the engine errors and the probe findings. `gdh live` starts the game held at frame 0 and steps it an exact number of frames with input, so you can look between steps. `gdh movie` records a video, and `gdh editor` saves what the Godot editor shows. `gdh guide` prints a one-page cheat sheet.
 
 Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges game feel (controls, pacing, fun). You cover whether the game renders correctly, runs without errors and behaves as specified.
 
-## Setup
+The rest of this plugin: the `godot-editor` skill (changing files with the editor open, `gdh bridge`, UIDs), `godot-gdscript`, `godot-project`, `godot-export` (builds), and the `playtester` agent, which plays a scene against a goal, reports back and keeps what passed as a scenario.
 
-Check that `gdh --help` works. If it doesn't, the source is in the plugin root, `${CLAUDE_PLUGIN_ROOT}`. That's two directories above this skill's base directory if the variable isn't set. Either install it once, with the user's agreement, or run it in place:
+## The fast loop
+
+Each tool call costs you a turn, while a gdh command takes about 0.1 s. Do in one call what would take several:
 
 ```sh
-uv tool install "${CLAUDE_PLUGIN_ROOT}"                 # puts gdh on PATH
-uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh --help     # no install
+gdh live start --project <dir> --session <name> [--scene res://...] [--recipe get-to-hangar.txt]
+gdh live step --until "scene.name == 'Hangar'" --max 1200 --session <name>   # wait; exit 1 with the last value
+gdh live step 120 --hold ui_right --trace "get_node('Player').position.x" --every 10 --session <name>
+gdh live eval "[get_node('Player').position, GameState.score]" --session <name>   # several values at once
+gdh live find Play --session <name>                    # visible nodes showing "Play", with their screen boxes
+gdh live step 2 --click-text Play --session <name>     # or --click-node UI/Menu/Play: no coordinates
+gdh live shot --node UI/Inventory --zoom 2 --out inv.png --session <name>   # that part of the frame, ready to read
+gdh live batch --session <name> < steps.txt            # CLI lines, one process; --stop-on-error
+gdh live reload --session <name>                       # after a GDScript edit: new code, same game state
+gdh live restart --replay --session <name>             # after any other change: rebuilt, replayed to the same frame
+gdh live save-scenario --session <name> test/scenarios/door.scenario.json   # keep it; gdh scenario run replays it
+gdh live stop --session <name>
 ```
 
-Requirements are Linux, Godot 4.x as `godot` on PATH (or set `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb. gdh imports the project before `capture` and `live start` when its import cache is missing or stale (a fresh checkout or worktree, a new or changed asset), and says so; `gdh import --project <dir>` does it by hand, for instance after changing only an asset's import settings. A `DEFECT: ... failed to load` line means the game drew without those resources: report it, never treat it as log noise.
+- **Read stderr.** Engine errors (with a script's backtrace), `DEFECT:` lines, notes and what the game printed (`game: ...`) go to stderr, results to stdout. Never add `2>/dev/null`. `--strict` (or `GDH_STRICT=1`) exits 1 when the game raised engine errors.
+- **One session per task**, with a name of your own (another agent may be using `default`), and always `gdh live stop` it: a running game keeps the GPU busy. `gdh live list` shows every session, left-over ones included.
+- **View every image you report or publish.** Saying a capture shows something you haven't opened is a guess.
+- **Keep what you verified.** A saved scenario replays frame-exactly with `gdh scenario run` (and under `gdh test` in `res://test`): add `expect` checks to it. From Python, `from gdh.client import Session` drives a game over one pipe. See `${CLAUDE_PLUGIN_ROOT}/docs/scenarios.md`.
+- **Give a big game a debug autoload:** a node whose methods return what you check as dictionaries (`Debug.state()`), and jump to a state (`Debug.goto("hangar")`). `eval` and `--until` call it, recipes and scenarios start from it, and it's the only way `eval` sees C# objects.
 
-`--resolution` is checked: if the game sizes its own window to something else, `capture` exits 1 and `live start` refuses, naming the size it found. Ask for that size, or change what sizes the window.
+## Setup
 
-**Displays.** By default gdh runs the game on a display the GPU presents to (weston and Xwayland), so it runs at the GPU's full speed, even at 4K. If that can't start (weston or Xwayland missing, no GPU to composite on), gdh falls back to Xvfb and prints a note. Xvfb copies every frame through the CPU, so it's slow at high resolutions and the GPU idles between frames. If you see the note, say so when you report timings, and suggest installing weston and Xwayland. `--display gpu|xvfb|auto` (or `GDH_DISPLAY`) picks one. Screenshots are the same on both.
+Check that `gdh --help` works. If it doesn't, the source is the plugin root, `${CLAUDE_PLUGIN_ROOT}` (two directories above this skill): install it once, with the user's agreement (`uv tool install "${CLAUDE_PLUGIN_ROOT}"`), or run it in place (`uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh ...`). It needs Linux, Godot 4.x as `godot` (or `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb; a C# project also needs `godot-mono` and the .NET SDK.
 
-A C# project (one with a `.csproj`) also needs `godot-mono` and the .NET SDK. gdh builds it with `dotnet build` before every `capture`, `live start` and `import`, and runs `godot-mono`, so there's nothing to do by hand. A failed build stops gdh with the compiler's errors. `eval` can't see plain C# objects: have the game expose a node or autoload whose methods return dictionaries and arrays, and call those.
+- **Builds and imports.** gdh builds a C# project when its code changed and imports a project whose import cache is missing or stale, before `capture` and `live start`, so don't run `dotnet build` or a Godot import yourself (`gdh import` does it, for instance after changing only import settings). A `DEFECT: ... failed to load` line means the game drew without those resources: report it, never treat it as log noise.
+- **Window size.** `--resolution` is checked: if the game sizes its own window otherwise, `capture` exits 1 and `live start` refuses, naming the size it found.
+- **Displays.** The game runs on a display the GPU presents to (weston and Xwayland), at full speed even at 4K. If that can't start, gdh falls back to Xvfb with a note: Xvfb is slow at high resolutions and GPU times read high, so say so when you report timings. Screenshots are the same on both.
+- **User data.** Games under gdh keep `user://` in gdh's own directory, never the player's. `start --user-data fresh` or `--user-data-from DIR` gives a session its own.
 
 ## Choosing a mode
 
 | Situation | Use |
 |---|---|
-| A scene, level, material, lighting or UI layout was changed | `gdh capture` |
-| "Does this look right?", or checking a scene for defects | `gdh capture`, then read everything it produced |
+| A scene, level, material, lighting or UI layout was changed | `gdh capture`, then read everything it produced |
+| Did a change alter only what it should? | `gdh capture --baseline`, or `gdh measure diff A B` |
 | Movement, input, animation, physics, timers, scene changes, UI interaction | `gdh live` |
-| A bug that shows up after doing something | `gdh live`: reproduce it step by step |
+| A bug that shows up after doing something | `gdh live`: reproduce it step by step, then save it as a scenario |
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
-| A thin effect's width, a point's size (stars, dust), a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
-| Frame time, or which render pass costs what | `gdh live start --gpu-passes`, then `gdh live frames` |
-| What the editor shows: tool scripts, `@tool` previews, scenes the user opens to edit | `gdh editor` |
+| A thin effect's width, a point's size, a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
+| Frame time against a budget, or which render pass costs what | `gdh live bench`; `gdh live start --gpu-passes`, then `gdh live frames` |
+| Leaks, sound | `gdh live monitors --leak`, `gdh live audio` |
+| An exported build, a launcher, anything where `OS.has_feature("editor")` matters | `gdh live start --binary PATH`; `gdh export --smoke` |
+| What the editor shows: tool scripts, `@tool` previews | `gdh editor` |
 | Footage: a clip, a trailer shot, a video of a bug | `gdh movie` |
-| Logic with no picture to check: rules, save data, inventory, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
+| Logic with no picture to check: rules, save data, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
 | A long play-through against a goal, kept out of the main conversation | the `playtester` agent |
-| A check to keep: a playthrough to run again after later changes | `gdh live save-scenario`, then `gdh scenario run` (also run by `gdh test`) |
-
-## The editor
-
-```sh
-gdh editor --project <dir> --scene res://path/scene.tscn --out <dir>/captures/editor/<name>
-gdh editor --project <dir> --scene res://a.tscn --scene res://b.tscn --out <dir>   # several, one editor run
-```
-
-It runs `godot --editor` with gdh's harness as the main loop, so the project's tool scripts, plugins and importers run exactly as they do for the user, and nothing is installed into the project. It waits for the editor's first scan, opens each scene, and saves `viewport.png` (the first 3D viewport, or the 2D one), `editor.png` (the whole window: the Scene dock, the inspector, the viewport) and `report.json`: the errors raised while the scene opened and after, how long it took to open, how often the editor redrew over two idle seconds (`idle`: a tool script that writes to the scene every frame keeps the editor redrawing), what one redraw of the viewport costs on the CPU and the GPU (`redraw`), the editor camera, and the scene's nodes with how many each tool script made (`made_by_scripts`, never saved). `editor.json` has the startup's errors and `project_changes`: files the editor wrote in the project (often `project.godot`, rewritten in its own format). gdh lists them and never undoes them, so revert what the user didn't ask for.
-
-- **Framing.** The editor camera starts a few metres from the origin. `--orbit=DX,DY` drags it round with the middle button and `--zoom STEPS` turns the wheel (out; negative is in), as a person would. `--view X,Y,Z:X,Y,Z` looks from one point at another through a camera gdh adds (never saved) and previews, with the editor camera's lens or `--far M`. `--focus NODE` centers on a node (the View menu's Focus Selection; it keeps the distance).
-- **Changing what's shown.** `--set NODE:PROPERTY=VALUE` (in memory, never saved; Godot syntax, a `res://` path for a resource, or plain text) and `--select NODE`, which shows it in the inspector. NODE is relative to the scene's root: `.` is the root.
-- **Nothing of the user's is touched.** The editor's settings, data and caches live in gdh's editor home (`GDH_EDITOR_HOME`, default `~/.local/share/gdh/editor-home`), and the project's `.godot/editor` (its layout, open scenes, each scene's camera) is put back as it was.
-- **The editor's own camera** reaches 4 km by default (View → Settings → View Z-Far), unlike most game cameras: something far off may be clipped in the editor and not in the game.
-- **A C# project** is built first, as for `capture` and `live`; the editor loads the build and runs its `[Tool]` scripts.
 
 ## Capture
 
@@ -71,166 +69,101 @@ It runs `godot --editor` with gdh's harness as the main loop, so the project's t
 gdh capture --project <dir> --scene res://path/scene.tscn --out <dir>/captures/<name>
 ```
 
-Repeat `--scene` to capture several scenes. Each gets its own subdirectory. The command prints each finding with a crop path. The output directory holds:
+Repeat `--scene` for several scenes, each in its own subdirectory; `--modes normal,wireframe` renders only some views, which is faster. It prints each finding with a crop path, and saves `normal.png` (the frame as the player sees it), `unshaded.png`, `lighting.png`, `normals.png`, `wireframe.png` and `overdraw.png` (3D only), `report.json` (GPU, `errors` merged with counts, `findings`, render stats), `crops/` (a zoomed crop per finding; `--tiles` adds four 2× tiles) and `godot.log`.
 
-- `normal.png`: the frame as the player sees it
-- `unshaded.png`, `lighting.png`, `normals.png`, `wireframe.png` and `overdraw.png` (3D only, see below)
-- `report.json`: GPU, `errors` (engine errors, merged by message with a count), `findings` and render stats
-- `crops/`: a zoomed crop per finding. `--tiles` adds `normal.png` as four 2× tiles.
-- `godot.log`: full engine output
-
-Use `--modes normal,wireframe` to render only some views, which is faster.
-
-To check a change altered only what it should, compare against a baseline: `gdh capture ... --baseline <dir> --update-baseline` once, then `--baseline <dir>`, which exits 1 naming each changed view and its box. Unshaded and normals views make steadier baselines than the lit frame; give the lit frame a `--tolerance`. Baselines belong to one machine. For two frames you already have, `gdh measure diff A B --out <dir>` gives the share changed, its box and `crop.png`: trust its numbers over comparing by eye.
+**Baselines.** `--baseline <dir> --update-baseline` once, then `--baseline <dir>`: it exits 1 naming each changed view and its box. Unshaded and normals views make steadier baselines than the lit frame; give the lit frame a `--tolerance`. Baselines belong to one machine. For two frames you already have, `gdh measure diff A B --out <dir>` gives the share changed, its box and `crop.png`: trust its numbers over comparing by eye.
 
 ## Live control
 
 ```sh
-gdh live start --project <dir> [--scene res://...] --session <name>   # held at game frame 0
-gdh live start --project <dir> --session <name> -- --level 3          # arguments after -- go to the game
+gdh live start --project <dir> --session <name> -- --level 3       # arguments after -- go to the game
 gdh live status --session <name>
-gdh live step 30 --hold ui_right --session <name>                     # run exactly 30 frames, then hold
+gdh live step 30 --hold ui_right --session <name>                  # exactly 30 frames, then held again
 gdh live shot --session <name> [--view wireframe]
-gdh live tree [NodePath] --session <name>
-gdh live eval "get_node('Player').velocity" --session <name>
+gdh live tree [NodePath] [--visible-only] --session <name>
 gdh live probes --session <name>
-gdh live stop --session <name>
 ```
 
-**One call instead of many.** Each tool call costs you a turn, so:
-
-- Wait with `step --until "EXPR" [--every K] [--max N]`, never a loop of `step` and `eval`. It exits 1, with the last value, if EXPR never holds.
-- Watch a value over time with `step N --trace "EXPR" [--every K] [--trace-out f.csv]`.
-- Read several values at once: `eval "[get_node('Player').position, GameState.score]"`.
-- Find UI with `gdh live find TEXT` (or `--name`, `--class`): visible nodes and their boxes. Click with `step 2 --click-text Play` or `--click-node UI/Menu/Play`. `tree --visible-only` drops hidden menus.
-- Send a sequence in one call: `gdh live batch --session <name> <<'END'` with one CLI line each, then `END`; `--stop-on-error` stops at the first failure.
-- `gdh live list` shows every session, yours and any left running.
-
-**Keep what you verified.** After a playthrough passes, `gdh live save-scenario --session <name> <file>.scenario.json` saves what the session was sent, with its seed; add `expect` checks and it replays frame-exactly with `gdh scenario run` (and under `gdh test` in `res://test`). For a script, `from gdh.client import Session` drives the game over one pipe. See `${CLAUDE_PLUGIN_ROOT}/docs/scenarios.md`.
-
-**Don't replay by hand after a code change.** For GDScript, `gdh live reload` loads the changed scripts into the running game and keeps its state (a pending `await` is cancelled; scenes, resources and C# aren't reloaded). Otherwise `gdh live restart --replay` starts the session again, rebuilt, with the same options and companions, and replays its input to the same frame. Keep "get to X" steps in a file of batch lines and start with `--recipe FILE`. `--seed N` makes `randi()` repeat; restart keeps the seed. `--user-data fresh` or `--user-data-from DIR` give a session its own `user://`. C# builds only when code changed, so don't run `dotnet build` yourself.
-
-- **Session names.** Give each task its own `--session` name. Another agent or task may be using `default`.
-- **Stop when done.** Always run `gdh live stop`, because a running game keeps the GPU busy. It stops the game's display too. The game quits by itself after 30 idle minutes (`--idle-timeout`). With `--keep-children`, once the game has exited the session ends after 30 minutes with no `gdh live` command on it (`status` counts).
-- **Processes the game spawns** (a launcher that starts the game and exits, a server) run on the session's display and end with the session; `status` lists them. For a launcher that hands off, use `gdh live start --keep-children`: the session and display last until the spawned processes exit, or until it has gone 30 idle minutes without a `gdh live` command, and `status` shows them. Don't wrap gdh in your own `xvfb-run` for this. gdh can't step or capture the handed-off game (its harness is in the launcher), so to drive it, start the game directly with `gdh live start` and the launcher's arguments.
-- **An exported build, a launcher or any X program** runs as it is with `gdh live start --binary PATH [-- args]`: `wait --log REGEX`, `shot`, `input --click X,Y --type T --key Return --shot`, `status`, `stop`. Use it where `OS.has_feature("editor")` changes what runs. `gdh export --preset Linux --smoke 10` is the quick release check.
-- **Time.** The game is held between commands, so take as long as you need. `step N` runs exactly N frames, and each frame is one physics tick. Game seconds are frames divided by ticks per second, shown in `status`. This makes measurements exact. For example, a player at 120 px/s moves exactly 60 px in 30 frames at 60 ticks per second.
-- **Input.** An INPUT is an action from the Input Map, such as `ui_right` or `jump`, a key such as `key:Space` or a shortcut such as `key:ctrl+s`, or a gamepad button such as `joy:a`.
-  - `--press`: press and keep pressed.
-  - `--release`: release.
-  - `--hold`: press for the whole step.
-  - `--tap`: press for one frame.
-  - `--type TEXT`: type into the focused text field, a character a frame (click the field first; step at least as many frames as characters).
-  - `--click X,Y`: left click. `--right-click X,Y`: right click. `--left-hold X,Y` and `--right-hold X,Y`: press there for the whole step.
-  - `--move X,Y` moves the pointer; `mouse:left`, `mouse:right` and `mouse:middle` work with `--press`, `--release`, `--hold` and `--tap` at the pointer. A drag or a point-while-held is `--move` then `--press mouse:right`, steps with `--move`, then `--release mouse:right`.
-
-  - `--wheel down:3` (a notch a frame, at the pointer or `--wheel-at X,Y`), `--mod ctrl,shift` (held for the step, carried by its clicks, keys and wheel), `--axis left_x=0.5` (a stick stays put until moved again), `--touch X,Y` and `--touch-drag X,Y:X,Y` (each a finger of its own), `--look DX,DY` (relative motion for mouse-look; `--look=-40,0` for a negative DX).
-
-  Input arrives the way a player's does, so `_input`, `is_action_just_pressed` and `is_action_pressed` all see it.
-- **User data.** Games run under gdh keep `user://` in `~/.local/share/gdh/user-data`, never the player's own; `GDH_USER_DATA=<dir>` picks another, `real` the player's.
-- **Coordinates** are screenshot pixels everywhere. `tree` gives each node's `screen` position (`[x, y, w, h]` for Controls), so click at the center of what `tree` reports.
-- **`eval`** evaluates one Godot Expression, with the current scene as its base. `scene`, `tree`, `root`, every autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`...) are available. It can't assign with `=`. Use `set("prop", value)` or call a method instead.
-- **Errors.** Every reply lists the engine errors raised since the previous command, with a script's backtrace, and what the game printed (`game: ...`). They go to stderr, so never add `2>/dev/null`: read them after every step. They're often the real bug. `--strict` (or `GDH_STRICT=1`) makes a command exit 1 when the game raised engine errors.
-- **Companions and instances.** `--companion 'NAME=COMMAND'` starts a program beside the game (a server, say) and stops it with the session; `{port}` in its command is a free port, and `{NAME.port}` passes it to the game's arguments (`-- --server ws://127.0.0.1:{server.port}`). `--companion-ready NAME=http://127.0.0.1:{port}/health` waits for it. `--instances N` runs N games that step together (`{instance}` in the game's arguments tells them apart); `step` input goes to `--instance K`, and `eval`, `shot` and `tree` take `--instance K` or `all`. A script that steps many times keeps one `gdh live pipe` open (docs/live.md).
-- **Frame pacing.** gdh starts Godot with V-Sync off: steps run as fast as the GPU goes. If the game turns V-Sync on itself, a step's notes say so, and steps then run at about 60 frames a second.
-- **Nodes that run while held.** `status` lists nodes with process mode ALWAYS or WHEN_PAUSED. They keep running while the game is held, so account for them when measuring.
+- **Time.** The game is held between commands, so take as long as you need. Each frame is one physics tick, and game seconds are frames divided by ticks per second (`status`): a player at 120 px/s moves exactly 60 px in 30 frames at 60 ticks. Nodes with process mode ALWAYS or WHEN_PAUSED (listed by `status`) run while held. If the game turns V-Sync on, steps run at about 60 frames a second, and a note says so.
+- **Input.** An INPUT is an Input Map action (`ui_right`, `jump`), a key (`key:Space`) or shortcut (`key:ctrl+s`), a gamepad button (`joy:a`), or `mouse:left|right|middle` at the pointer. `--press` keeps it pressed, `--release` lets go, `--hold` presses for the whole step, `--tap` for one frame. Also `--click X,Y`, `--right-click`, `--left-hold`, `--right-hold`, `--move X,Y` (a drag is `--move`, `--press mouse:left`, steps with `--move`, `--release mouse:left`), `--type TEXT` (a character a frame, into the focused field), `--wheel down:3` (`--wheel-at X,Y`), `--mod ctrl,shift` (held for the step, carried by its clicks, keys and wheel), `--axis left_x=0.5` (a stick stays until moved), `--touch X,Y` and `--touch-drag X,Y:X,Y`, and `--look DX,DY` (mouse-look; `--look=-40,0` for a negative DX). Input arrives as a player's does, so `_input` and `is_action_just_pressed` see it.
+- **Coordinates** are screenshot pixels everywhere; prefer `--click-text` and `--click-node`, which survive a layout change.
+- **`eval`** evaluates one Godot Expression with the current scene as its base; `scene`, `tree`, `root`, every autoload and the engine's singletons are available. It can't assign with `=`: use `set("prop", value)` or call a method.
+- **Starting where you need to be.** `--recipe FILE` runs batch lines once the game is ready; `--seed N` makes `randi()` repeat (restart keeps the seed); `start --replay <out>/inputs.jsonl` replays a saved session. `gdh live reload` keeps state but cancels a pending `await`, and doesn't reload scenes, resources or C#: use `restart --replay` for those.
+- **Companions and instances.** `--companion 'NAME=COMMAND'` starts a program beside the game (a server) and stops it with the session: `{port}` is a free port, `{NAME.port}` passes it to the game's arguments, `--companion-ready NAME=http://127.0.0.1:{port}/health` waits for it. `--instances N` runs N games that step together; input goes to `--instance K`, and `eval`, `shot` and `tree` take `--instance K` or `all`.
+- **Spawned processes and builds.** What the game spawns runs on its display and ends with the session; `--keep-children` keeps it for a launcher that hands off (watch it, but start the real game directly to step it). An exported build, a launcher or any X program runs as it is with `start --binary PATH [-- args]`: `wait --log REGEX`, `shot`, `input --click X,Y --type T --key Return --shot`, `status`, `stop`. `gdh export --preset Linux --smoke 10` is the quick release check.
 
 ## Movies
 
 ```sh
-gdh movie --project <dir> --out <dir>/captures/clip --seconds 10 --resolution 3840x2160 [--scene res://...] [--fps 60] [-- game args]
+gdh movie --project <dir> --out <dir>/captures/clip --seconds 10 --resolution 3840x2160 [--scene res://...] [-- game args]
 ```
 
-It writes `movie.mp4` (H.264 and AAC), `sheet.png` and `report.json`. Godot's Movie Maker records every frame at a fixed rate with the audio, so the movie is smooth however slowly it records. gdh puts the size in a temporary `override.cfg` (Movie Maker ignores `--resolution`): if the project has an `override.cfg` of its own, gdh refuses; tell the user rather than moving it yourself. After recording, read `sheet.png` first: it shows whether the clip shows what was wanted. A `covered` warning means a UI panel (a dialog, a popup) sat over the middle of the screen for most of the run. `report.json` has `problems` (size or frame count off; gdh exits 1) and the audio's peak, `silent` when there's none. See `${CLAUDE_PLUGIN_ROOT}/docs/movie.md`.
+It writes `movie.mp4` (H.264 and AAC, every frame at a fixed rate with the audio), `sheet.png` and `report.json`. Read `sheet.png` first: it shows whether the clip shows what was wanted. A `covered` warning means a UI panel sat over the middle of the screen for most of the run. gdh refuses a project with an `override.cfg` of its own: tell the user rather than moving it. See `${CLAUDE_PLUGIN_ROOT}/docs/movie.md`.
 
 ## Measuring
 
-Numbers settle what eyes can't: whether something flickers, swims, stays a pixel wide, or costs too much. Every measure reads PNGs (files or directories, in name order); see `${CLAUDE_PLUGIN_ROOT}/docs/measure.md` for each definition.
+Numbers settle what eyes can't. Every measure reads PNGs (files or directories, in name order); `${CLAUDE_PLUGIN_ROOT}/docs/measure.md` defines each.
 
 ```sh
 gdh live record 90 --out <dir>/frames --session <name> [--hold ui_left]   # step 90 frames, save each
 gdh measure flicker <dir>/frames          # still camera: anything over 0 changes on its own
 gdh measure shimmer <dir>/frames          # moving camera: the second difference over time
 gdh measure line shot.png --from X,Y --to X,Y   # a thin line's width at half maximum, its peak
-gdh measure spots shot.png --radius 6     # each isolated point's width at half maximum, sigma and peak
+gdh measure spots shot.png --radius 6     # each isolated point's width, sigma and peak
 gdh measure black <dir>/frames --fail     # pure black cut into something lit: a NaN
 gdh measure crush shot.png --mask hull.png      # pixels at the tone mapper's floor in a region
-gdh measure mask with.png without.png --out hull.png   # where a thing draws (shots with it and without)
 gdh live measure shimmer --frames 60 --session <name>  # record and measure in one go
-gdh live start --project <dir> --session <name> --gpu-passes   # then:
-gdh live frames --clear --session <name>; gdh live step 600 --session <name>; gdh live frames --session <name>
+gdh live bench 600 --budget-p99 8.3 --session <name>   # time 600 frames; exit 1 over budget
 ```
 
-- **Compare like with like.** Moving edges count in `shimmer`, so compare a shot against the same shot changed one way, never two different shots. `term WITHOUT WITH` measures what one setting adds from two runs of the same held frames.
-- **Budgets in one call:** `gdh live bench 600 --budget-p99 8.3` warms the GPU up, times 600 frames and exits 1 over budget. Time budgets in a session started without `--gpu-passes` (it inflates times), and re-time if the summary names other games on the machine.
-- **Leaks:** `gdh live monitors --leak` exits 1 when nodes, orphan nodes, objects, resources or video memory grow steadily; `step N --monitors` shows how the counts changed over a step.
-- **Audio:** `gdh live audio` after a step gives each bus's peak and which players played what. Mixing runs in real time, so step a few hundred frames before reading levels.
-- **Frame times** count only frames the game ran, each measured frame once; the summary says how many were measured of the frames run. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. Under Xvfb the GPU idles between frames, so times read slower than in play: say which display ran, and compare runs with each other, alone on the GPU.
+- **Compare like with like:** a shot against the same shot changed one way, never two different shots. `term WITHOUT WITH` measures what one setting adds.
+- **Timing.** Time budgets in a session started without `--gpu-passes`, which inflates times (start with it, then `gdh live frames`, to see what each pass costs). Re-time if the summary names other games on the machine. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. Under Xvfb the GPU idles between frames, so say which display ran.
+- **Leaks and sound.** `gdh live monitors --leak` exits 1 when nodes, orphan nodes, objects, resources or video memory grow steadily; `step N --monitors` shows a step's change. `gdh live audio` after a step gives each bus's peak and what played; mixing runs in real time, so step a few hundred frames first.
 - **`black` and `crush` have blind spots:** a black object on purpose in front of something lit reads as a NaN's hole, and which regions should hold detail is yours to choose (`--box`, `--mask`).
 
 ## Looking at images
 
 Read PNGs with the Read tool. This is where you catch what logs miss, so don't skip it.
 
-- **Keep each image at about 1280 px wide or less.** To compare frames for detail, view them one at a time or crop the same region from each, never tiled into one image: scaling creates streaks and blotches that aren't in the real frame.
-- **Contact sheets are for what's on screen, not for pixels.** `sheet.png` (from `gdh movie`), `<dir>-sheet.png` (from `live record` and `live measure`) and `gdh measure sheet` put 16 frames of a run in one image, about 1220 px wide: use them to see which screen was up when (a dialog left open, a menu, a loading screen, black), then open single frames for anything finer.
-- **Zoom in for small things.** A floating object, a blurry sprite or a misaligned icon is easy to miss at full-frame size and obvious at 2–4×. Use the crops in `crops/`, `--tiles`, or `gdh live shot --node PATH --zoom 3` / `--crop X,Y,W,H --zoom 3`. `shot --max-width 1280` shrinks a big frame for reading, `--out FILE.png` names the file, and `--no-ui` leaves the HUD out. `gdh live camera --view X,Y,Z:X,Y,Z` looks from anywhere in 3D (`--release` gives the game its camera back).
-- **View every image you report or publish.** Saying a capture shows something you haven't opened is a guess.
-- **Debug views affect 3D only.** In a 2D or UI scene, all six images are identical. For 2D, use `tree` screen positions and zoomed crops instead.
-
-What each 3D view shows:
+- **Keep each image at about 1280 px wide or less** (`shot --max-width 1280`). Compare frames one at a time or as the same crop of each, never tiled into one image: scaling creates streaks and blotches that aren't in the frame.
+- **Contact sheets are for what's on screen, not for pixels.** `sheet.png` (`gdh movie`), `<dir>-sheet.png` (`live record`, `live measure`) and `gdh measure sheet` show which screen was up when (a dialog left open, a loading screen, black); open single frames for anything finer.
+- **Zoom in for small things.** A floating object, a blurry sprite or a misaligned icon is obvious at 2–4×: the crops in `crops/`, `--tiles`, or `shot --node PATH --zoom 3` / `--crop X,Y,W,H --zoom 3`. `--no-ui` leaves the HUD out, and `gdh live camera --view X,Y,Z:X,Y,Z` looks from anywhere in 3D (`--release` gives the game its camera back).
+- **Debug views affect 3D only.** In a 2D or UI scene all six images are identical: use `find`, `tree` boxes and zoomed shots.
 
 | View | Reveals |
 |---|---|
-| `unshaded` | Albedo with no lighting. Tells a color or texture problem apart from a lighting problem. |
-| `lighting` | Light only. Shows shadow acne (fine stripes), light leaks and missing shadows. |
-| `normals` | Surface direction as color. Flipped faces and smoothed hard edges show as wrong or gradient colors on flat faces. |
-| `wireframe` | Triangles. Shows holes, stray or stretched triangles, and meshes far too dense for their size. |
-| `overdraw` | How often each pixel is drawn. Shows stacked transparency and hidden geometry. |
+| `unshaded` | Albedo with no lighting: a color or texture problem told apart from a lighting one |
+| `lighting` | Light only: shadow acne (fine stripes), light leaks, missing shadows |
+| `normals` | Surface direction as color: flipped faces, and smoothed hard edges as gradients on flat faces |
+| `wireframe` | Triangles: holes, stray or stretched triangles, meshes far too dense for their size |
+| `overdraw` | How often each pixel is drawn: stacked transparency, hidden geometry |
+
+## The editor
+
+```sh
+gdh editor --project <dir> --scene res://a.tscn [--scene res://b.tscn] --out <dir>/captures/editor
+```
+
+It runs `godot --editor` with gdh's harness as its main loop, so the project's tool scripts, plugins and importers run as they do for the user, and saves `viewport.png` (the 3D or 2D viewport), `editor.png` (the whole window) and `report.json` (errors while the scene opened, how long it took, idle redraws: a tool script writing every frame keeps the editor redrawing, the cost of a redraw, the nodes each tool script made). `--orbit=DX,DY`, `--zoom STEPS`, `--focus NODE` and `--view X,Y,Z:X,Y,Z` frame the view; `--set NODE:PROPERTY=VALUE` and `--select NODE` change what's shown, in memory only. `editor.json` lists `project_changes`, files the editor wrote (often `project.godot`): gdh never undoes them, so revert what the user didn't ask for. See `${CLAUDE_PLUGIN_ROOT}/docs/editor.md`.
 
 ## Probes
 
-The probes check scene data for likely defects:
-
-- objects floating above surfaces
-- a rolled camera
-- geometry cut off by the far plane
-- material values outside 0–1
-- a texture with alpha drawn opaque
-- zero shadow bias
-- mirrored `Label3D` text
-- pixel art blurred by linear filtering
-- smeared sprite regions
-- raw translation keys and placeholder text
-- one UI item out of line with its siblings
-
-Treat a `warning` as a strong lead and confirm it on its crop before reporting it. An `info` finding is often intended. The probes can't see everything, and they were tuned on a small set of scenes. An empty findings list doesn't mean the scene is fine, so still look at the images. See `references/probes.md` for what each probe measures and where it's weak.
+The probes check scene data for likely defects: objects floating above surfaces, a rolled camera, geometry cut off by the far plane, material values outside 0–1, a texture with alpha drawn opaque, zero shadow bias, mirrored `Label3D` text, pixel art blurred by linear filtering, smeared sprite regions, raw translation keys and placeholder text, and one UI item out of line with its siblings. Treat a `warning` as a strong lead and confirm it on its crop; an `info` is often intended. An empty list doesn't mean the scene is fine, so still look. `references/probes.md` has what each measures and where it's weak.
 
 ## Checking a Godot API name
 
-The installed Godot may be newer than your training data, and Godot 3 names (`KinematicBody2D`, `instance()`,
-`yield`) are easy to slip into Godot 4 code. Before using a class, method, property or signal you aren't sure of,
-look it up in the installed version's own class reference:
-
-```sh
-gdh api CharacterBody2D                 # its chain, properties, methods, signals and constants
-gdh api CharacterBody2D.move_and_slide  # one member's signature and description (found up the chain)
-gdh api --search floor                  # every class and member whose name contains "floor"
-gdh api @GDScript                       # GDScript's built-ins: preload, load, range, annotations
-```
-
-A wrong name exits 1 and suggests close ones. The first lookup for a Godot version builds the reference (about ten
-seconds); later ones are instant.
+The installed Godot may be newer than your training data, and Godot 3 names (`KinematicBody2D`, `instance()`, `yield`) slip in easily. Look up what you aren't sure of in the installed version's reference: `gdh api CharacterBody2D` (its chain and members), `gdh api CharacterBody2D.move_and_slide` (one member), `gdh api --search floor`, `gdh api @GDScript`. A wrong name exits 1 with close matches.
 
 ## Reporting to the user
 
-- **Verified and unverified:** say what you verified and how, such as "stepped 30 frames holding right; the player moved 60 px, which matches 120 px/s". Also say what you didn't check.
-- **Evidence:** give the paths of the screenshots or crops that show a problem or a fix. If a file-sending tool is available, send the key image.
-- **Game feel:** leave it to the user. Say which parts need a human playtest, such as feel, pacing, input latency or sound.
+- **Verified and unverified:** say what you verified and how ("stepped 30 frames holding right; the player moved 60 px, which matches 120 px/s"), and what you didn't check.
+- **Evidence:** the paths of the screenshots or crops that show a problem or a fix, and the scenario that replays it. If a file-sending tool is available, send the key image.
+- **Game feel:** leave it to the user. Say which parts need a human playtest: feel, pacing, input latency, sound.
 
 ## References
 
-- `references/probes.md`: what each probe measures, its thresholds and its known blind spots
-- `${CLAUDE_PLUGIN_ROOT}/docs/live.md`: full live-control reference, including the raw JSON protocol for scripting many steps in one program
-- `${CLAUDE_PLUGIN_ROOT}/docs/editor.md`: how `gdh editor` drives the Godot editor, its report, and what it leaves alone
-- `${CLAUDE_PLUGIN_ROOT}/docs/measure.md`: every measure's definition, its options and its limits, and how frame times are recorded
+- `references/probes.md`: each probe, its thresholds and its blind spots
+- `${CLAUDE_PLUGIN_ROOT}/docs/live.md`: live control in full, batches, the protocol for scripts, restart and replays, `--binary` sessions
+- `${CLAUDE_PLUGIN_ROOT}/docs/scenarios.md`: scenario files, `gdh scenario run` and the Python client
+- `${CLAUDE_PLUGIN_ROOT}/docs/measure.md`: every measure, diffs and baselines, frame times, bench, monitors and audio
+- `${CLAUDE_PLUGIN_ROOT}/docs/editor.md`: how `gdh editor` drives the Godot editor

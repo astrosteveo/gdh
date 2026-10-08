@@ -44,6 +44,8 @@ This puts `gdh` on your `PATH`. After pulling changes, run `uv tool install --re
 
 To run it from the repo without installing, use `uv run gdh ...`.
 
+`gdh guide` prints a one-page cheat sheet of the commands that save an agent the most calls, for an agent that has gdh but not the plugin below.
+
 ## Claude Code plugin
 
 The repo is also a Claude Code plugin. To try it without installing:
@@ -66,7 +68,7 @@ It runs gdh from the plugin's own copy of this repo, so `uv` is the only extra i
 | `gdh` skill | When and how to see and drive the game: which mode to pick, how to read the views and crops, how to drive a live session, what to report |
 | `godot-editor` skill | Changing a project with the editor open: the bridge, live edits the user can undo, UIDs |
 | `godot-gdscript`, `godot-project`, `godot-export` skills | Typed Godot 4.7 GDScript and its Godot 3 pitfalls; scenes, autoloads, the Input Map and saves; exporting builds |
-| `playtester` agent | Plays a scene with `gdh live` against a goal and reports pass or fail with evidence |
+| `playtester` agent | Plays a scene with `gdh live` against a goal and reports pass or fail with evidence, keeps each passed goal as a scenario, and leaves notes for the next playtest |
 | Hooks | Before each Write or Edit in a Godot project: refuse edits to `.godot/`, to scenes with unsaved changes in the editor, to `project.godot` under a running editor, and `uid://` values the project doesn't have. After: rescan the file, reload it if it's open, fill in a new scene's UIDs and check GDScript, returning Godot's errors. `GDH_HOOKS=off` turns them off. |
 | Band | A row above Claude Code's prompt in a Godot project: the editor bridge, the open scene, unsaved scenes, the running game and editor errors waiting for Claude |
 
@@ -314,7 +316,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 
 | Path | Contents |
 |---|---|
-| `src/gdh/cli.py` | The `gdh` command |
+| `src/gdh/cli.py`, `guide.py` | The `gdh` command, and `gdh guide`'s cheat sheet |
 | `src/gdh/capture.py`, `live.py`, `editor.py`, `movie.py` | `gdh capture`, `gdh live`, `gdh editor` and `gdh movie` |
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/imports.py` | `gdh import`, and the import cache's check before a run |

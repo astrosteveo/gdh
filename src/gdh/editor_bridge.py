@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -27,6 +28,7 @@ ADDON_FILES = ("plugin.cfg", "plugin.gd", "server.gd")
 PLUGIN_CFG = "res://addons/gdh_bridge/plugin.cfg"
 INFO = Path(".godot") / "gdh_bridge.json"
 HOST_SCRIPT = HARNESS / "bridge_host.gd"
+CHECK_SCRIPT = HARNESS / "check.gd"
 SCENE_EXTENSIONS = {".tscn", ".scn"}
 
 
@@ -131,24 +133,32 @@ def install(project, enable):
 # --- Checking scripts without an editor ---------------------------------------------------------------------------
 
 def check_headless(project, paths, timeout=60):
-    """Parse each GDScript with `godot --headless --check-only`, off the user's desktop. Returns {path: [errors]}."""
+    """Load each script in a headless Godot running harness/check.gd, off the user's desktop. Returns {path: [errors]}.
+
+    check.gd runs as the game's SceneTree, so a script that names an autoload compiles as it does in the game, which
+    `godot --check-only` can't do. The autoloads are created but never enter the tree (check.gd). The project is
+    imported first when its import cache is stale, as before a game runs: global class names come from its class
+    cache, and a preloaded asset from its imported copy."""
     from gdh.godot import alert_shims, godot_env
-    out = {}
-    with alert_shims() as shims:
-        env = godot_env(shims, ":gdh-no-display", game=False)
-        for path in paths:
-            cmd = [godot_binary(project), "--headless", "--path", str(project), "--check-only", "--script", path]
-            try:
-                proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout,
-                                      stdin=subprocess.DEVNULL)
-                text = proc.stdout + proc.stderr
-            except subprocess.TimeoutExpired:
-                out[path] = [{"type": "error", "message": f"godot --check-only took over {timeout} s", "where": path}]
-                continue
-            out[path] = parse_engine_errors(text)
-            if proc.returncode != 0 and not out[path]:
-                out[path] = [{"type": "error", "message": f"godot --check-only exited {proc.returncode}", "where": path}]
-    return out
+    from gdh.imports import ensure_imported
+    ensure_imported(project)
+    with alert_shims() as shims, tempfile.TemporaryDirectory(prefix="gdh-check-") as tmp:
+        result = Path(tmp) / "checked.json"
+        env = godot_env(shims, ":gdh-no-display", ["--out", result, *paths])
+        cmd = [godot_binary(project), "--headless", "--path", str(project), "--script", str(CHECK_SCRIPT)]
+        try:
+            proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=timeout,
+                                  stdin=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired:
+            return {p: [{"type": "error", "message": f"Godot took over {timeout} s to check it", "where": p}]
+                    for p in paths}
+        try:
+            return json.loads(result.read_text())
+        except (OSError, ValueError):
+            errors = parse_engine_errors(proc.stdout + proc.stderr)
+            errors.append({"type": "error", "message": f"Godot exited {proc.returncode} before checking it",
+                           "where": str(CHECK_SCRIPT)})
+            return {p: errors for p in paths}
 
 
 def parse_engine_errors(text):
@@ -317,10 +327,10 @@ def cmd_bridge(args):
         if action != "check":
             print(f"gdh: {e}", file=sys.stderr)
             return 3
-        # No editor: parse the scripts with a headless Godot instead.
+        # No editor: load the scripts in a headless Godot instead.
         checked = check_headless(project, paths)
         reply = {"ok": not any(e["type"] != "warning" for errs in checked.values() for e in errs),
-                 "checked": checked, "note": "no editor bridge: parsed with godot --headless --check-only"}
+                 "checked": checked, "note": "no editor bridge: loaded in a headless Godot instead"}
     ok = bool(reply.get("ok"))
     print_reply(reply, args.json)
     return 0 if ok else 1

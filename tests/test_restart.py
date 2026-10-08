@@ -174,6 +174,7 @@ def test_recipe_runs_after_start_and_stops_at_a_failing_line(tmp_path):
         # A restart runs it again.
         gdh("live", "restart", "--session", name)
         assert value(name, "[ticks, clicks]") == [12, 1]
+        gdh("live", "stop", "--session", name)
 
         recipe.write_text("step 5\nstep --until 'ticks > 1000' --max 3\nstep 50\n")
         proc = start(name, tmp_path / "out", "--recipe", recipe, check=False)

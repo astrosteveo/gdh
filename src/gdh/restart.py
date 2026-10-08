@@ -39,6 +39,8 @@ LOGGED = ("step", "eval", "camera", "run", "pause")
 NOT_REPLAYED = ("until", "trace", "every", "shot_every", "cover_every", "views")
 # The start options a start record leaves out: they belong to one command, not to the session.
 NOT_RECORDED = ("func", "command", "live_command", "json", "strict", "session", "rebuild")
+# How long a start record is kept after its session last started, for restart.
+RECORD_DAYS = 7
 # What a session's own user:// links to in the shared one, so its shader and pipeline caches stay warm.
 CACHES = ("shader_cache", "vulkan")
 
@@ -214,6 +216,10 @@ def begin_log(args, session, infos):
             options[key] = str(Path(options[key]).resolve())
     record = {"options": options, "log": str(log), "cwd": os.getcwd()}
     starts_dir().mkdir(parents=True, exist_ok=True, mode=0o700)
+    for old in starts_dir().glob("*.json"):  # the records of sessions not started for a week go
+        with contextlib.suppress(OSError):
+            if time.time() - old.stat().st_mtime > RECORD_DAYS * 86400:
+                old.unlink()
     fd = os.open(starts_dir() / f"{session['name']}.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(record, f)

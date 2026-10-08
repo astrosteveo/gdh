@@ -1,5 +1,5 @@
 """Measurements over rendered frames: flicker, shimmer, thin lines, points' sizes, dissolves, black from a NaN, crushed
-blacks, light jitter, what one setting adds, and frame times.
+blacks, light jitter, what one setting adds, what changed between two frames, and frame times.
 
 Every image measure works on PNG files: frames a capture or a live session saved, or any game's. Pixel values are
 luminance in Rec. 709's weights on the 0-255 sRGB values the files hold, computed in float32, so numbers taken from
@@ -574,6 +574,138 @@ def save_mask(mask, path):
     ys, xs = np.nonzero(mask)
     return {"mask": str(path), "pixels": int(mask.sum()),
             "box": [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1] if mask.any() else None}
+
+
+# --- What changed between two frames -------------------------------------------------------------------------------
+
+# A pixel has changed when one of its channels differs by more than this (0-255), so rounding stays under it.
+DIFF_THRESHOLD = 2.0
+# Changed pixels in blocks this many pixels square that touch, diagonals included, are one region.
+REGION_BLOCK = 8
+
+
+def diff(a, b, threshold=DIFF_THRESHOLD, region=None, out=None, name="", labels=None):
+    """What changed between two frames of one size, A (before) and B (after). A pixel's difference is the largest of
+    its three channels' differences (0-255). max_diff and mean_diff over the pixels; changed_px and changed_share,
+    the pixels that differ by more than `threshold` (2); box, round them all (x0, y0, x1, y1, the far edges
+    excluded); regions, the changed pixels grouped (changed_regions), largest first. With `out`, when anything
+    changed, also saves a heatmap of the difference over B (<out>/<name>heatmap.png) and the largest region side by
+    side: A, B and their difference amplified (<out>/<name>crop.png, panels titled `labels`, the files' names by
+    default)."""
+    ra, rb = rgb(a), rgb(b)
+    if ra.shape != rb.shape:
+        raise MeasureError(f"{a} is {ra.shape[1]}x{ra.shape[0]} and {b} {rb.shape[1]}x{rb.shape[0]}: frames of "
+                           f"different sizes can't be compared pixel by pixel.")
+    d = np.abs(ra - rb).max(axis=2)
+    sel = (region or Region()).select(d.shape)
+    if sel is not None:
+        d = np.where(sel, d, 0)
+    pixels = int(sel.sum()) if sel is not None else d.size
+    changed = d > threshold
+    count = int(changed.sum())
+    regions, region_count = changed_regions(changed, d)
+    ys, xs = np.nonzero(changed)
+    result = {
+        "a": str(a),
+        "b": str(b),
+        "size": [int(d.shape[1]), int(d.shape[0])],
+        "identical": not d.any(),
+        "max_diff": int(d.max()),
+        "mean_diff": round(float(d.sum()) / pixels, 4),
+        "threshold": threshold,
+        "pixels": pixels,
+        "changed_px": count,
+        "changed_share": round(count / pixels, 6),
+        "box": [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1] if count else None,
+        "region_count": region_count,
+        "regions": regions,
+    }
+    if out is not None and count:
+        from gdh.images import diff_crop, heatmap
+        out = Path(out)
+        result["heatmap"] = str(heatmap(d, rb, threshold, [r["box"] for r in regions], out / f"{name}heatmap.png"))
+        result["crop"] = str(diff_crop(ra, rb, regions[0]["box"], out / f"{name}crop.png",
+                                       labels or (Path(a).name, Path(b).name)))
+    return result
+
+
+def changed_regions(changed, d, limit=10):
+    """Changed pixels grouped into regions: those in REGION_BLOCK-pixel blocks that touch (diagonals included) are one,
+    so a change's speckled or anti-aliased edge stays with it. Returns (each region's changed pixels, box and largest
+    difference, largest first, at most `limit`; how many regions in all)."""
+    h, w = changed.shape
+    k = REGION_BLOCK
+    rows, cols = -(-h // k), -(-w // k)
+
+    def blocks(a, reduce):
+        padded = np.zeros((rows * k, cols * k), dtype=a.dtype)
+        padded[:h, :w] = a
+        return reduce(padded.reshape(rows, k, cols, k), axis=(1, 3))
+
+    counts = blocks(changed, np.sum)
+    labels, count = components(counts > 0)
+    if count == 0:
+        return [], 0
+    sizes = np.bincount(labels.ravel(), weights=counts.ravel(), minlength=count + 1)
+    peaks = np.zeros(count + 1)
+    np.maximum.at(peaks, labels.ravel(), blocks(d, np.max).ravel())
+    out = []
+    for r in (np.argsort(-sizes[1:], kind="stable") + 1)[:limit]:
+        by, bx = np.nonzero(labels == r)
+        y0, x0 = int(by.min()) * k, int(bx.min()) * k
+        y1, x1 = min(int(by.max() + 1) * k, h), min(int(bx.max() + 1) * k, w)
+        mine = np.repeat(np.repeat(labels[y0 // k:-(-y1 // k), x0 // k:-(-x1 // k)] == r, k, 0), k, 1)
+        ys, xs = np.nonzero(changed[y0:y1, x0:x1] & mine[:y1 - y0, :x1 - x0])
+        out.append({"px": int(sizes[r]), "box": [x0 + int(xs.min()), y0 + int(ys.min()), x0 + int(xs.max()) + 1,
+                                                 y0 + int(ys.max()) + 1], "max_diff": int(peaks[r])})
+    return out, count
+
+
+def diff_dirs(a, b, threshold=DIFF_THRESHOLD, region=None, out=None):
+    """diff() for each PNG the two directories both hold, by file name (each one's heatmap and crop named after it),
+    and the names only one of them holds. A pair that can't be compared (sizes differ) has an error instead."""
+    names_a = {p.name for p in Path(a).glob("*.png")}
+    names_b = {p.name for p in Path(b).glob("*.png")}
+    each = []
+    for name in sorted(names_a & names_b):
+        try:
+            each.append(diff(Path(a) / name, Path(b) / name, threshold, region, out, f"{Path(name).stem}-"))
+        except MeasureError as e:
+            each.append({"a": str(Path(a) / name), "b": str(Path(b) / name), "error": str(e)})
+    return {
+        "a": str(a),
+        "b": str(b),
+        "threshold": threshold,
+        "compared": len(each),
+        "changed": [Path(r["b"]).name for r in each if r.get("error") or r["changed_px"]],
+        "only_in_a": sorted(names_a - names_b),
+        "only_in_b": sorted(names_b - names_a),
+        "each": each,
+    }
+
+
+def diff_paths(a, b, threshold=DIFF_THRESHOLD, region=None, out=None):
+    """diff() of two PNG files, or diff_dirs() of two directories."""
+    pa, pb = Path(a), Path(b)
+    for p in (pa, pb):
+        if not p.exists():
+            raise MeasureError(f"No such file or directory: {p}")
+    if pa.is_dir() and pb.is_dir():
+        return diff_dirs(pa, pb, threshold, region, out)
+    if pa.is_dir() or pb.is_dir():
+        raise MeasureError("diff compares two PNG files, or two directories of them by name.")
+    return diff(pa, pb, threshold, region, out)
+
+
+def diff_over(result, tolerance=0.0):
+    """Whether a diff (one pair, or two directories) changed more than `tolerance` percent of a pair's pixels, has a
+    pair that couldn't be compared, or has a name in one directory only."""
+    def over(r):
+        return r["changed_px"] * 100 > tolerance * r["pixels"]
+
+    if "each" not in result:
+        return over(result)
+    return bool(result["only_in_a"] or result["only_in_b"] or any(r.get("error") or over(r) for r in result["each"]))
 
 
 # --- Black: NaNs and crushed blacks --------------------------------------------------------------------------------

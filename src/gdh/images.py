@@ -60,6 +60,78 @@ def zoom(img, long_side):
     return img
 
 
+# A diff's heatmap is shrunk by a whole factor to at most this long side, and its crop's panels zoomed to about this.
+HEATMAP_LONG_SIDE = 1280
+DIFF_PANEL_LONG_SIDE = 400
+
+
+def heatmap(diff, base, threshold, boxes, out):
+    """Save where two frames differ, over the second dimmed to grey: a pixel that differs by more than the threshold
+    on a hot scale (red for the least, through yellow, to white for 255; logarithmic, so a change of a few levels
+    shows as plainly as a large one), a smaller difference in dim blue, and each box (x0, y0, x1, y1) outlined in
+    cyan. A frame longer than HEATMAP_LONG_SIDE is shrunk by a whole factor, each pixel showing the largest difference
+    it covers, so a single changed pixel still shows. diff is each pixel's difference (0-255), base the second frame
+    as float RGB. Returns out."""
+    import numpy as np
+    from PIL import ImageDraw
+    f = -(-max(diff.shape) // HEATMAP_LONG_SIDE)
+    grey = base[..., 0] * 0.2126 + base[..., 1] * 0.7152 + base[..., 2] * 0.0722
+    if f > 1:
+        diff, grey = shrink(diff, f, np.max), shrink(grey, f, np.mean)
+    img = np.repeat((grey * 0.3)[..., None], 3, axis=2)
+    t = 0.25 + 0.75 * np.log1p(diff) / np.log1p(255)
+    hot = np.stack([np.clip(3 * t, 0, 1), np.clip(3 * t - 1, 0, 1), np.clip(3 * t - 2, 0, 1)], axis=-1) * 255
+    over = diff > threshold
+    img[over] = hot[over]
+    img[(diff > 0) & ~over] = (30, 70, 170)
+    picture = Image.fromarray(img.astype(np.uint8))
+    draw = ImageDraw.Draw(picture)
+    for x0, y0, x1, y1 in boxes:
+        draw.rectangle((x0 // f - 2, y0 // f - 2, -(-x1 // f) + 1, -(-y1 // f) + 1), outline=(0, 220, 255), width=2)
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    picture.save(out)
+    return out
+
+
+def shrink(a, f, reduce):
+    """A 2D array shrunk by a whole factor f: each value is reduce() over the f x f block it covers (the edges
+    repeated to fill the last blocks)."""
+    import numpy as np
+    h, w = a.shape
+    padded = np.pad(a, ((0, -h % f), (0, -w % f)), mode="edge")
+    return reduce(padded.reshape(padded.shape[0] // f, f, padded.shape[1] // f, f), axis=(1, 3))
+
+
+def diff_crop(a, b, box, out, labels=("A", "B")):
+    """Save the region round box (x0, y0, x1, y1) in two frames side by side, padded as crop_findings pads and each
+    zoomed to about DIFF_PANEL_LONG_SIDE (nearest neighbor, at most 4x), with a third panel: their difference in each
+    channel, amplified so the largest in the crop reads 255. a and b are float RGB (0-255). Returns out."""
+    import numpy as np
+    from PIL import ImageDraw, ImageFont
+    h, w = a.shape[:2]
+    x0, y0, x1, y1 = box
+    pad = max(24, round(0.25 * max(x1 - x0, y1 - y0)))
+    window = (slice(max(0, y0 - pad), min(h, y1 + pad)), slice(max(0, x0 - pad), min(w, x1 + pad)))
+    ca, cb = a[window], b[window]
+    d = np.abs(ca - cb)
+    gain = 255 / max(float(d.max()), 1.0)
+    panels = [(labels[0], ca), (labels[1], cb), (f"difference x{gain:.3g}", d * gain)]
+    panels = [(label, zoom(Image.fromarray(np.clip(p, 0, 255).astype(np.uint8)), DIFF_PANEL_LONG_SIDE))
+              for label, p in panels]
+    pw, ph = panels[0][1].size
+    label_h = 18
+    sheet = Image.new("RGB", (3 * pw + 16, ph + label_h + 8), (24, 24, 24))
+    draw = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default(size=13)
+    for i, (label, img) in enumerate(panels):
+        x = 4 + i * (pw + 4)
+        sheet.paste(img, (x, 4 + label_h))
+        draw.text((x + 2, 4), label, fill=(230, 230, 230), font=font)
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out)
+    return out
+
+
 # A contact sheet: up to SHEET_TILES frames spread evenly over a run, SHEET_TILE_WIDTH px wide each, four across:
 # about 1220 px in all, which an image reader takes whole.
 SHEET_TILES = 16

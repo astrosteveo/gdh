@@ -15,6 +15,8 @@ Each finding has these fields:
 | `view` | The capture that shows the problem best |
 | `crop` | The crop `gdh` saved, relative to the output directory |
 
+`gdh capture --baseline` adds findings of the same shape from its comparison with a saved baseline: `probe` is `baseline`, `node` the view's file (`normal.png`), and the crop puts the baseline, the new view and their difference side by side ([measure.md](measure.md#baselines)).
+
 ## Checks
 
 The list of checks, their thresholds and known gaps is in [skills/gdh/references/probes.md](../skills/gdh/references/probes.md), which the Claude Code skill also reads.

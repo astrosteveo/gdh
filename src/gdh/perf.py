@@ -67,13 +67,13 @@ def session_games():
     return games
 
 
-def other_games(own=()):
-    """The games running on this machine but the pids `own`: Godot processes (pgrep -x godot, godot-mono, and $GODOT's
-    name) and every gdh live session's games. A Godot run --headless draws nothing, so it isn't one. Returns
-    [{"pid", "what"}], what being the session, or the command line."""
+def running_games():
+    """The games running on this machine: Godot processes (pgrep -x godot, godot-mono, and $GODOT's name) and every
+    gdh live session's games. A Godot run --headless draws nothing, so it isn't one. Returns [{"pid", "what"}], what
+    being the session, or the binary and project. (add_warnings takes out the game measured.)"""
     sessions = session_games()
     found = []
-    for pid in sorted((godot_pids() | {p for p in sessions if pid_alive(p)}) - set(own)):
+    for pid in sorted(godot_pids() | {p for p in sessions if pid_alive(p)}):
         args = command_line(pid)
         if not running(pid) or "--headless" in args:
             continue
@@ -104,7 +104,7 @@ class Watch:
         self._thread = threading.Thread(target=self._run, daemon=True)
 
     def _look(self):
-        for game in other_games():
+        for game in running_games():
             self.found.setdefault(game["pid"], game)
 
     def _run(self):
@@ -193,7 +193,8 @@ def cmd_bench(args):
     report(reply, args.json, echo=False)
     errors = [e for r in (stepped, reply) for part in r.get("instances", [r]) for e in part.get("errors", [])]
     outs = []
-    for part in reply.get("instances", [reply]):
+    parts = reply.get("instances", [reply])
+    for part in parts:
         index = part.get("instance", 0)
         record = part["result"]
         summary = {"size": record.get("size"), "adapter": record.get("adapter"), **m.times(record)}
@@ -204,7 +205,7 @@ def cmd_bench(args):
             summary["instance"] = index
         outs.append(summary)
         if args.save:
-            path = Path(args.save) if len(outs) == 1 else Path(args.save).with_suffix(f".{index}.json")
+            path = Path(args.save) if len(parts) == 1 else Path(args.save).with_suffix(f".{index}.json")
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps({**record, "summary": summary}) + "\n")
     over = any(s["over_budget"] for s in outs)

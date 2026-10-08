@@ -464,10 +464,10 @@ def cmd_live_measure(args):
 
 def cmd_frames(args):
     from gdh.live import call, instances, load_session, report
-    from gdh.perf import add_warnings, other_games
+    from gdh.perf import add_warnings, running_games
     session = load_session(args.session)
     # The other games running now: as the record starts over, the game keeps them with it; read, they're warned of.
-    others = other_games()
+    others = running_games()
     reply = call(session, "frames", {"reset": args.reset, "clear": args.clear, "others": others},
                  instance=args.instance)
     # With --json, stdout is one JSON document: the engine's errors go into it, not before it.

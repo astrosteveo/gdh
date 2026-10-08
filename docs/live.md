@@ -6,6 +6,9 @@
 gdh live start --project path/to/game            # main scene, held at frame 0
 gdh live step 30 --hold ui_right --shot          # run 30 frames holding right, then save a frame
 gdh live tree Player                             # inspect nodes
+gdh live find Play                               # nodes that show "Play", with their boxes on screen
+gdh live step 5 --click-text Play                # click it
+gdh live shot --node UI/Inventory --zoom 2 --out inventory.png   # just that panel, twice the size
 gdh live eval "get_node('Player').velocity"      # read any value
 gdh live probes                                  # run the probes on the current frame
 gdh live stop
@@ -43,14 +46,63 @@ Input is injected at the start of a step, where real input arrives. `_input`, `i
 | `--right-click X,Y` | Right click at screenshot pixel X,Y |
 | `--left-hold X,Y` | Press the left button at X,Y at the start of the step, release it at the end |
 | `--right-hold X,Y` | Press the right button at X,Y at the start of the step, release it at the end (a held press: a context or marking menu) |
+| `--click-text TEXT` | Left click the node that shows TEXT, at the centre of what shows of it (below) |
+| `--click-node PATH` | Left click a node, at the centre of what shows of it (below) |
 
 An INPUT can also be `mouse:left`, `mouse:right` or `mouse:middle`, pressed where the pointer is: `--move 300,200 --press mouse:right`, then steps with `--move` to drag or point, then `--release mouse:right`.
 
 Each option can be repeated. Events at the end of a step (a `--hold`'s release) reach the game before it's held again, so a node that tracks keys by their events (`_input`, `_unhandled_input`) sees them go, not only `Input.is_action_pressed`.
 
+## Finding and clicking nodes
+
+`find` lists the nodes that show on screen, one a line, with each one's path, class, text and box in screenshot pixels:
+
+```sh
+$ gdh live find go
+UI/GoButton (Button) text="Go" screen=[100.0, 100.0, 120.0, 50.0]
+$ gdh live find --class Button --name "*Quit*"
+```
+
+- **What it matches:** `TEXT` is part of the text a node shows, in any case: a Label's, a Button's, a LineEdit's (its placeholder while it's empty), a RichTextLabel's without its BBCode, a Label3D's, translated as the node draws it. `--name PATTERN` is the node's name, where `*` and `?` match anything. `--class CLASS` is a class or one it extends (`--class BaseButton` finds every kind of button), built in or a script's `class_name`. Give any of them together.
+- **Where it looks:** the current scene and the autoloads, with the nodes Godot makes inside its own controls, so a dialog's OK button is found as `UI/@AcceptDialog@8/@HBoxContainer@4/@Button@6`. A path outside the current scene starts with `/root/`.
+- **What shows:** a node shows when it and everything above it is visible (CanvasItems, Node3Ds, CanvasLayers, windows), it isn't modulated to nothing, and some of it is on screen, inside every clipping Control above it (a scroll container's). The box is that part. A Control's box is its rect; a Sprite2D's, its rect; a 3D object's, its bounds seen through the camera; another 2D or 3D node is a point, `[x, y]`. A dialog's nodes are placed through the window they're in.
+- **What doesn't:** up to ten nodes that match but don't show are listed after the rest as `not showing: PATH (CLASS) hidden`, or `transparent`, `off screen`, `not on screen`. A disabled button says `disabled`. With nothing that shows, `find` exits 1.
+
+`step --click-text TEXT` and `--click-node PATH` click a node at the centre of the part of it that shows, worked out before the step's first frame: the pointer moves there, the left button goes down and comes up a frame later, as with `--click`. A path is from the current scene, or from the root (`/root/...`). A text picks the one node showing exactly that text, in any case, else the one whose text holds it. A text no node shows, or shows in several, a path with no node, and a node that doesn't show fail the step before it runs, naming what's there: the texts on screen, the nodes that match, or why the node doesn't show. The step says what it clicked (`clicked UI/GoButton (Button) text="Go" at 160,125`; `"aimed"` in `--json`).
+
+`tree --visible-only` leaves hidden nodes, and everything under them, out of the tree.
+
+## Framing shots
+
+`shot` saves the whole frame as a numbered file by default. Its options write the image wanted, so it needs no cropping or scaling after:
+
+| Option | Effect |
+|---|---|
+| `--out FILE.png` | Write this file (relative to where gdh runs) instead of a numbered one in `shots/`. With several `--view`s, the view's name is added: `--out a.png` writes `a-normal.png` and `a-wireframe.png` |
+| `--crop X,Y,W,H` | Keep only this part of the screen, in screenshot pixels |
+| `--node PATH [--margin PX]` | Keep only the box `find` gives a node, grown by PX on each side. A node that's a point needs a margin |
+| `--zoom K` | Scale up K times (1 to 16), nearest neighbour, so each pixel stays a sharp square |
+| `--max-width W` | Scale down to at most W pixels wide, after any zoom, for reading the whole frame; never up |
+| `--no-ui` | Leave the UI out of this shot: every CanvasLayer drawn over the game (layer 1 and up, not following the viewport) is hidden for the shot and shown again after |
+
+A shot that's cropped or scaled says which part of the screen it shows and at what size: `normal: a.png (the screen's 90,90 140x70, saved at 280x140)`, and `"crop"` and `"size"` in `--json`. A pixel at X,Y in the file is at `crop_x + X * crop_w / size_w`, `crop_y + Y * crop_h / size_h` on screen, which is where to click it.
+
+## gdh's camera
+
+`camera` looks through a camera of gdh's own, so a scene can be seen from anywhere without game code, as `gdh editor --view` does in the editor:
+
+```sh
+gdh live camera --view 0,40,80:0,0,0 --fov 60    # 3D: from the first point, looking at the second
+gdh live camera --view=-12,3,6:0,1,0             # a negative first number needs the =
+gdh live camera --view 640,360 --zoom 2          # 2D: centred on a point, twice as close
+gdh live camera --release                        # the game's own camera again
+```
+
+In 3D it adds a Camera3D with the game camera's lens (its fov, near and far planes, cull mask, environment and attributes) unless `--fov` or `--far` says otherwise, and makes it current. In 2D it adds a Camera2D, centred on X,Y in world units at `--zoom` (2 is twice as close), which moves the view while the game is held. Each is an internal child of the root, so game code walking the tree doesn't see it, and it stays through steps until `--release`, which frees it and makes the camera it replaced current again. `tree`, `find`, clicks and shots all see through it. A game that makes its own camera current again takes the view back, and one that reads the current camera (to aim, say) gets gdh's while it's there.
+
 ## Coordinates
 
-Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `screen` field in `tree`, and probe `screen_rect`s. So you can click where a screenshot or `tree` shows something, whatever the project's stretch settings are. Tests cover stretch modes `viewport` and `canvas_items`.
+Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `screen` field in `tree` and `find`, a shot's `--crop`, and probe `screen_rect`s. So you can click where a screenshot or `tree` shows something, whatever the project's stretch settings are. Tests cover stretch modes `viewport` and `canvas_items`.
 
 `tree` also reports `pos`, which is the node's global position in world units.
 
@@ -58,11 +110,13 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 
 | Command | Output |
 |---|---|
-| `shot [--view V]... [--label L] [--tiles]` | PNGs of the current frame, in any capture view |
+| `shot [--view V]... [--label L] [--tiles]` | PNGs of the current frame, in any capture view; `--out`, `--crop`, `--node`, `--zoom`, `--max-width` and `--no-ui` frame them (above) |
 | `step N --shot-every K` | A frame every K frames during the step, to catch flicker, popping and jitter |
 | `step N --shot` | A frame after the step |
 | `probes` | Probe findings on the current frame, with crops |
-| `tree [PATH] [--depth N]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
+| `tree [PATH] [--depth N] [--visible-only]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
+| `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
+| `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |
 | `eval EXPR` | Any Godot expression. The base is the current scene. `scene`, `tree`, `root`, each autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) are also available. |
 | `status` | Game frame, held or running, scene, image and window size, nodes that run while held, processes the game spawned |
 | `record N [--out DIR]` | N frames stepped and each saved as `DIR/frame-0000.png` on, for `gdh measure` |
@@ -93,7 +147,7 @@ gdh live start --project client --session vs \
 `--instances N` runs N instances of the game in one session, each on a display of its own, with its own output in `<out>/instance-K/`. `{instance}` in the game's arguments is each one's number, so they can be told apart (`-- --user pilot{instance}`).
 
 - **`step`, `run` and `pause` go to every instance at once**, so the instances step together: when each frame of one waits on another (two clients of a server on a test clock that ticks once every client has asked), they keep in step. The input of a step goes to `--instance K` (default 0), or to every instance with `--instance all`.
-- **`shot`, `probes`, `tree` and `eval` go to `--instance K`** (default 0), or to every instance with `--instance all`.
+- **`shot`, `probes`, `tree`, `find`, `camera` and `eval` go to `--instance K`** (default 0), or to every instance with `--instance all`.
 - With one instance, every reply is the game's own. With more, a command sent to one instance gets that instance's reply, with `"instance": K`, and a command sent to several gets `{"ok": ..., "instances": [reply, ...]}`, with the first failure as its `"error"`. The CLI prefixes each instance's lines with `[K]`.
 - If any instance ends, the session has ended: the next command says which, and stops the rest.
 
@@ -135,11 +189,20 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `eval`, `frames`, `run`, `pause` and `quit`. `frames` takes `{"reset": bool, "clear": bool}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name}`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `run`, `pause` and `quit`.
+
+- `shot` takes `{"views": [...], "label": "shot", "out": FILE, "crop": [x, y, w, h], "node": PATH, "margin": PX, "zoom": K, "max_width": W, "no_ui": bool}`, all but `views` optional; a relative `out` is under the session's output directory. It returns `{"shots": {view: path}, "image_size": [w, h]}`, with `"crop"` and `"size"` when the shot is cropped or scaled.
+- `tree` takes `{"path", "depth", "visible_only": bool}`.
+- `find` takes `{"text", "name", "class"}`, at least one, and returns `{"matches": [{"path", "class", "text"?, "screen", "disabled"?}], "hidden": [{..., "why"}], "more": n}`.
+- `camera` takes `{"from": [x, y, z], "at": [x, y, z], "fov", "far"}` (3D), `{"at": [x, y], "zoom"}` (2D) or `{"release": true}`.
+
+`frames` takes `{"reset": bool, "clear": bool}` and returns `{"frames": [{"gpu": ms, "cpu": ms, "frame": n, "passes": {name: ms}, "groups": {name: ms}}, ...], "game_frames": n, "size": [w, h], "adapter": name}`. In `step`, an event with `"at": k` is injected before frame k+1 of the step. Event forms:
 - `{action, pressed, strength}`
 - `{key, pressed}`
 - `{mouse_button, position, pressed}`
 - `{mouse_motion: [x, y]}`
+
+A mouse event with `"on": {"text": TEXT}` or `"on": {"node": PATH}` instead of a position goes to the centre of what shows of that node, as `--click-text` and `--click-node` do; the step's reply lists each target in `"aimed"`, and fails before stepping when a target can't be clicked.
 
 ## Tests
 
@@ -149,6 +212,12 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - that taps reach `_physics_process`, `_process` and `_input` once each
 - held input across steps
 - button clicks at the positions `tree` reports, with no stretching and in both stretch modes
+- `find` by text, name and class, its one-line output, the nodes that don't show and why, and its box matching `tree`'s in both stretch modes
+- `--click-text` and `--click-node` clicking the Go button (and over `pipe`), a dialog's OK button, and failing, without stepping, on a missing text, a hidden node, a missing path and an ambiguous text, with the candidates named
+- `tree --visible-only`
+- `shot --out` with one view and with several, `--crop` and `--zoom`, `--node` and `--margin` (in both stretch modes, and on a 3D object), `--max-width`, the two together, and bad framings, each image compared with the full frame pixel for pixel
+- `shot --no-ui` leaving the UI out of that shot and the game in, and the next shot the same as the one before
+- `camera` in 2D and 3D (`testbed/smoke/smoke.tscn`): the view moved, the boxes moved with it, and after `--release` the game's camera back and the frame the same as before, pixel for pixel
 - screenshots, the tree, error reporting and the unpause note
 - a bad scene, the idle timeout and cleanup after a crash
 

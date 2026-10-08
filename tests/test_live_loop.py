@@ -62,6 +62,8 @@ def test_until_gives_up_at_max_with_exit_1(chatty):
     assert proc.returncode == 1
     until = json.loads(proc.stdout)["result"]["until"]
     assert not until["met"] and until["checks"] == 30 and "error" in until
+    proc = run("step", "3", "--until", "ticks < 0", "--every", "5")
+    assert proc.returncode == 1 and "never checked, as --every is more than that" in proc.stderr
 
 
 def test_until_lets_go_of_a_hold_when_it_ends_early(chatty):
@@ -97,10 +99,13 @@ def test_trace_as_text_leaves_out_rows_that_repeat(chatty):
 def test_until_and_trace_through_pipe(chatty):
     ticks = value("ticks")
     request = {"cmd": "step", "args": {"frames": 100, "until": f"ticks >= {ticks + 6}", "trace": ["ticks"], "every": 2}}
-    proc = run("pipe", stdin=json.dumps(request) + "\n")
-    result = json.loads(proc.stdout)["result"]
+    # One expression alone may come as a string, and null is no expression.
+    loose = {"cmd": "step", "args": {"frames": 2, "until": None, "trace": "ticks"}}
+    proc = run("pipe", stdin=json.dumps(request) + "\n" + json.dumps(loose) + "\n")
+    result, other = [json.loads(line)["result"] for line in proc.stdout.splitlines()]
     assert result["frames"] == 6 and result["until"]["met"]
     assert [row[1] for row in result["trace"]["rows"]] == [ticks + 2, ticks + 4, ticks + 6]
+    assert "until" not in other and [row[1] for row in other["trace"]["rows"]] == [ticks + 7, ticks + 8]
 
 
 def test_batch_runs_command_lines_in_one_process(chatty):

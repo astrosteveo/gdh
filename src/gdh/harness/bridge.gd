@@ -397,8 +397,12 @@ func _eval_inputs() -> Array:
 ## args.until: the step ends after the first check where it's truthy (args.frames is then the most it runs).
 ## args.trace: [expression, ...], each one's value at every check. Returns {} when there are neither, or {"error"}.
 func _watch_start(args: Dictionary) -> Dictionary:
-	var until: String = args.get("until", "")
-	var traces: Array = args.get("trace", [])
+	var until: String = "" if args.get("until") == null else str(args.until)
+	var traces: Array = []
+	if args.get("trace") is String:
+		traces = [args.trace]
+	elif args.get("trace") is Array:
+		traces = args.trace
 	if until.is_empty() and traces.is_empty():
 		return {}
 	var inputs := _eval_inputs()
@@ -406,7 +410,7 @@ func _watch_start(args: Dictionary) -> Dictionary:
 			"traces": [], "texts": traces, "rows": [], "failed": {}}
 	for text in traces:
 		var expression := Expression.new()
-		if expression.parse(text, inputs[0]) != OK:
+		if expression.parse(str(text), inputs[0]) != OK:
 			return {"error": "trace %s: %s" % [text, expression.get_error_text()]}
 		watch.traces.append(expression)
 	if not until.is_empty():

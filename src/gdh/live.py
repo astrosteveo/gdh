@@ -642,7 +642,8 @@ def watched(reply, result, args):
                 print(f"{prefix}note: trace {expr} failed (its value is null): {error}", file=sys.stderr)
         if until and not until["met"]:
             last = (f"its last check, at frame {until['frame']}, failed: {until['error']}" if until.get("error")
-                    else f"it was {json.dumps(until['value'])} at frame {until['frame']}")
+                    else f"it was {json.dumps(until['value'])} at frame {until['frame']}" if until["checks"]
+                    else "it was never checked, as --every is more than that")
             unmet = f"{prefix}--until {until['expr']} didn't hold in {r['frames']} frames: {last}"
         if args.json:
             continue
@@ -1067,7 +1068,8 @@ def add_parsers(sub):
 
     p = command("step", cmd_step, "Run every instance for a number of frames, then hold",
                 instance="Which instance gets the input: a number, or all (default 0). Every instance steps")
-    p.add_argument("frames", type=int, nargs="?", default=None, help="How many frames (default 1)")
+    p.add_argument("frames", type=int, nargs="?", default=None,
+                   help="How many frames (default 1); with --until, the most")
     p.add_argument("--move", action="append", default=[], metavar="X,Y",
                    help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
     p.add_argument("--press", action="append", default=[], metavar="INPUT",

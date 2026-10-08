@@ -122,6 +122,27 @@ def test_restart_replay_returns_to_the_same_frame_and_state(tmp_path):
         gdh("live", "stop", "--session", name)
 
 
+def test_a_replay_steps_the_frames_each_step_ran():
+    from gdh.restart import replay_plan
+    press, release = {"action": "a", "pressed": True}, {"action": "a", "pressed": False}
+    entries = [
+        # --until held after 20 of 100 frames: the events then and at the end went, the one at 50 never did.
+        {"cmd": "step", "args": {"frames": 100, "until": "x", "every": 1, "shot_every": 5,
+                                 "events": [{**press, "at": 0}, {"action": "b", "pressed": True, "at": 20},
+                                            {"action": "c", "pressed": True, "at": 50}, {**release, "at": 100}]},
+         "instance": "0", "frame": 20, "ran": 20},
+        {"cmd": "run", "args": {}, "instance": 0, "frame": 20},
+        {"cmd": "pause", "args": {}, "instance": 0, "frame": 50},
+        {"cmd": "camera", "args": {"release": True}, "instance": "all", "frame": 50},
+    ]
+    plan, end = replay_plan(entries)
+    assert plan == [("step", {"frames": 20, "events": [{**press, "at": 0}, {"action": "b", "pressed": True, "at": 20},
+                                                       {**release, "at": 20}]}, "0"),
+                    ("step", {"frames": 30, "events": []}, 0),
+                    ("camera", {"release": True}, "all")]
+    assert end == 50
+
+
 def test_seed_repeats_random_numbers_across_starts(tmp_path):
     name = f"{SESSION}-seed"
     draws = []

@@ -405,7 +405,7 @@ def cmd_start(args):
     parse_resolution(args.resolution)
     restart.prepare_start(args, name)
     if not args.no_build:
-        build_csharp(project, force=args.rebuild)
+        build_csharp(project, force=getattr(args, "rebuild", False))
     if not args.no_import:
         ensure_imported(project)
     out = Path(args.out or Path.cwd() / "captures" / "live" / name).resolve()

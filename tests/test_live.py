@@ -33,6 +33,15 @@ def value(expr):
     return live("eval", expr)["result"]["value"]
 
 
+def pipe(*requests):
+    """Requests over one gdh live pipe, and their replies."""
+    import subprocess
+    import sys
+    proc = subprocess.run([sys.executable, "-m", "gdh", "live", "pipe", "--session", SESSION],
+                          input="".join(json.dumps(r) + "\n" for r in requests), capture_output=True, text=True)
+    return [json.loads(line) for line in proc.stdout.splitlines()]
+
+
 def test_eval_reaches_engine_singletons(arena):
     assert value("Engine.get_physics_ticks_per_second()") == 60
 
@@ -167,15 +176,11 @@ def test_click_text_and_click_node_press_the_button(arena):
     live("step", "3", "--click-node", "UI/GoButton")
     assert value("clicks") == before + 2
     # The raw protocol: a mouse event aimed with "on".
-    import subprocess
-    import sys
     on = {"text": "Go"}
-    request = {"cmd": "step", "args": {"frames": 3, "events": [
+    [reply] = pipe({"cmd": "step", "args": {"frames": 3, "events": [
         {"mouse_motion": [0, 0], "on": on, "at": 0}, {"mouse_button": 1, "on": on, "pressed": True, "at": 0},
-        {"mouse_button": 1, "on": on, "pressed": False, "at": 1}]}}
-    proc = subprocess.run([sys.executable, "-m", "gdh", "live", "pipe", "--session", SESSION],
-                          input=json.dumps(request) + "\n", capture_output=True, text=True)
-    assert json.loads(proc.stdout)["ok"]
+        {"mouse_button": 1, "on": on, "pressed": False, "at": 1}]}})
+    assert reply["ok"]
     assert value("clicks") == before + 3
 
 
@@ -216,6 +221,29 @@ def test_click_text_reaches_a_dialog(arena):
         assert value(f"{dialog}.visible") is False
     finally:
         live("eval", f"{dialog}.queue_free()")
+        live("step", "1")
+
+
+def test_find_and_click_inside_a_subviewport(arena):
+    # A SubViewport shown by a SubViewportContainer at 2x, as pixel-art games draw: its nodes are placed through it.
+    container = "get_node('UI').get_child(-1)"
+    button = f"{container}.get_child(0).get_child(0)"
+    made = pipe(*({"cmd": "eval", "args": {"expr": expr}} for expr in (
+        "get_node('UI').add_child(ClassDB.instantiate('SubViewportContainer'))",
+        f"{container}.set('stretch', true)", f"{container}.set('stretch_shrink', 2)",
+        f"{container}.set('position', Vector2(700, 200))", f"{container}.set('size', Vector2(200, 100))",
+        f"{container}.add_child(ClassDB.instantiate('SubViewport'))",
+        f"{container}.get_child(0).add_child(ClassDB.instantiate('Button'))",
+        f"{button}.set('text', 'Inner')", f"{button}.set('toggle_mode', true)",
+        f"{button}.set('position', Vector2(10, 10))", f"{button}.set('size', Vector2(60, 40))")))
+    try:
+        assert all(r["ok"] for r in made)
+        live("step", "2")
+        assert [m["screen"] for m in live("find", "Inner")["result"]["matches"]] == [[720, 220, 120, 80]]
+        live("step", "3", "--click-text", "Inner")
+        assert value(f"{button}.button_pressed") is True
+    finally:
+        live("eval", f"{container}.queue_free()")
         live("step", "1")
 
 

@@ -14,52 +14,57 @@ const MAX_HIDDEN := 10
 
 ## A node's box on screen in screenshot pixels: a Control's rect, a Sprite2D's (anything with get_rect), a 3D
 ## object's bounds seen through the camera; a Rect2 of no size for a point (another 2D node, or a 3D one); null when it
-## has no place on screen (a plain Node, a node drawn in a SubViewport, a 3D point behind the camera).
+## has no place on screen (a plain Node, a 3D point behind the camera, a node drawn somewhere gdh can't follow).
 static func box(tree: SceneTree, node: Node) -> Variant:
+	if not (node is CanvasItem or node is Node3D):
+		return null
+	var to_root: Variant = _to_root(tree, node.get_viewport())
+	if to_root == null:
+		return null
 	if node is CanvasItem:
-		var xf: Variant = _to_root(tree, node)
-		if xf == null:
-			return null
 		var rect := Rect2()
 		if node is Control:
 			rect = Rect2(Vector2.ZERO, (node as Control).size)
 		elif node.has_method("get_rect") and node.get_rect() is Rect2:
 			rect = node.get_rect()
-		return Common.to_shot(tree, (xf as Transform2D) * rect)
-	if node is Node3D:
-		var camera := (node as Node3D).get_viewport().get_camera_3d()
-		if camera == null or node.get_viewport() != tree.root:
-			return null
-		var corners: Array[Vector3] = [(node as Node3D).global_position]
-		if node is VisualInstance3D:
-			var aabb: AABB = (node as Node3D).global_transform * (node as VisualInstance3D).get_aabb()
-			corners.clear()
-			for i in 8:
-				corners.append(aabb.get_endpoint(i))
-		var seen := PackedVector2Array()
-		for corner in corners:
-			if not camera.is_position_behind(corner):
-				seen.append(camera.unproject_position(corner))
-		if seen.is_empty():
-			return null
-		var rect := Rect2(seen[0], Vector2.ZERO)
-		for p in seen:
-			rect = rect.expand(p)
-		return Common.to_shot(tree, rect)
-	return null
+		return Common.to_shot(tree, (to_root as Transform2D) * (node as CanvasItem).get_global_transform_with_canvas() * rect)
+	var camera := node.get_viewport().get_camera_3d()
+	if camera == null:
+		return null
+	var corners: Array[Vector3] = [(node as Node3D).global_position]
+	if node is VisualInstance3D:
+		var aabb: AABB = (node as Node3D).global_transform * (node as VisualInstance3D).get_aabb()
+		corners.clear()
+		for i in 8:
+			corners.append(aabb.get_endpoint(i))
+	var seen := PackedVector2Array()
+	for corner in corners:
+		if not camera.is_position_behind(corner):
+			seen.append(camera.unproject_position(corner))
+	if seen.is_empty():
+		return null
+	var rect := Rect2(seen[0], Vector2.ZERO)
+	for p in seen:
+		rect = rect.expand(p)
+	return Common.to_shot(tree, (to_root as Transform2D) * rect)
 
 
-## A canvas item's transform into the root viewport's coordinates: through the embedded windows it's in (a dialog), or
-## null when it's drawn elsewhere (a SubViewport, a window of its own).
-static func _to_root(tree: SceneTree, item: CanvasItem) -> Variant:
-	var xf := item.get_global_transform_with_canvas()
-	var viewport := item.get_viewport()
+## From a viewport's coordinates to the root viewport's: through the windows embedded in it (a dialog) and the
+## SubViewportContainers that show a SubViewport, or null when it's drawn elsewhere (a window of its own, a SubViewport
+## shown some other way).
+static func _to_root(tree: SceneTree, viewport: Viewport) -> Variant:
+	var xf := Transform2D.IDENTITY
 	while viewport != tree.root:
-		var window := viewport as Window
-		if window == null or not window.is_embedded() or window.get_parent() == null:
+		var parent := viewport.get_parent()
+		if viewport is Window and (viewport as Window).is_embedded() and parent != null:
+			xf = Transform2D(0.0, Vector2((viewport as Window).position)) * viewport.get_final_transform() * xf
+		elif viewport is SubViewport and parent is SubViewportContainer:
+			var container := parent as SubViewportContainer
+			var shrink := float(container.stretch_shrink) if container.stretch else 1.0
+			xf = container.get_global_transform_with_canvas() * Transform2D(0.0, Vector2(shrink, shrink), 0.0, Vector2.ZERO) * xf
+		else:
 			return null
-		xf = Transform2D(0.0, Vector2(window.position)) * window.get_final_transform() * xf
-		viewport = window.get_parent().get_viewport()
+		viewport = parent.get_viewport()
 	return xf
 
 
@@ -77,7 +82,7 @@ static func seen(tree: SceneTree, node: Node) -> Dictionary:
 	var clip := Rect2(0, 0, size[0], size[1])
 	var parent := node.get_parent()
 	while parent != null and parent != tree.root:
-		if parent is Control and (parent as Control).clip_contents:
+		if parent is Control and ((parent as Control).clip_contents or parent is SubViewportContainer):
 			var parent_box: Variant = box(tree, parent)
 			if parent_box != null:
 				clip = clip.intersection(parent_box)

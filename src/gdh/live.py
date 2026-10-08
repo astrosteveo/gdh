@@ -673,7 +673,7 @@ def cmd_camera(args):
         elif len(points) == 1:
             if args.fov is not None or args.far is not None:
                 raise LiveError("--fov and --far are for a 3D view (--view X,Y,Z:X,Y,Z); a 2D one takes --zoom.")
-            request_args = {"at": numbers(points[0], 2, "--view"), "zoom": args.zoom or 1.0}
+            request_args = {"at": numbers(points[0], 2, "--view"), "zoom": 1.0 if args.zoom is None else args.zoom}
         else:
             raise LiveError(f"--view takes X,Y,Z:X,Y,Z (3D) or X,Y (2D), not {args.view!r}.")
     reply = call(session, "camera", request_args, instance=args.instance)

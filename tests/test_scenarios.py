@@ -71,7 +71,7 @@ def test_the_client_drives_the_arena(tmp_path):
             game.eval("1 +")
         # Another pipe to the same session; closing it leaves the session running.
         with Session.attach(name, echo=False) as other:
-            assert other.eval("clicks") == 1
+            assert other.eval("clicks") == 2  # ui_accept pressed the Go button too: it had the focus
         assert game.eval("OS.get_cmdline_user_args()") == ["--level", "3"]
         assert game.errors == [] and game.frame == 58
     assert gone(name)
@@ -183,7 +183,7 @@ def test_save_scenario_replays_to_the_same_state(tmp_path):
         assert refused.returncode == 1 and "--force" in refused.stderr
         shot = game.shot(out=tmp_path / "live-end.png")
     assert gone(name) and not (live.SESSION_DIR / f"{name}-client.jsonl").exists()
-    assert state["clicks"] == 1 and state["GameState.jumps"] == 1 and state["get_node('UI/Field').text"] == "pilot"
+    assert state["clicks"] == 2 and state["GameState.jumps"] == 1 and state["get_node('UI/Field').text"] == "pilot"
     doc = json.loads(path.read_text())
     assert doc["start"] == {"project": os.path.relpath(TESTBED, tmp_path), "scene": ARENA, "resolution": "640x360"}
     assert doc["steps"][0] == {"step": 30, "hold": "ui_right"}

@@ -430,6 +430,7 @@ def run_files(files, out_root, session=None, display=None, project=None, start_e
     failed; the others still run."""
     out_root = Path(out_root).resolve()
     out_root.mkdir(parents=True, exist_ok=True)
+    project = Path(project).resolve() if project else None  # each scenario runs from its own folder
     session = session or f"scenario-{os.getpid()}"
     results = []
     used = set()

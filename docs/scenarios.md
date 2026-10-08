@@ -1,6 +1,6 @@
 # Scenarios and the Python client
 
-A scenario is a playthrough kept as a JSON file: the options its session starts with, the inputs, frame by frame, and checks along the way. `gdh scenario run` replays it in a live session and says which checks passed. gdh's steps are frame-exact (each frame is one physics tick, however long it takes to draw), so a replay reaches the same state every time, and a check that passed once fails only when the game changed. That makes a playtest a regression test.
+A scenario is a playthrough kept as a JSON file: the options its session starts with, the inputs, frame by frame, and checks along the way. `gdh scenario run` replays it in a live session and says which checks passed. gdh's steps are frame-exact (each frame is one physics tick, however long it takes to draw), so a replay reaches the same state every time, and a check that passed once fails when the game changed. That makes a playtest a regression test.
 
 ```sh
 gdh scenario run test/first_level.scenario.json                 # exit 1 when a check failed
@@ -30,7 +30,7 @@ gdh test --project game                                          # runs res://te
 }
 ```
 
-`testbed/scenarios/arena.scenario.json` is this file, run by the tests. The keys:
+`testbed/scenarios/arena.scenario.json` is a fuller version of it, which the tests run. The keys:
 
 | Key | What it holds |
 |---|---|

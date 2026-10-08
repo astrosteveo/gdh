@@ -38,7 +38,7 @@ gdh live stop --session <name>
 
 ## Setup
 
-Check that `gdh --help` works. If it doesn't, the source is the plugin root, `${CLAUDE_PLUGIN_ROOT}` (two directories above this skill): install it once, with the user's agreement (`uv tool install "${CLAUDE_PLUGIN_ROOT}"`), or run it in place (`uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh ...`). It needs Linux, Godot 4.x as `godot` (or `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb; a C# project also needs `godot-mono` and the .NET SDK.
+Check that `gdh guide` works. If it doesn't, or a command or option this skill names is missing, the `gdh` on PATH is missing or older than this plugin. The plugin's own copy is at `${CLAUDE_PLUGIN_ROOT}` (two directories above this skill): run it in place (`uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh ...`), or, with the user's agreement, install it (`uv tool install --reinstall "${CLAUDE_PLUGIN_ROOT}"`). It needs Linux, Godot 4.x as `godot` (or `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb; a C# project also needs `godot-mono` and the .NET SDK.
 
 - **Builds and imports.** gdh builds a C# project when its code changed and imports a project whose import cache is missing or stale, before `capture` and `live start`, so don't run `dotnet build` or a Godot import yourself (`gdh import` does it, for instance after changing only import settings). A `DEFECT: ... failed to load` line means the game drew without those resources: report it, never treat it as log noise.
 - **Window size.** `--resolution` is checked: if the game sizes its own window otherwise, `capture` exits 1 and `live start` refuses, naming the size it found.

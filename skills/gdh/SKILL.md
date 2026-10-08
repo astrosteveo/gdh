@@ -80,6 +80,8 @@ Repeat `--scene` to capture several scenes. Each gets its own subdirectory. The 
 
 Use `--modes normal,wireframe` to render only some views, which is faster.
 
+To check a change altered only what it should, compare against a baseline: `gdh capture ... --baseline <dir> --update-baseline` once, then `--baseline <dir>`, which exits 1 naming each changed view and its box. Unshaded and normals views make steadier baselines than the lit frame; give the lit frame a `--tolerance`. Baselines belong to one machine. For two frames you already have, `gdh measure diff A B --out <dir>` gives the share changed, its box and `crop.png`: trust its numbers over comparing by eye.
+
 ## Live control
 
 ```sh
@@ -94,11 +96,20 @@ gdh live probes --session <name>
 gdh live stop --session <name>
 ```
 
+**One call instead of many.** Each tool call costs you a turn, so:
+
+- Wait with `step --until "EXPR" [--every K] [--max N]`, never a loop of `step` and `eval`. It exits 1, with the last value, if EXPR never holds.
+- Watch a value over time with `step N --trace "EXPR" [--every K] [--trace-out f.csv]`.
+- Read several values at once: `eval "[get_node('Player').position, GameState.score]"`.
+- Find UI with `gdh live find TEXT` (or `--name`, `--class`): visible nodes and their boxes. Click with `step 2 --click-text Play` or `--click-node UI/Menu/Play`. `tree --visible-only` drops hidden menus.
+- Send a sequence in one call: `gdh live batch --session <name> <<'END'` with one CLI line each, then `END`; `--stop-on-error` stops at the first failure.
+- `gdh live list` shows every session, yours and any left running.
+
 - **Session names.** Give each task its own `--session` name. Another agent or task may be using `default`.
 - **Stop when done.** Always run `gdh live stop`, because a running game keeps the GPU busy. It stops the game's display too. The game quits by itself after 30 idle minutes (`--idle-timeout`). With `--keep-children`, once the game has exited the session ends after 30 minutes with no `gdh live` command on it (`status` counts).
 - **Processes the game spawns** (a launcher that starts the game and exits, a server) run on the session's display and end with the session; `status` lists them. For a launcher that hands off, use `gdh live start --keep-children`: the session and display last until the spawned processes exit, or until it has gone 30 idle minutes without a `gdh live` command, and `status` shows them. Don't wrap gdh in your own `xvfb-run` for this. gdh can't step or capture the handed-off game (its harness is in the launcher), so to drive it, start the game directly with `gdh live start` and the launcher's arguments.
 - **Time.** The game is held between commands, so take as long as you need. `step N` runs exactly N frames, and each frame is one physics tick. Game seconds are frames divided by ticks per second, shown in `status`. This makes measurements exact. For example, a player at 120 px/s moves exactly 60 px in 30 frames at 60 ticks per second.
-- **Input.** An INPUT is an action from the Input Map, such as `ui_right` or `jump`, or a key such as `key:Space`.
+- **Input.** An INPUT is an action from the Input Map, such as `ui_right` or `jump`, a key such as `key:Space` or a shortcut such as `key:ctrl+s`, or a gamepad button such as `joy:a`.
   - `--press`: press and keep pressed.
   - `--release`: release.
   - `--hold`: press for the whole step.
@@ -107,11 +118,13 @@ gdh live stop --session <name>
   - `--click X,Y`: left click. `--right-click X,Y`: right click. `--left-hold X,Y` and `--right-hold X,Y`: press there for the whole step.
   - `--move X,Y` moves the pointer; `mouse:left`, `mouse:right` and `mouse:middle` work with `--press`, `--release`, `--hold` and `--tap` at the pointer. A drag or a point-while-held is `--move` then `--press mouse:right`, steps with `--move`, then `--release mouse:right`.
 
+  - `--wheel down:3` (a notch a frame, at the pointer or `--wheel-at X,Y`), `--mod ctrl,shift` (held for the step, carried by its clicks, keys and wheel), `--axis left_x=0.5` (a stick stays put until moved again), `--touch X,Y` and `--touch-drag X,Y:X,Y` (each a finger of its own), `--look DX,DY` (relative motion for mouse-look; `--look=-40,0` for a negative DX).
+
   Input arrives the way a player's does, so `_input`, `is_action_just_pressed` and `is_action_pressed` all see it.
 - **User data.** Games run under gdh keep `user://` in `~/.local/share/gdh/user-data`, never the player's own; `GDH_USER_DATA=<dir>` picks another, `real` the player's.
 - **Coordinates** are screenshot pixels everywhere. `tree` gives each node's `screen` position (`[x, y, w, h]` for Controls), so click at the center of what `tree` reports.
 - **`eval`** evaluates one Godot Expression, with the current scene as its base. `scene`, `tree`, `root`, every autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`...) are available. It can't assign with `=`. Use `set("prop", value)` or call a method instead.
-- **Errors.** Every reply lists the engine errors raised since the previous command. Read them after every step. They're often the real bug.
+- **Errors.** Every reply lists the engine errors raised since the previous command, with a script's backtrace, and what the game printed (`game: ...`). They go to stderr, so never add `2>/dev/null`: read them after every step. They're often the real bug. `--strict` (or `GDH_STRICT=1`) makes a command exit 1 when the game raised engine errors.
 - **Companions and instances.** `--companion 'NAME=COMMAND'` starts a program beside the game (a server, say) and stops it with the session; `{port}` in its command is a free port, and `{NAME.port}` passes it to the game's arguments (`-- --server ws://127.0.0.1:{server.port}`). `--companion-ready NAME=http://127.0.0.1:{port}/health` waits for it. `--instances N` runs N games that step together (`{instance}` in the game's arguments tells them apart); `step` input goes to `--instance K`, and `eval`, `shot` and `tree` take `--instance K` or `all`. A script that steps many times keeps one `gdh live pipe` open (docs/live.md).
 - **Frame pacing.** gdh starts Godot with V-Sync off: steps run as fast as the GPU goes. If the game turns V-Sync on itself, a step's notes say so, and steps then run at about 60 frames a second.
 - **Nodes that run while held.** `status` lists nodes with process mode ALWAYS or WHEN_PAUSED. They keep running while the game is held, so account for them when measuring.
@@ -152,7 +165,8 @@ Read PNGs with the Read tool. This is where you catch what logs miss, so don't s
 
 - **Keep each image at about 1280 px wide or less.** To compare frames for detail, view them one at a time or crop the same region from each, never tiled into one image: scaling creates streaks and blotches that aren't in the real frame.
 - **Contact sheets are for what's on screen, not for pixels.** `sheet.png` (from `gdh movie`), `<dir>-sheet.png` (from `live record` and `live measure`) and `gdh measure sheet` put 16 frames of a run in one image, about 1220 px wide: use them to see which screen was up when (a dialog left open, a menu, a loading screen, black), then open single frames for anything finer.
-- **Zoom in for small things.** A floating object, a blurry sprite or a misaligned icon is easy to miss at full-frame size and obvious at 2–4×. Use the crops in `crops/`, `--tiles`, or crop a region yourself with nearest-neighbor scaling.
+- **Zoom in for small things.** A floating object, a blurry sprite or a misaligned icon is easy to miss at full-frame size and obvious at 2–4×. Use the crops in `crops/`, `--tiles`, or `gdh live shot --node PATH --zoom 3` / `--crop X,Y,W,H --zoom 3`. `shot --max-width 1280` shrinks a big frame for reading, `--out FILE.png` names the file, and `--no-ui` leaves the HUD out. `gdh live camera --view X,Y,Z:X,Y,Z` looks from anywhere in 3D (`--release` gives the game its camera back).
+- **View every image you report or publish.** Saying a capture shows something you haven't opened is a guess.
 - **Debug views affect 3D only.** In a 2D or UI scene, all six images are identical. For 2D, use `tree` screen positions and zoomed crops instead.
 
 What each 3D view shows:

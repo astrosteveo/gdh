@@ -24,9 +24,9 @@ C# objects are invisible to `eval` unless the game hands them over as Godot valu
 
 ## Importing
 
-Godot run from the command line, as gdh runs a game, never imports assets. A texture or model whose imported copy in `.godot/imported` is missing fails to load, and the game draws without it, so a fresh checkout or worktree renders with missing textures. A changed asset with a stale copy draws as it was. So before `capture` and `live start`, gdh checks the project's import cache and imports it (`godot --headless --import`) when it's missing or stale, and says why on stderr. The check reads file times only, and hashes an asset only when it's newer than its import (a checkout touches files without changing them), so it costs next to nothing when nothing changed; a Godot import costs a couple of seconds. It counts as stale when `.godot` or `.godot/uid_cache.bin` is missing, an importable asset has no `.import` file, an imported copy named in an `.import` file is missing, or an asset's content changed since its import. A change to an asset's import settings alone isn't detected: run `gdh import`. `--no-import` skips the check. `gdh editor` needs none of this: it runs the editor, which imports as it opens.
+Godot run from the command line, as gdh runs a game, never imports assets. A texture or model whose imported copy in `.godot/imported` is missing fails to load, and the game draws without it, so a fresh checkout or worktree renders with missing textures. A changed asset with a stale copy draws as it was. So before `capture` and `live start`, gdh checks the project's import cache and imports it (`godot --headless --import`) when it's missing or stale, and says why on stderr. The check reads file times only, and hashes an asset only when it's newer than its import (a checkout touches files without changing them), so it costs next to nothing when nothing changed; a Godot import costs a couple of seconds. It counts as stale when `.godot` or `.godot/uid_cache.bin` is missing, an importable asset has no `.import` file, an imported copy named in an `.import` file is missing, an asset's content changed since its import, or a script's `class_name` is missing from Godot's class cache. An asset Godot can't import is remembered and skipped, and every other asset is still checked. A change to an asset's import settings alone isn't detected: run `gdh import`. `--no-import` skips the check. `gdh editor` needs none of this: it runs the editor, which imports as it opens.
 
-Resources that still fail to load (`Failed loading resource`, `Error loading resource`, `No loader found for resource`, a scene's `[ext_resource] referenced non-existent resource`, a missing `.ctex`) are a defect, not log noise: `capture` prints a `DEFECT:` line naming them and lists them in `report.json` under `missing_resources`, and `live` prints the same line with the errors of the command that raised them.
+Resources that still fail to load (`Failed loading resource`, `Error loading resource`, `No loader found for resource`, a scene's `[ext_resource] referenced non-existent resource`, a missing `.ctex`) are a defect, not log noise: `capture` prints a `DEFECT:` line naming them and lists them in `report.json` under `missing_resources`, and `live` prints the same line on stderr, with the errors of the command that raised them.
 
 ## Window size
 
@@ -108,6 +108,10 @@ Options:
 | `--display` | `auto` | `gpu`, `xvfb` or `auto` ([Displays](#displays)) |
 | `--timeout` | `120` | Seconds allowed per scene |
 | `--tiles` | off | Also save `normal.png` as four 2× tiles in `crops/` |
+| `--baseline DIR` | off | Compare each view with the PNG of its name in DIR (a subdirectory per scene, as `--out`), report a changed view as a finding with a crop, and exit 1 when one changed past `--tolerance` ([docs/measure.md](docs/measure.md)) |
+| `--update-baseline` | off | Write the views into `--baseline DIR` instead |
+| `--tolerance PCT` | `0` | With `--baseline`: the percent of a view's pixels that may change |
+| `--threshold T` | `2` | With `--baseline`: a pixel has changed when a channel differs by more than T (of 255) |
 | `--no-import` | off | Don't import the project first when its import cache is missing or stale ([Importing](#importing)) |
 
 Environment variables:
@@ -127,7 +131,20 @@ gdh live eval "get_node('Player').position"
 gdh live stop
 ```
 
-`gdh live` starts the game off-screen, held at frame 0, and runs it an exact number of frames per `step`. Steps can inject actions, keys, clicks, drags and typed text (`--type`). Between commands you can save frames in any view, run the probes, inspect the scene tree and evaluate expressions.
+`gdh live` starts the game off-screen, held at frame 0, and runs it an exact number of frames per `step`. Steps can inject actions, keys and shortcuts, clicks, drags, typed text (`--type`), the wheel, a gamepad's buttons and sticks, touches and mouse-look. Between commands you can save frames in any view, run the probes, inspect the scene tree and evaluate expressions.
+
+Most checks take one command:
+
+```sh
+gdh live step --until "scene.name == 'Hangar'" --max 1200   # run until it holds, or exit 1
+gdh live step 120 --trace "get_node('Ship').position.y"       # a value, frame by frame
+gdh live find Play                                             # what shows "Play", and where
+gdh live step 2 --click-text Play                              # click it, no coordinates
+gdh live shot --node UI/Inventory --zoom 2 --out inv.png       # that part of the frame, zoomed
+gdh live batch --session s < commands.txt                      # many commands, one process
+```
+
+Results go to stdout. Engine errors (with a script's backtrace), `DEFECT:` lines, notes and what the game printed go to stderr, so they survive a discarded stdout; `--strict` exits 1 when the game raised engine errors. `gdh live list` lists every session.
 
 A session can also start companion processes beside the game, such as a server, wait until they're ready, hand their ports to the game and stop them with it, and it can run several instances of the game that step together. A script can drive it over one pipe:
 
@@ -195,6 +212,7 @@ gdh live measure black --frames 60 --fail --session s     # black cut into somet
 gdh live start --project game --session s --gpu-passes    # time each render pass too
 gdh live frames --clear --session s && gdh live step 600 --session s && gdh live frames --session s
 gdh measure sheet frames/still --out still-sheet.png      # 16 frames of a run (or a video) in one image
+gdh measure diff before.png after.png --out diff          # what changed: share, box, heatmap, amplified crop
 ```
 
 A recording (`live record`, `live measure`) also writes a contact sheet beside its frames' directory and flags a UI panel that covered the middle of the screen for most of it ([docs/movie.md](docs/movie.md#panels-that-cover-the-screen)).
@@ -294,12 +312,13 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/api.py`, `testing.py`, `export.py` | `gdh api`, `gdh test` and `gdh export` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
+| `src/gdh/harness/screen.gd`, `camera.gd` | Where nodes show on screen, for `find`, clicks by text or node and framed shots; and gdh's camera for `gdh live camera` |
 | `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
 | `src/gdh/harness/movie.gd` | The main loop for `gdh movie`: runs the scene for the frames asked for under Movie Maker |
 | `src/gdh/harness/covered.gd` | Lists the UI panels drawn over the screen's centre, for `covered.py` |
 | `src/gdh/harness/editor.gd` | The editor's main loop for `gdh editor`: opens each scene and saves what the editor shows |
 | `src/gdh/harness/probes.gd` | The probes |
-| `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, and gdh's own test runner |
+| `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd`, `check.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, gdh's own test runner, and the script check with no editor, which loads scripts as the game does, autoloads and all |
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays; the bridge and hooks, `api`, `test` and `export`, which run headless, once. `claude plugin test .` runs the band's tests. |
 | `docs/` | Live control, the editor, measuring frames, movies, displays, probes, and test reports |

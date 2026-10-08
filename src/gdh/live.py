@@ -502,9 +502,22 @@ def cmd_status(args):
 
 
 MOUSE_BUTTONS = {"left": 1, "right": 2, "middle": 3}
+# Godot's JoyButton and JoyAxis, in order, and the wheel's buttons.
+JOY_BUTTONS = ["a", "b", "x", "y", "back", "guide", "start", "left_stick", "right_stick", "left_shoulder",
+               "right_shoulder", "dpad_up", "dpad_down", "dpad_left", "dpad_right", "misc1", "paddle1", "paddle2",
+               "paddle3", "paddle4", "touchpad"]
+JOY_AXES = ["left_x", "left_y", "right_x", "right_y", "trigger_left", "trigger_right"]
+WHEEL = {"up": 4, "down": 5, "left": 6, "right": 7}
+MODIFIER_KEYS = {"ctrl": "Ctrl", "shift": "Shift", "alt": "Alt", "meta": "Meta"}
 
 
 def input_event(token, pressed, at):
+    if token.startswith("joy:"):
+        name = token[4:]
+        if name not in JOY_BUTTONS and not name.isdigit():
+            raise SystemExit(f"gdh: unknown gamepad button {name!r} ({', '.join(JOY_BUTTONS)}, or a number)")
+        return {"joy_button": JOY_BUTTONS.index(name) if name in JOY_BUTTONS else int(name), "pressed": pressed,
+                "at": at}
     if token.startswith("key:"):
         return {"key": token[4:], "pressed": pressed, "at": at}
     if token.startswith("mouse:"):
@@ -514,6 +527,99 @@ def input_event(token, pressed, at):
         # Where the pointer is: --move puts it there first.
         return {"mouse_button": MOUSE_BUTTONS[name], "pressed": pressed, "at": at}
     return {"action": token, "pressed": pressed, "at": at}
+
+
+def xy(text, option, form="X,Y"):
+    try:
+        x, y = (float(v) for v in text.split(","))
+    except ValueError:
+        raise SystemExit(f"gdh: {option} takes {form}, not {text!r}") from None
+    return [x, y]
+
+
+def device_input(args, n):
+    """A step's wheel, touches, gamepad axes and mouse-look, as events."""
+    events = []
+    # The wheel: each notch a press and a release of a wheel button, a notch a frame, where the pointer is.
+    if args.wheel_at and not args.wheel:
+        raise SystemExit("gdh: --wheel-at needs a --wheel")
+    at = xy(args.wheel_at, "--wheel-at") if args.wheel_at else None
+    if at:
+        events.append({"mouse_motion": at, "at": 0})
+    for spec in args.wheel:
+        direction, _, count = spec.partition(":")
+        if direction not in WHEEL or not (count or "1").isdigit():
+            raise SystemExit(f"gdh: --wheel takes up, down, left or right, and :N for N notches; not {spec!r}")
+        count = int(count or 1)
+        if count > n:
+            raise SystemExit(f"gdh: --wheel turns a notch a frame: step at least {count} frames")
+        for i in range(count):
+            notch = {"mouse_button": WHEEL[direction], "at": i, **({"position": at} if at else {})}
+            events += [{**notch, "pressed": True}, {**notch, "pressed": False}]
+    # Touches: each a finger of its own, numbered from 0. A tap lifts after a frame; a drag moves evenly over the step
+    # and lifts at its end.
+    for index, point in enumerate(args.touch):
+        p = xy(point, "--touch")
+        events += [{"touch": p, "index": index, "pressed": True, "at": 0},
+                   {"touch": p, "index": index, "pressed": False, "at": 1}]
+    for index, spec in enumerate(args.touch_drag, start=len(args.touch)):
+        ends = spec.split(":")
+        if len(ends) != 2:
+            raise SystemExit(f"gdh: --touch-drag takes X,Y:X,Y, not {spec!r}")
+        a, b = (xy(p, "--touch-drag", "X,Y:X,Y") for p in ends)
+        events.append({"touch": a, "index": index, "pressed": True, "at": 0})
+        moves = max(n - 1, 1)
+        for k in range(1, moves + 1):
+            events.append({"touch_drag": [a[0] + (b[0] - a[0]) * k / moves, a[1] + (b[1] - a[1]) * k / moves],
+                           "index": index, "at": k if n > 1 else 0})
+        events.append({"touch": b, "index": index, "pressed": False, "at": n})
+    # A stick or trigger stays where it's put, as a hand holds it, until another --axis moves it.
+    for spec in args.axis:
+        name, _, value = spec.partition("=")
+        try:
+            value = float(value)
+        except ValueError:
+            value = None
+        if name not in JOY_AXES or value is None or not -1 <= value <= 1:
+            raise SystemExit(f"gdh: --axis takes NAME=VALUE, VALUE from -1 to 1 and NAME one of {', '.join(JOY_AXES)}; "
+                             f"not {spec!r}")
+        events.append({"joy_axis": JOY_AXES.index(name), "value": value, "at": 0})
+    for spec in args.look:
+        events.append({"look": xy(spec, "--look", "DX,DY"), "at": 0})
+    return events
+
+
+def with_modifiers(events, mods, n):
+    """Splits each key:MOD+KEY into its modifier keys and the key, and holds the step's --mod keys from its start to its
+    end, around everything else. A key, button or pointer move made while modifiers are down carries them ("mods"), as
+    a keyboard's state does; a modifier key's own press and release carry the ones held before it."""
+    held = []
+    for name in (m for spec in mods for m in spec.lower().split(",") if m):
+        if name not in MODIFIER_KEYS:
+            raise SystemExit(f"gdh: unknown modifier {name!r} (ctrl, shift, alt or meta)")
+        if name not in held:
+            held.append(name)
+
+    def modifier(name, pressed, at, before):
+        return {"key": MODIFIER_KEYS[name], "pressed": pressed, "at": at, **({"mods": before} if before else {})}
+
+    out = [modifier(m, True, 0, held[:i]) for i, m in enumerate(held)]
+    for event in events:
+        combo = []
+        if "+" in event.get("key", ""):
+            *names, key = event["key"].split("+")
+            names = [m.lower() for m in names]
+            for name in names:
+                if name not in MODIFIER_KEYS:
+                    raise SystemExit(f"gdh: unknown modifier {name!r} in key:{event['key']} (ctrl, shift, alt or meta)")
+            combo = [m for m in names if m not in held]
+            event = {**event, "key": key, "mods": names}
+        if held and any(k in event for k in ("key", "mouse_button", "mouse_motion", "look")):
+            event = {**event, "mods": held + [m for m in event.get("mods", []) if m not in held]}
+        presses = [modifier(m, True, event["at"], held + combo[:i]) for i, m in enumerate(combo)]
+        releases = [modifier(m, False, event["at"], held + combo[:i]) for i, m in enumerate(combo)][::-1]
+        out += presses + [event] if event.get("pressed", True) else [event] + releases
+    return out + [modifier(m, False, n, held[:i]) for i, m in enumerate(held)][::-1]
 
 
 def cmd_step(args):
@@ -545,6 +651,9 @@ def cmd_step(args):
             events += [{"mouse_motion": [x, y], "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": True, "at": 0},
                        {"mouse_button": button, "position": [x, y], "pressed": False, "at": until}]
+    events = with_modifiers(events + device_input(args, n), args.mod, n)
+    # In time order, each frame's as given: the game follows the pointer, its buttons and the fingers event by event.
+    events.sort(key=lambda e: e["at"])
     step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
     # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
     reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
@@ -746,8 +855,9 @@ def add_parsers(sub):
     p.add_argument("--move", action="append", default=[], metavar="X,Y",
                    help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
     p.add_argument("--press", action="append", default=[], metavar="INPUT",
-                   help="Press at the start and keep it pressed. INPUT is an action name, key:NAME, or mouse:left, "
-                        "mouse:right or mouse:middle (at the pointer)")
+                   help="Press at the start and keep it pressed. INPUT is an action name, key:NAME (key:ctrl+s with "
+                        "its modifiers), mouse:left, mouse:right or mouse:middle (at the pointer), or a gamepad's "
+                        "joy:NAME (joy:a, joy:start, joy:dpad_up...)")
     p.add_argument("--release", action="append", default=[], metavar="INPUT", help="Release at the start")
     p.add_argument("--hold", action="append", default=[], metavar="INPUT",
                    help="Press at the start, release at the end")
@@ -759,6 +869,26 @@ def add_parsers(sub):
                    help="Press the left button at screenshot pixel X,Y at the start, release it at the end")
     p.add_argument("--right-hold", action="append", default=[], metavar="X,Y",
                    help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
+    p.add_argument("--wheel", action="append", default=[], metavar="DIR[:N]",
+                   help="Turn the mouse wheel up, down, left or right N notches (default 1) where the pointer is, a "
+                        "notch a frame from the step's start")
+    p.add_argument("--wheel-at", metavar="X,Y",
+                   help="Move the pointer to screenshot pixel X,Y first, and turn the wheel there")
+    p.add_argument("--mod", action="append", default=[], metavar="MODS",
+                   help="Hold ctrl, shift, alt or meta (comma-separated) for the step: pressed at its start, released "
+                        "at its end, and carried by its keys, clicks, wheel and pointer moves")
+    p.add_argument("--axis", action="append", default=[], metavar="NAME=VALUE",
+                   help="Put a gamepad axis at VALUE (-1 to 1) at the start, where it stays until another --axis moves "
+                        "it: left_x, left_y, right_x, right_y, trigger_left or trigger_right")
+    p.add_argument("--touch", action="append", default=[], metavar="X,Y",
+                   help="Tap the touchscreen at screenshot pixel X,Y for one frame. Each --touch, then each "
+                        "--touch-drag, is a finger of its own, numbered from 0")
+    p.add_argument("--touch-drag", action="append", default=[], metavar="X,Y:X,Y",
+                   help="Put a finger down at the first point at the start, move it evenly to the second over the "
+                        "step, and lift it at the end")
+    p.add_argument("--look", action="append", default=[], metavar="DX,DY",
+                   help="Move the mouse by DX,DY screenshot pixels at the start: relative motion, for mouse-look (a "
+                        "captured mouse stays at the window's centre). A negative DX needs =: --look=-40,0")
     p.add_argument("--shot-every", type=int, default=0, metavar="K", help="Save a frame every K frames")
     p.add_argument("--shot", action="store_true", help="Save a frame after stepping")
 

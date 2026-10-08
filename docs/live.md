@@ -117,6 +117,71 @@ A game can start other programs: a launcher that starts the game itself and exit
 - **`start --keep-children`** keeps the session, and its display, while any game or any process they spawned runs. When a launcher hands off and exits, the session goes on: `status` says the game has exited and lists what it spawned, commands that need the game (`step`, `shot`, `eval` and the rest) fail saying so, and `stop` ends it. Once the last spawned process exits, the watchdog stops the display and the next command says the session has ended. The idle timeout still applies (below): after the game has exited, the watchdog keeps it, and stops what the game spawned, then the display, as `stop` does, once no `gdh live` command has touched the session for that long. gdh's harness runs in the game it started, not in what that spawns, so a spawned game can be watched (its log, the files it writes, `status`) but not stepped or captured: to drive the real game, start it directly with `gdh live start`, with the arguments the launcher would give it.
 - A process that clears its environment, or sets `GDH_MARK` itself, isn't found.
 
+## Programs as they are: `--binary`
+
+`gdh live start --binary PATH` runs a program as it is, with no harness in it: an exported game (where `OS.has_feature("editor")` is false, as it is for a player), a launcher, or any X program. It gets a display of gdh's own, as a project does, and gdh sees and drives it from outside, as a person would, through the display's screen, pointer and keyboard.
+
+```sh
+gdh live start --binary build/game.x86_64 -- --level 3      # waits for its first window
+gdh live wait --log 'menu ready'                             # a line of its log
+gdh live shot                                                # the display's screen
+gdh live input --click 640,360 --type pilot --key Return --shot
+gdh live wait --exit                                         # how it ended
+gdh live stop
+```
+
+- **Exports.** A program with a Godot pack, embedded or beside it as `<name>.pck` (where Godot looks for it), is an exported Godot game. gdh puts Godot's off-screen options first (`--display-driver x11 --audio-driver Dummy --resolution WxH`, and `--gpu-index` with `GDH_GPU_INDEX`), and the arguments after gdh's `--` after Godot's own `--`, where `OS.get_cmdline_user_args()` returns exactly them. Any other program gets the arguments as they are. `--raw` gives an export its arguments as they are too, with nothing added, for engine options of your own.
+- **Starting.** `start` waits for the program's first window, up to `--timeout` seconds (default 60), and prints its size and title. If the program exits first, `start` fails with how it ended and the end of its log, and leaves nothing running. `--no-wait` returns at once, for a program that shows no window. `--keep-children`, the companion options, `--idle-timeout`, `--resolution`, `--display` and `--out` work as for a project. `--scene`, `--instances` and `--gpu-passes` need `--project`.
+- **Its output** goes to `<out>/program.log`. The program runs under `stdbuf`, so the log is written a line at a time: a release export otherwise holds its prints until it exits. `<out>/exit.json` records how it ended.
+- **Errors.** Each command prints the engine errors (`ERROR:`, `SCRIPT ERROR:`, `WARNING:`) the log gained since the command before, with repeats merged, and a `DEFECT:` line for resources that failed to load.
+
+| Command | What it does |
+|---|---|
+| `shot [--label L] [--tiles]` | Saves the display's whole screen to `<out>/shots/NNNN-L.png`: what a player would see. It's read from the X server, not from the game's viewport, so the debug views (`--view`) aren't there |
+| `input OPTION...` | Sends pointer and key input through the X server (XTest), in the order the options are given (below) |
+| `wait --seconds S` | Waits S seconds. Fails if the program ends meanwhile |
+| `wait --log REGEX` | Waits for a line of the log that matches REGEX (Python's `re.search`) and prints it. Each `--log` looks after the line the one before matched, so waiting for a line twice waits for it to come again. A line written just before the program ended is still found |
+| `wait --window` | Waits for a window to show, and prints its size, place and title |
+| `wait --exit` | Waits for the program to exit, and prints how it ended and the end of its log |
+| `status` | Whether it runs and for how long, its windows and the processes it spawned; or how it ended (its exit code, or the signal that ended it and whether that was a crash) and the end of its log. `--json` for all of it |
+| `stop` | Stops the program (SIGTERM, then SIGKILL), what it spawned, the companions and the display |
+
+`wait --log`, `--window` and `--exit` give up after `--timeout` seconds (default 60), and exit 1 with the end of the log. The other `gdh live` commands (`step`, `tree`, `eval`, `probes`, `run`, `pause`, `pipe`, `record`, `measure`, `frames`) need the harness, and say so.
+
+### Input
+
+| Option | Effect |
+|---|---|
+| `--move X,Y` | Move the pointer to X,Y |
+| `--click X,Y` | Left click at X,Y |
+| `--double-click X,Y` | Double click at X,Y |
+| `--right-click X,Y`, `--middle-click X,Y` | Right or middle click at X,Y |
+| `--wheel DIR[:N]` | Turn the wheel N steps (default 1) where the pointer is: `up`, `down`, `left` or `right` |
+| `--key KEY` | Press and let go of a key: an X keysym name (`Return`, `Escape`, `F5`, `a`, `Left`, `BackSpace`), Godot's name for it (`Enter`, `Space`, `PageUp`), or a chord (`ctrl+s`, `shift+Tab`) |
+| `--hold KEY[:S]` | Hold a key or chord down for S seconds (default 0.5) |
+| `--type TEXT` | Type TEXT into the window with the focus, a key a character, with Shift for a capital. A character the keyboard has no key for is put on a spare key while it's typed |
+| `--pause S` | Wait S seconds before the next input |
+| `--shot` | Save the screen `--settle` seconds (default 0.5) after the last input |
+
+Positions are screenshot pixels, the screen's. Every option is checked before any input is sent, so a bad position or key name sends nothing. The displays have no window manager, so nothing gives a window the keyboard's focus, and Godot takes the focus when its window is clicked, which loses that click. So gdh gives the window under a click the focus first, and before keys the window that has it, else the one under the pointer, else the topmost, and lets the program take it in. One `--click` is one click.
+
+### Kept off the desktop
+
+A `--binary` session's program gets what a project's game gets: the display, the alert stand-ins, `user://` in gdh's own directory, the `GDH_MARK` that finds what it spawns, the watchdog, and the cleanup. A black box can do anything, so it's kept further off the user's session too:
+
+- Its `XDG_RUNTIME_DIR` is an empty directory of the session's, so it finds no Wayland, D-Bus, PulseAudio or PipeWire socket of the user's, and its `DBUS_SESSION_BUS_ADDRESS` names a socket that isn't there.
+- `xdg-open`, `kde-open`, `kde-open5` and `gnome-open` are stand-ins that write `gdh: xdg-open URL` to the log, so `OS.shell_open` and the like never open the user's browser.
+- MangoHud and vkBasalt are turned off (`DISABLE_MANGOHUD=1`, `DISABLE_VKBASALT=1`): they draw into the program's frames, which the screen shows.
+- Its core size limit is 0, so a crash leaves no core dump for a desktop's crash reporter to show the user.
+
+### When it ends
+
+The program runs under `src/gdh/runner.py`, its parent, which records how it ended, and holds a connection to the display while it runs (gdh's displays exit when their last client leaves). When the program exits, the watchdog stops its display, its companions and what it spawned, as for a project; with `--keep-children` once what it spawned has ended too, so a launcher's handed-off game can still be shot and clicked. The session stays until `stop`, so `status` and `wait --exit` can say how it ended; commands that need it running (`shot`, `input`, `wait --seconds`, `--log`, `--window`) fail saying how it ended, with the end of its log. There's no harness to keep the idle timeout, so the runner keeps it: after `--idle-timeout` seconds (default 1800) without a `gdh live` command on the session, it stops the program and notes so in the log, and `status` says so.
+
+### `gdh export --smoke`
+
+`gdh export --project DIR --preset Linux --smoke SECONDS` exports, then runs the build as a `--binary` session runs a program, on a display of gdh's (`--display`, `--resolution`), for SECONDS. It fails, exiting 1, if the build crashes or exits before then, or its log has engine errors (warnings don't count), and passes otherwise. It saves the screen at the end to `smoke.png`, beside `program.log` and `display.log`, in `--smoke-out` (default `./captures/smoke/<preset>`). Arguments after `--` go to the game. It needs a Linux preset. With `--pack`, the pack runs on gdh's Godot (`--main-pack`), which needs no export templates; that's the editor build, so `OS.has_feature("editor")` is true there, as it isn't in an export.
+
 ## Sessions
 
 - **Several games at once:** `--session NAME` runs more than one game side by side. The default name is `default`.
@@ -166,6 +231,16 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - without `--keep-children`, the child ending once the launcher quits
 - with `--keep-children`, the session and display kept after the launcher quits, the child still drawing frames, `status` saying the game exited, `shot` refused saying why, and the watchdog stopping the display and ending the session once the child exits
 - with `--keep-children` and a short `--idle-timeout`, `status` keeping the session open after the launcher quits, and the watchdog stopping the child and the display once no command has come for that long
+
+`tests/test_binary.py` runs `testbed/binary/clicker.tscn`, a window that turns green when its button is clicked and prints what reaches it, as a build: Godot's release export template beside the clicker's pack, as `gdh export` writes a Linux build (skipped without export templates for this Godot version), and gdh's Godot running the pack. It checks:
+
+- one click on the export changing what it draws, and its shot showing it, before and after; typed text, a key, a chord, the wheel and a right click reaching it; a bad position or key sending nothing
+- `wait --log` returning the line, looking after the last match, timing out with exit 1, and finding a line written as the program quit; `wait --window`, `--seconds` and `--exit`
+- an exit reported with its code and the end of the log (by `wait --exit`, `status` and a refused `shot`), a program killed by a signal, and nothing left running after `stop`
+- the harness's commands refused, the program's environment (its display, no Wayland, runtime directory or D-Bus of the user's, the stand-ins first on `PATH`), and `OS.shell_open` going to the stand-in
+- `--keep-children`: a launcher script that hands off to the clicker and exits, and the clicker clicked and shot after it has
+- any X program (`xmessage`, when installed) answering a key with its exit code; a program that exits before its window failing `start`; the idle timeout
+- `gdh export --smoke` passing a good build, and failing one that raises an engine error as it starts and one that exits early; a real export's when the templates are there
 
 `tests/test_imports_and_size.py` checks the import cache's check and the window's size:
 

@@ -37,7 +37,7 @@ from pathlib import Path
 from gdh import companions, live, spawned, x11
 from gdh.display import open_display, parse_resolution
 from gdh.editor_bridge import parse_engine_errors
-from gdh.godot import GdhError, godot_env, kill_groups, pid_alive, write_alert_shims
+from gdh.godot import godot_env, kill_groups, pid_alive, write_alert_shims
 from gdh.images import save_tiles
 from gdh.imports import describe_missing, missing_resources
 from gdh.live import LiveError, session_path
@@ -655,6 +655,8 @@ def route(name, func):
             if not args.project:
                 raise LiveError("gdh live start takes --project DIR (a project, under gdh's harness) or --binary PATH "
                                 "(a program as it is: an exported game, a launcher).")
+            if args.raw or args.no_wait:
+                raise LiveError(f"{'--raw' if args.raw else '--no-wait'} goes with --binary.")
             return func(args)
         session = read_session(args.session)
         if session is None or session.get("kind") != "binary" or name in PASS:

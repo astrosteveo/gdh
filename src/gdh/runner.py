@@ -49,7 +49,7 @@ def main():
     env[spawned.VAR] = args.mark
     started = time.time()
     try:
-        held = x11.Display(env["DISPLAY"])  # until this process exits (never closed: the display may be gone by then)
+        display = x11.Display(env["DISPLAY"])  # until this process exits (never closed: the display may be gone by then)
     except GdhError as e:
         print(json.dumps({"error": str(e)}), flush=True)
         return 1
@@ -60,7 +60,7 @@ def main():
     except OSError as e:
         print(json.dumps({"error": f"Couldn't run {command[0]}: {e.strerror or e}"}), flush=True)
         return 1
-    print(json.dumps({"pid": proc.pid}), flush=True)
+    print(json.dumps({"pid": proc.pid, "display": display.name}), flush=True)
     devnull = os.open(os.devnull, os.O_WRONLY)
     os.dup2(devnull, sys.stdout.fileno())
     idle = False

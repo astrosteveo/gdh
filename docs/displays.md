@@ -8,7 +8,7 @@ Every Godot run gets an X display of its own, so its window never reaches the us
 | `xvfb` | Xvfb | No DRI3: Vulkan copies the frame through the CPU |
 | `auto` (default) | `gpu` if it starts, else `xvfb`, with a note on stderr | |
 
-`GDH_DISPLAY` sets the default for scripts that run gdh. `capture` prints the display it used, and puts it in `report.json`. `live start` and `live status` print each instance's display, as `display gpu :N`.
+`GDH_DISPLAY` sets the default for scripts that run gdh. A `--binary` session ([live.md](live.md#programs-as-they-are---binary)) reads the screen from the X server and sends input through XTest, which both have: on the GPU display the screen is Xwayland's, which holds the frames Vulkan hands over (checked on both). `capture` prints the display it used, and puts it in `report.json`. `live start` and `live status` print each instance's display, as `display gpu :N`.
 
 ## The GPU display
 

@@ -210,7 +210,9 @@ gdh measure line frame.png --from 400,120 --to 400,580    # a line's width at ha
 gdh measure spots frame.png --radius 6                     # each star's or mote's width at half its peak, and sigma
 gdh live measure black --frames 60 --fail --session s     # black cut into something lit: a NaN
 gdh live start --project game --session s --gpu-passes    # time each render pass too
-gdh live frames --clear --session s && gdh live step 600 --session s && gdh live frames --session s
+gdh live bench 600 --budget-p99 8.3 --session s            # time 600 frames in one call; exit 1 over budget
+gdh live monitors --leak --session s                       # nodes, orphans, objects, memory: exit 1 on steady growth
+gdh live audio --session s                                 # each bus's peak over the last step, and what played
 gdh measure sheet frames/still --out still-sheet.png      # 16 frames of a run (or a video) in one image
 gdh measure diff before.png after.png --out diff          # what changed: share, box, heatmap, amplified crop
 ```
@@ -274,7 +276,9 @@ gdh export --project path/to/game --preset Linux     # release build to the pres
 gdh export --project path/to/game --preset Linux --pack   # the .pck alone, no templates needed
 ```
 
-It checks the preset and the export templates for the exact Godot version first, and says what's missing.
+It checks the preset and the export templates for the exact Godot version first, and says what's missing. `--smoke SECONDS` then runs the build off-screen for that long, fails on a crash, an early exit or engine errors in its log, and saves `smoke.png`.
+
+To drive an exported build, a launcher or any other X program as it is (where `OS.has_feature("editor")` matters), run it as a black box on gdh's display: `gdh live start --binary build/game.x86_64`, then `wait --log REGEX`, `shot`, `input --click X,Y --type TEXT --key Return`, `status` and `stop`. Shots read the display, input goes through XTest, and gdh gives the window the focus so one click is one click. Commands that need gdh's harness (`step`, `eval`, `tree`, `find`) say so. See [docs/live.md](docs/live.md).
 
 ## Displays
 
@@ -304,6 +308,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/display.py` | The displays: the GPU display (weston and Xwayland) and Xvfb |
 | `src/gdh/imports.py` | `gdh import`, and the import cache's check before a run |
 | `src/gdh/override.py` | The `override.cfg` written into a project for one run |
+| `src/gdh/blackbox.py`, `perf.py` | `--binary` sessions (any program, its shots and XTest input), and `live bench`, `monitors` and `audio` |
 | `src/gdh/companions.py`, `spawned.py`, `watchdog.py` | A live session's companion processes, the processes its game spawns, and the watchdog that stops them when its game ends |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |

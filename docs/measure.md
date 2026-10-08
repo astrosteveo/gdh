@@ -1,6 +1,6 @@
 # Measuring frames
 
-`gdh measure` puts numbers on what a game draws: whether a still picture flickers, whether a moving one swims, how wide a thin line is, how big each point of light is, whether a dissolve leaves holes or doubles, whether a NaN has drawn black, whether dark areas are crushed to black, and how long each frame and each render pass takes on the GPU. It works on any PNG frames, whoever saved them, and `gdh live` records frames and frame times from a running game to feed it.
+`gdh measure` puts numbers on what a game draws: whether a still picture flickers, whether a moving one swims, how wide a thin line is, how big each point of light is, whether a dissolve leaves holes or doubles, whether a NaN has drawn black, whether dark areas are crushed to black, what changed between two frames or since a saved baseline, and how long each frame and each render pass takes on the GPU. It works on any PNG frames, whoever saved them, and `gdh live` records frames and frame times from a running game to feed it.
 
 ```sh
 gdh live record 120 --session s --out frames/still          # step 120 frames, saving each one
@@ -24,10 +24,44 @@ Every image measure reads luminance: Rec. 709's weights (0.2126, 0.7152, 0.0722)
 | `dissolve A B --region R` | Two layers drawn alone as masks (white where each draws): inside the region (where both draw when whole, shrunk by a pixel), `doubled_px` drawn by both, `empty_px` by neither, and `b_share`, the second's share. | A dither or screen-door fade between two models: both must be zero. |
 | `black` | `black_px`: pixels at or under `--floor` (0) in every channel. `nan_px`: those in black shapes more than half of whose immediate neighbours (`--ring 1`) are lit, over 24 in luminance (`--lit`), listed with their boxes in `nan_shapes`. `--fail` exits 1 if any. | A NaN draws pure black with no error, and a blur, the glow or temporal anti-aliasing can spread it. A shadow fades into black through dark pixels; a NaN cuts a hard hole in something lit. |
 | `crush` | In the region: `crushed_px`, pixels at the floor (every channel at or under `--floor`, 0) and their share; `near_floor_px`, within its last 6 steps (`--detail`); the darkest luminance; the largest crushed patch. `--fail` exits 1 if any. | Dark areas that should hold detail (a sky, smoke, a hull's shadowed side): a tone mapper clips the darkest values to 0, and a pixel there has lost its detail. |
+| `diff A B` | What changed from A to B: the largest and mean difference, the pixels changed by more than 2 (`--threshold`) and their share, the box round them, and the changed regions; with `--out DIR`, a heatmap and a crop of the largest change ([below](#what-changed-diffs-and-baselines)). Two directories compare by file name. | Checking that a change changed what it should, and nothing else. |
 | `mask WITH WITHOUT --out PNG` | Where something draws: the pixels where two shots of one held frame (with it, and with it hidden) differ by more than 1 in a channel, with the holes inside filled. | A region for the others: a hull's silhouette for `crush --mask`, say. |
 | `times RECORD` | A frame-time record's summary (below). | Reading a record `gdh live frames --save` kept. |
 
 `black` and `crush` have their limits. A black object drawn on purpose in front of something lit reads as a hole; give it a dark grey, or measure around it. A NaN on a surface lit under 24 slips past `--lit`. With little or no anti-aliasing, the last pixel or two of a dark crevice can reach pure black right beside lit pixels and read as a hole too. A pixel between two black shapes counts in both their rings. `crush` counts what's at the floor; deciding which regions should hold detail is the caller's.
+
+## What changed: diffs and baselines
+
+```sh
+gdh measure diff before.png after.png --out diff               # one pair
+gdh measure diff captures/before captures/after --out diff     # two directories, by file name
+gdh capture --project game --scene res://level.tscn --out captures/level --baseline baselines/level --update-baseline
+gdh capture --project game --scene res://level.tscn --out captures/level --baseline baselines/level   # exit 1 on a change
+```
+
+`gdh measure diff A B` compares two frames of one size, A before and B after. A pixel's difference is the largest of its three channels' differences, 0–255, and the pixel has changed when that is over `--threshold` (2, so rounding stays under it). It reports:
+
+| Key | What it is |
+|---|---|
+| `max_diff`, `mean_diff` | The largest difference, and the mean over the pixels |
+| `changed_px`, `changed_share` | The pixels changed, and their share of the frame (or of `--box` and `--mask`) |
+| `box` | The box round every changed pixel: x0, y0, x1, y1 in image pixels, the far edges excluded, as `--box` takes it |
+| `regions` | The changed pixels grouped: those in 8-pixel blocks that touch, diagonals included, are one region, so a change's ragged edge stays with it. Each region's pixels, box and largest difference, largest first (at most 10), and `region_count` |
+| `identical` | No pixel differs at all, by however little |
+
+With `--out DIR`, a pair that changed also gets two images. `heatmap.png` is B dimmed to grey with each changed pixel on a hot scale, red for the least change through yellow to white for 255 (logarithmic, so a change of a few levels shows as plainly as a large one), smaller differences in dim blue, and each region outlined in cyan. A frame over 1280 px long is shrunk by a whole factor, each pixel showing the largest difference it covers, so a single changed pixel still shows. `crop.png` is the largest region, padded, in A, in B and as their difference, side by side, each zoomed to about 400 px (nearest neighbor, at most 4×); the difference is amplified so its largest reads 255, and its title gives the factor.
+
+Two directories compare the PNGs directly in both by file name, and each pair's heatmap and crop are named after it (`normal-heatmap.png`). `changed` lists the pairs that changed, `only_in_a` and `only_in_b` the names one directory lacks, and a pair of different sizes has an `error` instead of numbers. `--fail` exits 1 when more than `--tolerance` percent (0) of a pair's pixels changed, a pair differs in size, or a name is in one directory only.
+
+Trust the numbers over your eyes. Looking at two frames misses small changes, and vision models are weakest at exactly the subtle regressions that matter (VideoGameQA-Bench); the diff counts every pixel. The heatmap shows where to look, and the crop shows what changed.
+
+### Baselines
+
+`gdh capture --baseline DIR` compares each view it saves with the PNG of the same name in DIR. With several scenes, DIR holds a subdirectory per scene, named as under `--out`. A view with pixels changed by more than `--threshold` (2) is a `baseline` finding named for the view (`normal.png`), whose message gives how much changed and the box round it, with the numbers above in its `data`, a crop in `crops/baseline-<view>-crop.png` (baseline, now, and the difference amplified) and a heatmap beside it. It's a warning when more than `--tolerance` percent (0) of the view's pixels changed, and capture then exits 1; within the tolerance it's info. A view missing from the baseline is a warning too, and a missing DIR stops gdh before Godot starts. `report.json` holds every view's numbers under `baseline`.
+
+`--update-baseline` writes each saved view into DIR, replacing what was there and keeping views not captured this time. Where an old baseline exists it still compares, listing the changes it accepts as info, and never fails on them. It writes nothing when the capture failed.
+
+Some views make steadier baselines than others. `unshaded` (the albedo alone) and `normals` (surface directions) change only when geometry, materials or the camera change. The lit frame (`normal`) and `lighting` also move with shadows, lights, the sky, fog and post effects, and anything that runs on time (an animated shader, particles, temporal anti-aliasing, a flickering light) can differ from one run to the next. For a check of what's built, capture `--modes unshaded,normals`; give the lit frame a tolerance, or hold what moves still. gdh draws a scene the same, pixel for pixel, run after run on one machine, on either display. Another GPU or driver may round or render differently, so keep a baseline per machine.
 
 ## Recording from a live session
 
@@ -64,5 +98,7 @@ Inside Godot, at 3840x2160, reading a frame back took about 10 ms and encoding i
 The GPU under gdh's display idles between frames and clocks down, so times read slower than in play; compare runs on the same machine, alone on the GPU.
 
 ## Tests
+
+`tests/test_diff.py` checks `diff` on made-up frames whose change is known (its numbers, box, regions, heatmap and crop, and directories by name), and `capture --baseline` on a copy of `testbed/smoke/smoke.tscn`: written, passed unchanged, failed with the box named when the box turns blue, passed within a tolerance, and written again.
 
 `tests/test_measure.py` checks each definition on made-up frames whose answers are known, and each live path on `testbed/measure/measure.tscn`, whose modes (`-- --mode NAME`) draw a still scene, the same with noise, a smooth and a shaken orbit, lines 1, 3 and 6 px wide, points of three sizes beside a block that isn't one (made up, not live), a sphere whose shader makes a NaN beside a black patch in a dark frame, ACES over a dark gradient, a dissolve whose layers match or don't, and a compositor pass with a timestamp of its own.

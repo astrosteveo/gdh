@@ -225,6 +225,12 @@ A script that drives many steps can keep one `gdh live pipe --session NAME` open
 
 The commands and their arguments are the raw protocol's (below), so a step takes `"until"`, `"trace"` and `"every"` there too, and `"instance"` follows the rules above. A request waits for its reply for `"timeout"` seconds if it gives one, otherwise 300, or for a `step` two seconds a frame when that's longer, as `gdh live step` does. The replies are what `--json` prints. `quit` is refused: stop the session with `gdh live stop`, which stops its companions too. If the game ends, the pipe answers with how it ended and exits with status 1.
 
+From Python, `gdh.client` keeps one pipe open and wraps it: `Session.start(...)` or `Session.attach(name)`, then `step`, `until`, `eval`, `click`, `find`, `shot` and `stop`, with input given as `step`'s options by name ([scenarios.md](scenarios.md#the-python-client)).
+
+## Scenarios: `gdh live save-scenario`
+
+`gdh live save-scenario --session NAME FILE` writes the session's start options and the inputs sent to it through `gdh.client` so far as a scenario file. Add checks to it, and `gdh scenario run FILE` replays it in a session of its own, frame for frame, and says which checks passed ([scenarios.md](scenarios.md)). `--force` writes over FILE.
+
 ## Processes the game spawns
 
 A game can start other programs: a launcher that starts the game itself and exits, a server, a tool it runs. gdh marks the game with a random `GDH_MARK=...` in its environment, which everything it spawns inherits, and finds those processes by it (`src/gdh/spawned.py`). (Godot's `OS.create_process` starts each child in a session of its own, and a child whose parent exits is handed to init, so the game's process group and parent links don't find them.) They run on the game's display, with its environment, and their output goes to the game's `godot.log`.

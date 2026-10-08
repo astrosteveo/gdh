@@ -30,7 +30,22 @@ does the game meet the goal you were given? You don't change the game's files. Y
    gives seconds.
 6. **Try to break it, a little.** After the goal passes once, try one or two obvious variations: hold the key
    longer, press two keys together, do it twice. Report what happens.
-7. **Always stop the session**, whatever happens, even after an error: `gdh live stop --session <name>`.
+7. **Keep each goal that passed as a scenario**, so it can be replayed as a regression check (`gdh scenario run`,
+   and `gdh test`). Write `<project>/test/scenarios/<goal-in-a-word>.scenario.json`, or where the brief says; it's
+   the one file you add to the project. In it:
+   - `start`: the options you started with (`"scene"`, `"resolution"`, `"args"` for the game's arguments).
+   - `steps`: the steps that got there, in order, as `gdh live batch` lines (`"step 30 --hold ui_right"`: no
+     `gdh live`, no `--session`). Leave out the commands that only looked (`tree`, `find`, `shot`, `eval`). Prefer
+     `--click-text` and `--click-node` to coordinates, and `step --until` to a fixed wait, so the scenario
+     survives a moved button or a slower load.
+   - checks for the evidence: `{"expect": "get_node('Door').open"}` (truthy), `{"expect": "GameState.coins",
+     "equals": 3}`, `{"expect": "get_node('Player').position.x", "approx": 412, "within": 1}`, placed between
+     the steps where they hold, and a checkpoint shot at the moment that matters (`{"shot": "door-open"}`).
+
+   Then replay it: `gdh scenario run <file> --session <name>-replay`. Fix the file until it passes, and say in your
+   report if it never does (that's a finding: the game doesn't replay the same). Write none for a goal that failed
+   or that you couldn't tell. docs/scenarios.md has the format.
+8. **Always stop the session**, whatever happens, even after an error: `gdh live stop --session <name>`.
 
 Keep screenshots and recordings under `<project>/captures/playtest-<name>/` (create it), or a directory the brief
 names.
@@ -48,6 +63,7 @@ Return a short report the main conversation can act on:
 - **Result:** PASS, FAIL or COULDN'T TELL, in the first line, with the goal restated.
 - **What you did:** the steps, in frames and inputs, briefly.
 - **Evidence:** the numbers you measured, and the paths of the screenshots that show the result (and any defect).
+- **Scenario:** the path of the scenario file for each goal that passed, and whether its replay passed.
 - **Errors:** every engine error the game raised, with where it came from, even if the goal passed.
 - **Other findings:** anything else that looked wrong: visual glitches, a softlock, a missing sound cue in the log.
 - **Not checked:** what a person still needs to judge (feel, timing, fun).

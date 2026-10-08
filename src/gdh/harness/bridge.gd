@@ -15,10 +15,12 @@ extends Node
 ## while the client thinks. "step" runs an exact number of frames. With
 ## --fixed-fps set to the physics tick rate, each frame is one physics tick.
 
+const Camera := preload("camera.gd")
 const Common := preload("common.gd")
 const Covered := preload("covered.gd")
 const ErrorCollector := preload("errors.gd")
 const Probes := preload("probes.gd")
+const Screen := preload("screen.gd")
 
 # Frame rate caps. Held: rendering continues, so cap it to spare the GPU.
 # Running: about real time. Stepping, or answering a command: uncapped.
@@ -231,6 +233,10 @@ func _handle(item: Dictionary) -> void:
 			result = await _cmd_probes()
 		"tree":
 			result = _cmd_tree(args)
+		"find":
+			result = _cmd_find(args)
+		"camera":
+			result = Camera.command(get_tree(), args)
 		"frames":
 			result = recorder.command(args)
 		"eval":
@@ -268,6 +274,9 @@ func _set_held(held: bool) -> void:
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
 func _cmd_step(args: Dictionary) -> Dictionary:
+	var aimed: Variant = _aim_events(args.get("events", []))
+	if aimed is String:
+		return {"error": aimed}
 	var frames := maxi(int(args.get("frames", 1)), 1)
 	var shot_every := int(args.get("shot_every", 0))
 	var cover_every := int(args.get("cover_every", 0))
@@ -318,6 +327,8 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		result.cover_samples = cover_samples
 	if not watch.is_empty():
 		result.merge(_watch_result(watch))
+	if not aimed.is_empty():
+		result.aimed = aimed
 	return result
 
 
@@ -347,10 +358,41 @@ func _cmd_shot(args: Dictionary) -> Dictionary:
 		if not Common.VIEWS.has(view):
 			return {"error": "Unknown view %s. Views: %s" % [view, ", ".join(Common.VIEWS.keys())]}
 	var label: String = args.get("label", "shot").validate_filename()
+	var framing := Screen.framing(get_tree(), args)
+	if framing.has("error"):
+		return framing
+	var paths: Variant = _shot_paths(args.get("out", ""), views)
+	if paths is String:
+		return {"error": paths}
 	_shot_count += 1
+	var hidden := Screen.hide_ui(get_tree()) if args.get("no_ui", false) else []
 	var saved: Dictionary = await Common.save_views(get_tree(), views, out_dir.path_join("shots"),
-			"%04d-%s-" % [_shot_count, label])
-	return {"shots": saved, "image_size": Common.image_size(get_tree())}
+			"%04d-%s-" % [_shot_count, label], framing.edit, paths)
+	Screen.show_layers(hidden)
+	var result := {"shots": saved, "image_size": Common.image_size(get_tree())}
+	if framing.edit.is_valid():
+		result.merge(framing.report)
+	return result
+
+
+## --out: the file a shot goes to, with the view's name added when there are several (shot.png: shot-normal.png,
+## shot-wireframe.png). A relative path is under the session's output directory. Returns {view: path}, or an error.
+func _shot_paths(out: String, views: Array) -> Variant:
+	if out.is_empty():
+		return {}
+	if out.is_relative_path():
+		out = out_dir.path_join(out)
+	if DirAccess.dir_exists_absolute(out):
+		return "--out takes a file, and %s is a directory." % out
+	if out.get_extension().is_empty():
+		out += ".png"
+	elif out.get_extension().to_lower() != "png":
+		return "--out writes a PNG, so give it a .png file, not %s." % out.get_file()
+	DirAccess.make_dir_recursive_absolute(out.get_base_dir())
+	var paths := {}
+	for view in views:
+		paths[view] = out if views.size() == 1 else "%s-%s.png" % [out.get_basename(), view]
+	return paths
 
 
 func _cmd_probes() -> Dictionary:
@@ -374,7 +416,42 @@ func _cmd_tree(args: Dictionary) -> Dictionary:
 	if start == null:
 		return {"error": "No node at %s." % path}
 	var budget := [int(args.get("max_nodes", TREE_MAX_NODES))]
-	return {"tree": _describe(start, scene, int(args.get("depth", 4)), budget), "cut_nodes": -budget[0] if budget[0] < 0 else 0}
+	var described := _describe(start, scene, int(args.get("depth", 4)), budget, args.get("visible_only", false))
+	return {"tree": described, "cut_nodes": -budget[0] if budget[0] < 0 else 0}
+
+
+## args: text (shown, any case), name (a pattern with * and ?), class (or one it extends); each given must match.
+## Nodes that show only, each with its box on screen; up to 10 that match but don't show, with why.
+func _cmd_find(args: Dictionary) -> Dictionary:
+	var filters := {}
+	for key in ["text", "name", "class"]:
+		if args.has(key) and not str(args[key]).is_empty():
+			filters[key] = str(args[key])
+	if filters.is_empty():
+		return {"error": "find takes a text, a name or a class."}
+	return Screen.find(get_tree(), filters)
+
+
+## Events aimed at a node: "on": {"node": PATH} or {"text": TEXT} puts a mouse event at the centre of the part of it
+## that shows, worked out once before the step's first frame. Returns [{path, class, text?, at}], one for each
+## target, or an error naming the candidates.
+func _aim_events(events: Array) -> Variant:
+	var aimed := {}
+	for spec in events:
+		if not (spec is Dictionary and spec.has("on")):
+			continue
+		var key := JSON.stringify(spec.on)
+		if not aimed.has(key):
+			var target: Dictionary = Screen.aim(get_tree(), spec.on if spec.on is Dictionary else {})
+			if target.has("error"):
+				return target.error
+			aimed[key] = target
+		if spec.has("mouse_motion"):
+			spec.mouse_motion = aimed[key].at
+		else:
+			spec.position = aimed[key].at
+		spec.erase("on")
+	return aimed.values()
 
 
 ## Evaluates a Godot Expression with the current scene as base. Inputs: tree,
@@ -522,7 +599,7 @@ func _walk(node: Node) -> Array[Node]:
 	return out
 
 
-func _describe(node: Node, scene: Node, depth: int, budget: Array) -> Dictionary:
+func _describe(node: Node, scene: Node, depth: int, budget: Array, visible_only := false) -> Dictionary:
 	budget[0] -= 1
 	var d := {"name": str(node.name), "class": node.get_class()}
 	var script: Script = node.get_script()
@@ -544,6 +621,8 @@ func _describe(node: Node, scene: Node, depth: int, budget: Array) -> Dictionary
 	if node.process_mode != PROCESS_MODE_INHERIT:
 		d.process_mode = ["inherit", "pausable", "when_paused", "always", "disabled"][node.process_mode]
 	var children := node.get_children()
+	if visible_only:
+		children = children.filter(func(child: Node) -> bool: return Screen.shows(child))
 	if children.is_empty():
 		return d
 	if depth <= 0 or budget[0] <= 0:
@@ -556,7 +635,7 @@ func _describe(node: Node, scene: Node, depth: int, budget: Array) -> Dictionary
 			d.more_children = children.size() - d.children.size()
 			budget[0] -= d.more_children
 			break
-		d.children.append(_describe(child, scene, depth - 1, budget))
+		d.children.append(_describe(child, scene, depth - 1, budget, visible_only))
 	return d
 
 

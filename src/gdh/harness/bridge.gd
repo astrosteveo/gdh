@@ -405,7 +405,7 @@ func _cmd_shot(args: Dictionary) -> Dictionary:
 	var hidden := Screen.hide_ui(get_tree()) if args.get("no_ui", false) else []
 	var saved: Dictionary = await Common.save_views(get_tree(), views, out_dir.path_join("shots"),
 			"%04d-%s-" % [_shot_count, label], framing.edit, paths)
-	Screen.show_layers(hidden)
+	Screen.show_layers(get_tree(), hidden)
 	var result := {"shots": saved, "image_size": Common.image_size(get_tree())}
 	if framing.edit.is_valid():
 		result.merge(framing.report)

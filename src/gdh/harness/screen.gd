@@ -528,9 +528,12 @@ static func _pixels(rect: Rect2) -> Rect2i:
 
 
 ## For --no-ui: hides every CanvasLayer drawn over the game that shows (layer 1 and up, not following the viewport:
-## HUDs, menus, overlays), and returns them for show_layers.
+## HUDs, menus, overlays), and returns them for show_layers, with the control that had the focus first. Hiding a
+## control takes its focus and its hover away, which show_layers gives back, so the next frame draws as before.
 static func hide_ui(tree: SceneTree) -> Array:
-	var hidden := []
+	var focused := tree.root.gui_get_focus_owner()
+	# Focus a click gave is drawn without the focus ring: has_focus(true) is false for it.
+	var hidden := [[focused, focused != null and not focused.has_focus(true)]]
 	for node in _walk(tree.root, tree):
 		var layer := node as CanvasLayer
 		if layer != null and layer.visible and layer.layer > 0 and not layer.follow_viewport_enabled:
@@ -539,7 +542,17 @@ static func hide_ui(tree: SceneTree) -> Array:
 	return hidden
 
 
-static func show_layers(layers: Array) -> void:
-	for layer in layers:
+static func show_layers(tree: SceneTree, layers: Array) -> void:
+	if layers.is_empty():
+		return
+	for layer in layers.slice(1):
 		if is_instance_valid(layer):
 			layer.visible = true
+	var focused: Variant = layers[0][0]
+	if is_instance_valid(focused) and (focused as Control).is_visible_in_tree():
+		(focused as Control).grab_focus(layers[0][1])
+	# The pointer hasn't moved: a motion where it is puts the hover back on what's under it.
+	var motion := InputEventMouseMotion.new()
+	motion.position = tree.root.get_mouse_position()
+	motion.global_position = motion.position
+	tree.root.push_input(motion)

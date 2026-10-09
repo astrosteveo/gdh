@@ -81,7 +81,38 @@ $ gdh live find --class Button --name "*Quit*"
 
 `step --click-text TEXT` and `--click-node PATH` click a node at the centre of the part of it that shows, worked out before the step's first frame: the pointer moves there, the left button goes down and comes up a frame later, as with `--click`. A path is from the current scene, or from the root (`/root/...`). A text picks the one node showing exactly that text, in any case, else the one whose text holds it. A text no node shows, or shows in several, a path with no node, and a node that doesn't show fail the step before it runs, naming what's there: the texts on screen, the nodes that match, or why the node doesn't show. The step says what it clicked (`clicked UI/GoButton (Button) text="Go" at 160,125`; `"aimed"` in `--json`).
 
+Before the first frame, the step also checks that the click would reach the node, as a browser test checks a button isn't covered. gdh sends the pointer there with the game held and asks Godot which control it's over (`gui_get_hovered_control()`, into a dialog and through a SubViewportContainer), the control a click there goes to. The click fails, without stepping, when something else would take it:
+
+- a control drawn over the node that doesn't let the pointer through (a transparent panel or a menu left up, with mouse_filter Stop or Pass): `UI/GoButton (Button) can't be clicked at 160,125: UI/Fade (ColorRect) is over it and takes the click (mouse_filter Stop)`
+- a control inside the node with mouse_filter Stop (an icon in a button), which keeps the click from it: `UI/GoButton/Icon (TextureRect) inside it takes the click first`
+- a dialog or other window over it, or an exclusive window anywhere
+
+A control inside the node with mouse_filter Pass passes the click up to it, and a node that lets clicks through (a Label, mouse_filter Ignore) is clicked through to whatever is under it. Both are fine, and the step names what took the click (`which passed it to ...`; `"took"` in the aimed entry). A node that isn't a Control (a Sprite2D, a 3D object) clicks into the world: a control with mouse_filter Stop where it shows is a note, not a failure, since the game's `_input` still gets the click and only `_unhandled_input` doesn't. `--click X,Y` checks nothing and says where the click went (`click at 160,125 went to UI/Fade (ColorRect, mouse_filter Stop)`; `"clicked": [{"at", "took"}]` in `--json`, with `took` null when no control takes it), so it clicks a covered node anyway. Sending the pointer there moves the controls' hover while the game is held, as the click would; after a failed click gdh moves it back.
+
 `tree --visible-only` leaves hidden nodes, and everything under them, out of the tree.
+
+## UI snapshots: `gdh live snapshot`
+
+`gdh live snapshot` prints the UI on screen as an outline, as a browser test's accessibility snapshot does: what shows something to read or use, with its state, under the named nodes that group it.
+
+```
+$ gdh live snapshot
+- Arena (Node2D)
+  - UI (CanvasLayer)
+    - GoButton (Button) "Go" [focused]
+    - Stats (Label) "x 200.0  jumps 0  clicks 1"
+    - Field (LineEdit) placeholder "Name"
+    - (AcceptDialog) "Alert!"
+      - (Label) "Saved."
+      - (Button) "OK"
+```
+
+- **What's in it:** each node that shows (as `find` counts it) and has a text (a Label's, a Button's, a RichTextLabel's, a Label3D's), or can be used whatever its text (a button, a LineEdit or TextEdit, a slider, spin box or progress bar, a TabContainer, an ItemList). A window (a dialog) is a group of its own, with its title. A node that groups more than one of them is a line of its own, with what's under it indented; one that holds a single one is left out, and so are hidden nodes and everything under them, the parts Godot makes inside a field or a slider, and scroll bars. A name Godot made (`@Button@6`, a dialog's button) changes from run to run, so the line gives the class alone.
+- **State:** `[disabled]`, `[pressed]` (a toggle button), `[checked]` (a CheckBox or CheckButton), `[read-only]`, `[focused]`; a range's `value/max`, a TabContainer's `tab "Name"`, an ItemList's count and selected items; a field's text, or its `placeholder` while it's empty.
+- **Boxes:** `--boxes` adds each node's box on screen (`@x,y wxh`), and `--grid PX` rounds them to PX pixels (and adds them), so a shift of a pixel or two isn't a change.
+- `snapshot PATH` keeps it to what's under one node; `--json` gives the nodes as the game sent them, with paths and boxes.
+
+`--baseline FILE` compares the outline with a file and exits 1 with a unified diff on stderr when a line differs; `--update-baseline` writes the file. It checks what the UI says and its state without depending on pixels, so a baseline holds across GPUs. A scenario takes it as a step, `{"snapshot": NAME, "baseline": true}` ([scenarios.md](scenarios.md#ui-snapshots)).
 
 ## Framing shots
 
@@ -217,6 +248,16 @@ gdh live step --until "Debug.state().scene == 'Hangar'" --max 600 --session s
 
 Keep it to reading state and jumping to it; what it skips (a login, a tutorial) still needs a playthrough of its own now and then.
 
+## Locales
+
+`start --locale CODE` translates the game's text to that locale, and `--locale pseudo` turns on Godot's pseudolocalization (every text 40% longer, with accents), so `probes` and `snapshot` show the text that won't fit ([probes.md](probes.md#text-that-wont-fit---locale)).
+
+## The timeline: `--timeline`
+
+`gdh live start --timeline` keeps a record of the session in `<out>/timeline/`, as Playwright's trace viewer does for a browser test: `index.html` lists every command sent to the game, in order, with what it sent, the frames before and after it, how long it took, the engine errors (with their backtraces), notes and game output that came back, what a click went to, an eval's value, links to the shots it saved, and a thumbnail of the frame after each `step`, `run`, `pause`, `camera` and `reload` (320 pixels wide; click it for the full thumbnail). A checkbox shows only the commands that failed or raised errors or notes. It keeps the commands from every way in: commands, `batch`, `pipe`, a recipe and a replay; `status` is left out.
+
+The page opens straight from the disk, with no server. It reads `timeline.js` beside it, one line a command (`T({...});`), written as the session goes, so it's current at any time, and survives a session that crashed. `start` and `stop` print its path. `restart` keeps the option and adds to the same timeline: the old game's stop, then a mark where the game started again; a new `start` begins it afresh. Each thumbnail is one more small shot after the command, a few milliseconds; a session without `--timeline` does nothing more. A `--binary` session has no timeline.
+
 ## Companions
 
 A session can start other programs beside the game, such as a game server, and stop them with it:
@@ -233,6 +274,26 @@ gdh live start --project client --session vs \
 - **Ready:** `--companion-ready NAME=CHECK` says when it's ready. `tcp`, the default, waits for its port to take a connection. An `http://` or `https://` URL waits for a 2xx answer, and `none` doesn't wait. `--timeout` bounds the wait for each companion, and then for the game.
 - **Logs:** each companion's output is in `<out>/<NAME>.log`. A companion that exits before it's ready, or isn't ready in time, stops the start with the end of its log, and nothing is left running.
 - **Stopping:** `stop` quits the game first, so it can sign off, then stops every companion's process group. A watchdog also stops them if the game ends by itself (its idle timeout, a crash). While the session runs, a companion that has exited is noted, with the end of its log, on every command, and `status` shows each companion.
+
+## A worse network: `--net`
+
+`--net NAME` puts companion NAME behind a network proxy of gdh's, so a test can give the game latency, lost packets and a link that goes down, as browser tests throttle and cut the network:
+
+```sh
+gdh live start --project game --instances 2 --net server --net-latency 80 \
+  --companion 'server=exec ./server --port {port}' -- --connect 127.0.0.1:{server.port}
+gdh live net --cut --instance 1          # instance 1's link goes down
+gdh live run; sleep 5; gdh live pause    # the game notices, in real time
+gdh live net --heal --instance 1
+gdh live net --reset --instance 0        # close instance 0's TCP connections now: does it reconnect?
+gdh live net                             # each link's settings, and what went through it
+```
+
+- **The links:** the companion keeps its port. Each game instance gets a port of its own on the proxy, which `{NAME.port}` names in its arguments, and the proxy passes what comes in, TCP and UDP alike (ENet, WebSockets, a game's own protocol), on to the companion and back. Only the instances' links go through it: the companion's own command still gets its real `{port}`.
+- **What it does:** `--latency MS` delays everything, each way; `--jitter MS` adds up to that much more to each packet, drawn at random, so UDP datagrams can arrive out of order; `--loss PCT` drops that share of UDP datagrams each way. TCP loses nothing (it resends: a game sees only delay), and its data stays in order. `--cut` is a link that's gone: UDP is dropped, and TCP data is held, without closing anything, until `--heal`, as a network that goes down and comes back does (a game that times out first closes the connection itself). `--reset` closes the link's TCP connections at once, with a reset, as a server that drops its clients does.
+- **Which link:** `gdh live net` changes every link, or one instance's with `--instance K`, or one companion's with `--companion NAME`. `--net-latency`, `--net-jitter` and `--net-loss` on `start` set every link from the start. With no change, `net` prints each link and what went through it: TCP connections and bytes each way, UDP datagrams each way and those dropped (`--json` for all of it).
+- **Time:** the delays are in real time, as a network's are. A held game doesn't read its sockets, and `step` runs frames as fast as the GPU goes, so let the game run in real time (`gdh live run`, then `pause`) or wait on what it measured (`step --until`, in a session of one instance). The random draws repeat with the session's seed: the same datagrams are dropped, in a game that sends the same ones.
+- The proxy is a process of the session's (its output is `<out>/net.log`), and stops with it.
 
 ## Several instances
 
@@ -429,6 +490,7 @@ This is how gdh talks to one instance. The commands are `status`, `step`, `shot`
 - `shot` takes `{"views": [...], "label": "shot", "out": FILE, "crop": [x, y, w, h], "node": PATH, "margin": PX, "zoom": K, "max_width": W, "no_ui": bool}`, all but `views` optional; a relative `out` is under the session's output directory. It returns `{"shots": {view: path}, "image_size": [w, h]}`, with `"crop"` and `"size"` when the shot is cropped or scaled.
 - `tree` takes `{"path", "depth", "visible_only": bool}`.
 - `find` takes `{"text", "name", "class"}`, at least one, and returns `{"matches": [{"path", "class", "text"?, "screen", "disabled"?}], "hidden": [{..., "why"}], "more": n}`.
+- `snapshot` takes `{"path"}` (optional) and returns `{"nodes": [{"name", "class", "path", "children", "text"?, "placeholder"?, "states"?, "value"?, "box"?}]}`, the outline `gdh live snapshot` prints.
 - `camera` takes `{"from": [x, y, z], "at": [x, y, z], "fov", "far"}` (3D), `{"at": [x, y], "zoom"}` (2D) or `{"release": true}`.
 - `reload` takes `{"paths": [...]}` (empty: every loaded script whose file changed) and returns `{"reloaded": [path], "failed": [{"path", "error"}], "unchanged": n, "filled": {path: [member]}}`.
 
@@ -443,7 +505,7 @@ This is how gdh talks to one instance. The commands are `status`, `step`, `shot`
 
 `mods` lists the modifiers held (`ctrl`, `shift`, `alt`, `meta`) and sets the event's flags. It doesn't press their keys, which are key events of their own (`gdh live step` sends them around the rest). Send events in time order: the bridge follows the pointer, its buttons and the fingers event by event.
 
-A mouse event with `"on": {"text": TEXT}` or `"on": {"node": PATH}` instead of a position goes to the centre of what shows of that node, as `--click-text` and `--click-node` do; the step's reply lists each target in `"aimed"`, and fails before stepping when a target can't be clicked.
+A mouse event with `"on": {"text": TEXT}` or `"on": {"node": PATH}` instead of a position goes to the centre of what shows of that node, as `--click-text` and `--click-node` do; the step's reply lists each target in `"aimed"` (with `"took"`, `{path, class, mouse_filter}`, when a control other than the target takes the click), and fails before stepping when a target can't be clicked or another control would take the click ([Finding and clicking nodes](#finding-and-clicking-nodes)). A step whose first frame starts with a press at a position reports what takes each one in `"clicked"`.
 
 ## Tests
 
@@ -454,6 +516,10 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - held input across steps
 - button clicks at the positions `tree` reports, with no stretching and in both stretch modes
 - `find` by text, name and class, its one-line output, the nodes that don't show and why, and its box matching `tree`'s in both stretch modes
+- `--net`: two instances of `testbed/live/net.tscn` reaching an echo server (`testbed/live/echo.py`) over UDP and TCP through ports of their own on the proxy; latency on one instance's link doubling into its round trips and not the other's; a cut link passing nothing until healed while the other talks on; a reset making the game connect again; the same seed dropping the same datagrams (`tests/test_net.py`)
+- `snapshot`: the arena's UI outline with a clicked button focused, a hidden menu left out, boxes on a 10-pixel grid, a dialog as a group with its title and the names Godot made left out; a baseline written, the same, then failing with the diff when the button was disabled; and a scenario's snapshot baseline passing, then failing with its diff (`tests/test_scenarios.py`)
+- `start --timeline`: a step, a click, an eval, a failed eval and a `batch`'s step and shot in `timeline/timeline.js` with their frames, values, error and thumbnails, `status` left out, the shot linked, a restart added to it and a new start beginning it again (`tests/test_timeline.py`)
+- a click on a button under a transparent panel failing without stepping and naming the panel, `--click` reporting the panel took it, and a panel with mouse_filter Ignore letting the click through; a control inside a button passing the click up with mouse_filter Pass and failing it with Stop; a click on a Node2D noting the control that stops it
 - `--click-text` and `--click-node` clicking the Go button (and over `pipe`), a dialog's OK button, a button in a SubViewport shown at 2x, and failing, without stepping, on a missing text, a hidden node, a missing path and an ambiguous text, with the candidates named
 - `tree --visible-only`
 - `shot --out` with one view and with several, `--crop` and `--zoom`, `--node` and `--margin` (in both stretch modes, and on a 3D object), `--max-width`, the two together, and bad framings, each image compared with the full frame pixel for pixel

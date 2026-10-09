@@ -21,6 +21,10 @@ Each finding has these fields:
 
 The list of checks, their thresholds and known gaps is in [skills/gdh/references/probes.md](../skills/gdh/references/probes.md), which the Claude Code skill also reads.
 
+## Text that won't fit: `--locale`
+
+`gdh capture --locale CODE` and `gdh live start --locale CODE` translate the game's text to a locale (`TranslationServer.set_locale`, before the scene loads; a game that sets its own locale afterwards, from a saved setting, wins). `--locale pseudo` turns on Godot's pseudolocalization instead, without touching the project: every translated text 40% longer, its letters accented (`Options` draws as something like `[_Öṕţíôńš_]`) and in brackets, so a text that's cut off shows where it ends. The `text_overflow` probe then finds the Labels and Buttons whose text no longer fits: cut off by clip text or an overrun trim, lines of a wrapping Label past its height, or a node grown past its parent's edge. `testbed/locale/menu.tscn` fits in English and breaks in three places in pseudo (`tests/test_capture.py`). Only text that goes through translation grows: text a script sets with auto-translate off doesn't.
+
 ## Results on the test scenes
 
 Tested on the 10 scenes in `testbed/blind/` (answer key in `testbed/blind/KEY.md`) plus `testbed/smoke/`. These scenes are now the set the rules were tuned on, not a blind test. Scoring rules were set before the first run:

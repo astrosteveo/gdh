@@ -285,6 +285,97 @@ def test_find_and_click_inside_a_subviewport(arena):
         live("step", "1")
 
 
+def overlay(mouse_filter, parent="get_node('UI')"):
+    """A Panel over the Go button, made transparent so it's there but can't be seen, as a menu left up is."""
+    panel = f"{parent}.get_child(-1)"
+    made = pipe(*({"cmd": "eval", "args": {"expr": expr}} for expr in (
+        f"{parent}.add_child(ClassDB.instantiate('Panel'))", f"{panel}.set('size', Vector2(400, 400))",
+        f"{panel}.set('self_modulate', Color(1, 1, 1, 0))", f"{panel}.set('mouse_filter', {mouse_filter})")))
+    assert all(r["ok"] for r in made)
+    return panel
+
+
+def test_a_click_on_a_covered_button_fails_naming_the_cover(arena):
+    panel = overlay(0)  # Stop
+    try:
+        frame, clicks = live("status")["result"]["frame"], value("clicks")
+        proc = gdh("live", "step", "3", "--click-text", "Go", "--session", SESSION, check=False)
+        assert proc.returncode == 1
+        assert "UI/GoButton (Button) can't be clicked at 160,125: UI/@Panel@" in proc.stderr
+        assert "(Panel) is over it and takes the click (mouse_filter Stop)" in proc.stderr
+        assert "--click 160,125" in proc.stderr
+        assert live("status")["result"]["frame"] == frame  # nothing stepped
+        # --click goes there anyway, and says what took it.
+        [click] = live("step", "3", "--click", "160,125")["result"]["clicked"]
+        assert click["took"]["class"] == "Panel" and click["took"]["mouse_filter"] == "Stop"
+        assert value("clicks") == clicks
+        # A panel that lets the pointer through (Ignore) doesn't stop the click.
+        live("eval", f"{panel}.set('mouse_filter', 2)")
+        assert "took" not in live("step", "3", "--click-text", "Go")["result"]["aimed"][0]
+        assert value("clicks") == clicks + 1
+    finally:
+        live("eval", f"{panel}.queue_free()")
+        live("step", "1")
+
+
+def test_a_control_inside_a_button_passes_the_click_up_unless_it_stops_it(arena):
+    icon = overlay(1, parent="get_node('UI/GoButton')")  # Pass, inside the button
+    try:
+        clicks = value("clicks")
+        [aimed] = live("step", "3", "--click-node", "UI/GoButton")["result"]["aimed"]
+        assert aimed["took"]["path"].startswith("UI/GoButton/@Panel@")
+        assert value("clicks") == clicks + 1
+        live("eval", f"{icon}.set('mouse_filter', 0)")  # Stop
+        proc = gdh("live", "step", "3", "--click-node", "UI/GoButton", "--session", SESSION, check=False)
+        assert proc.returncode == 1 and "(Panel) inside it takes the click first (mouse_filter Stop)" in proc.stderr
+    finally:
+        live("eval", f"{icon}.queue_free()")
+        live("step", "1")
+
+
+def test_a_click_into_the_world_notes_a_control_that_stops_it(arena):
+    # The Player is a Node2D: its ColorRect body (mouse_filter Stop) keeps the click from _unhandled_input.
+    proc = gdh("live", "step", "2", "--click-node", "Player", "--session", SESSION)
+    assert "Player/Body (ColorRect) inside it takes the click first (mouse_filter Stop)" in proc.stderr
+
+
+def test_snapshot_outlines_the_ui_and_compares_it_with_a_baseline(arena, tmp_path):
+    live("step", "2", "--click-text", "Go")
+    text = gdh("live", "snapshot", "UI", "--session", SESSION).stdout
+    lines = text.splitlines()
+    assert lines[0] == "- UI (CanvasLayer)"
+    assert '  - GoButton (Button) "Go" [focused]' in lines
+    assert any(line.startswith('  - Stats (Label) "x ') for line in lines)
+    assert not any("PauseMenu" in line for line in lines)  # hidden: left out with what's under it
+    boxed = gdh("live", "snapshot", "UI", "--grid", "10", "--session", SESSION).stdout
+    assert '  - GoButton (Button) "Go" [focused] @100,100 120x50' in boxed.splitlines()
+    # A dialog is a group of its own, with its title; the names Godot made are left out.
+    live("eval", "get_node('UI').add_child(ClassDB.instantiate('AcceptDialog'))")
+    dialog = "get_node('UI').get_child(-1)"
+    try:
+        live("eval", f"{dialog}.set('dialog_text', 'Saved.')")
+        live("eval", f"{dialog}.popup_centered(Vector2i(300, 120))")
+        live("step", "1")
+        outline = gdh("live", "snapshot", "UI", "--session", SESSION).stdout
+        assert '  - (AcceptDialog) "Alert!"\n    - (Label) "Saved."\n    - (Button) "OK"' in outline
+    finally:
+        live("eval", f"{dialog}.queue_free()")
+        live("step", "1")
+    # A baseline: written, the same, then changed.
+    baseline = tmp_path / "ui.txt"
+    gdh("live", "snapshot", "UI/GoButton", "--baseline", baseline, "--update-baseline", "--session", SESSION)
+    same = gdh("live", "snapshot", "UI/GoButton", "--baseline", baseline, "--session", SESSION)
+    assert "the same as the baseline" in same.stderr
+    live("eval", "get_node('UI/GoButton').set('disabled', true)")
+    try:
+        changed = gdh("live", "snapshot", "UI/GoButton", "--baseline", baseline, "--session", SESSION, check=False)
+        assert changed.returncode == 1
+        assert '-- GoButton (Button) "Go" [focused]' in changed.stderr
+        assert '+- GoButton (Button) "Go" [disabled, focused]' in changed.stderr
+    finally:
+        live("eval", "get_node('UI/GoButton').set('disabled', false)")
+
+
 def test_tree_visible_only_leaves_out_hidden_nodes(arena):
     assert "PauseMenu" in [c["name"] for c in live("tree", "UI")["result"]["tree"]["children"]]
     shown = [c["name"] for c in live("tree", "UI", "--visible-only")["result"]["tree"]["children"]]

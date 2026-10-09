@@ -105,6 +105,7 @@ Options:
 |---|---|---|
 | `--scene` | required | Scene to capture. Repeat it to capture several scenes, each in its own subdirectory. |
 | `--modes` | all six | Comma-separated list of views, e.g. `normal,wireframe` |
+| `--locale CODE` | the project's | Translate the game's text to this locale, or `pseudo`: every text 40% longer with accents, so the `text_overflow` probe finds what won't fit ([docs/probes.md](docs/probes.md#text-that-wont-fit---locale)) |
 | `--warmup` | `30` | Frames to render before capturing |
 | `--resolution` | `1280x720` | The game window's size, checked once the game has started ([Window size](#window-size)) |
 | `--display` | `auto` | `gpu`, `xvfb` or `auto` ([Displays](#displays)) |
@@ -147,6 +148,8 @@ gdh live batch --session s < commands.txt                      # many commands, 
 ```
 
 After a code change, `gdh live reload` loads changed GDScript into the running game with its state kept, and `gdh live restart --replay` starts the session again with the same options and companions and replays its input log back to the same frame. `start --recipe FILE` runs lines written as for `batch` once the game is ready (a project's "get to the hangar"), `--seed N` makes the global random numbers repeat, and `--user-data fresh` or `--user-data-from DIR` give the session a `user://` of its own.
+
+`start --net NAME` puts a companion behind gdh's network proxy, and `gdh live net` adds latency, jitter and packet loss, cuts and heals one instance's link, or resets its connections, to test a multiplayer game's lag, desync and reconnects. `gdh live snapshot` prints the UI on screen as a text outline, each text, button, field and slider with its state, and compares it with a baseline file, a check that doesn't depend on pixels. `start --timeline` keeps a record of the session to look through afterwards, as Playwright's trace viewer does: `<out>/timeline/index.html` lists every command with its frames, errors, notes and values, and a thumbnail of the frame after it. `--click-text` and `--click-node` fail without stepping when something else would take the click, such as a transparent panel left over a button, and say what it is.
 
 Results go to stdout. Engine errors (with a script's backtrace), `DEFECT:` lines, notes and what the game printed go to stderr, so they survive a discarded stdout; `--strict` exits 1 when the game raised engine errors. `gdh live list` lists every session.
 

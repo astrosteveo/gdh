@@ -30,7 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from gdh import companions, restart, spawned
+from gdh import companions, netem, restart, spawned, timeline
 from gdh.display import CHOICES, open_display, parse_resolution, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
                        size_mismatch, write_alert_shims)
@@ -64,6 +64,8 @@ def log_tail(path, lines=15):
 def remove_session(session):
     session_path(session["name"]).unlink(missing_ok=True)
     shutil.rmtree(session.get("shims", ""), ignore_errors=True)
+    if session.get("net"):
+        shutil.rmtree(Path(session["net"]["socket"]).parent, ignore_errors=True)
 
 
 def instances(session):
@@ -190,6 +192,7 @@ def call(session, cmd, args=None, instance=0, timeout=300):
     games = instances(session)
     args = args or {}
     chosen = pick(session, instance)
+    started = time.time()
     if cmd in EVERY_INSTANCE:
         sends = [(i, args if i in chosen or cmd != "step" else {**args, "events": []}) for i in range(len(games))]
     else:
@@ -200,6 +203,8 @@ def call(session, cmd, args=None, instance=0, timeout=300):
         with ThreadPoolExecutor(len(sends)) as pool:
             replies = list(pool.map(lambda s: request(games[s[0]], cmd, s[1], timeout), sends))
     restart.log_input(session, cmd, args, instance, replies)
+    timeline.record(session, cmd, args, instance, replies, [i for i, _ in sends], started,
+                    lambda i, c, a: request(games[i], c, a, 60))
     if len(games) == 1:
         return replies[0]
     for (i, _), reply in zip(sends, replies):
@@ -313,6 +318,8 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
         user_args += ["--scene", args.scene]
     if getattr(args, "seed", None) is not None:
         user_args += ["--seed", str(args.seed)]
+    if getattr(args, "locale", None):
+        user_args += ["--locale", args.locale]
     game_args = [companions.expand(a, ports, instance=index) for a in args.game_args]
     # --fixed-fps matching the tick rate makes every frame exactly one physics tick.
     # --gpu-profile makes the renderer capture a timestamp at each pass, which `frames` reads (harness/frames.gd).
@@ -401,6 +408,15 @@ def cmd_start(args):
         companions.expand(command, ports, own=key)
     for arg in args.game_args:
         companions.expand(arg, ports, instance=0)
+    for key in args.net:
+        if key not in commands:
+            raise LiveError(f"--net names '{key}', which isn't a --companion.")
+    shaping = {"latency": args.net_latency, "jitter": args.net_jitter, "loss": args.net_loss}
+    if any(v < 0 for v in shaping.values()) or args.net_loss > 100:
+        raise LiveError("--net-latency and --net-jitter take milliseconds, and --net-loss a percent from 0 to 100.")
+    if not args.net and any(shaping.values()):
+        raise LiveError("--net-latency, --net-jitter and --net-loss go with --net NAME: the companion to put behind "
+                        "the network proxy.")
     project = Path(args.project).resolve()
     parse_resolution(args.resolution)
     restart.prepare_start(args, name)
@@ -427,10 +443,19 @@ def cmd_start(args):
             started_groups.append(record["pid"])
             session.setdefault("companions", []).append(record)
             print(f"companion '{key}': pid {record['pid']}, port {record['port']}, log {record['log']}")
+        if args.net:
+            net = netem.start(netem.plan(args.net, ports, args.instances, shaping), args.seed,
+                              SESSION_DIR / f"{name}-net", out)
+            started_groups.append(net["pid"])
+            session["net"] = net
+            for route in net["routes"]:
+                print(f"network: {netem.describe_route_start(route)}")
         deadline = time.monotonic() + args.timeout
         for index in range(args.instances):
             instance_out = out if args.instances == 1 else out / f"instance-{index}"
-            record, proc, ready = start_instance(project, args, index, args.instances, instance_out, shims, ports, ticks)
+            own_ports = {**ports, **netem.ports_for(session.get("net"), index)}
+            record, proc, ready = start_instance(project, args, index, args.instances, instance_out, shims, own_ports,
+                                                 ticks)
             started_groups += record["groups"]
             started.append((record, proc, ready))
         infos = [wait_ready(record, proc, ready, deadline, "" if args.instances == 1 else f" (instance {i})",
@@ -454,6 +479,7 @@ def cmd_start(args):
                     "groups": [*started_groups, watchdog]})
     session["scene"] = infos[0].get("status", {}).get("scene", "")  # the scene it started in, for list
     restart.begin_log(args, session, infos)
+    timeline.begin(args, session, restarted=getattr(args, "_restarted", False))
     fd = os.open(session_path(name), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(session, f)
@@ -488,7 +514,10 @@ def cmd_stop(args):
     # The display exits with Godot, but make sure every group is gone.
     stop_all(session)
     remove_session(session)
+    timeline.end(session)
     print(f"Stopped session '{args.session}'.")
+    if session.get("timeline"):
+        print(f"timeline: {Path(session['timeline']) / 'index.html'}")
     return 0
 
 
@@ -706,7 +735,11 @@ def cmd_step(args):
         for prefix, r in each(reply, result):
             print(f"{prefix}stepped {r['frames']} frames")
             for target in r.get("aimed", []):
-                print(f"{prefix}  clicked {describe_match(target)} at {target['at'][0]:g},{target['at'][1]:g}")
+                took = f", which passed it to {describe_took(target['took'])}" if "took" in target else ""
+                print(f"{prefix}  clicked {describe_match(target)} at {target['at'][0]:g},{target['at'][1]:g}{took}")
+            for click in r.get("clicked", []):
+                took = describe_took(click["took"]) if click["took"] else "no control (the game's _unhandled_input)"
+                print(f"{prefix}  click at {click['at'][0]:g},{click['at'][1]:g} went to {took}")
             for path in r.get("shots", []):
                 print(f"{prefix}  shot: {path}")
             print(describe_status(r["status"], prefix))
@@ -866,6 +899,12 @@ def numbers(text, count, option):
     return values
 
 
+def describe_took(took):
+    """What took a click: path (class, mouse_filter X)."""
+    filt = f", mouse_filter {took['mouse_filter']}" if "mouse_filter" in took else ""
+    return f"{took['path']} ({took['class']}{filt})"
+
+
 def describe_match(m):
     """One node `find` found, as a line: path (class) text="..." screen=[x, y, w, h]."""
     extras = [f"text={json.dumps(m['text'])}"] if "text" in m else []
@@ -899,6 +938,77 @@ def cmd_find(args):
             print(f"{prefix}not showing: {'; '.join(describe_match(m) for m in r['hidden'])}")
     if not found:
         raise LiveError("No node that shows matches.")
+    return 0
+
+
+def cmd_snapshot(args):
+    from gdh import snapshot
+    session = load_session(args.session)
+    if args.grid < 1:
+        raise LiveError("--grid takes a whole number of pixels, 1 or more.")
+    boxes = args.boxes or args.grid > 1
+    reply = call(session, "snapshot", {"path": args.path or ""}, instance=args.instance)
+    result = report(reply, args.json)
+    if isinstance(result, list):
+        if args.baseline or args.update_baseline:
+            raise LiveError("--baseline compares one instance's snapshot: give --instance N.")
+        if not args.json:
+            for prefix, r in each(reply, result):
+                print("".join(f"{prefix}{line}\n" for line in snapshot.lines(r["nodes"], boxes, args.grid)), end="")
+        return 0
+    now = snapshot.text(result["nodes"], boxes, args.grid)
+    if not args.json:
+        print(now or "Nothing on screen to read or use.", end="" if now else "\n")
+    if args.update_baseline:
+        if not args.baseline:
+            raise LiveError("--update-baseline writes the --baseline FILE: give one.")
+        Path(args.baseline).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.baseline).write_text(now)
+        print(f"wrote the baseline {args.baseline}", file=sys.stderr)
+        return 0
+    if args.baseline:
+        try:
+            kept = Path(args.baseline).read_text()
+        except OSError as e:
+            raise LiveError(f"Can't read the baseline {args.baseline}: {e.strerror}. --update-baseline writes it.") from None
+        changed = snapshot.diff(kept, now, str(args.baseline), "now")
+        if changed:
+            print(changed, end="", file=sys.stderr)
+            raise LiveError(f"The UI on screen isn't the same as the baseline {args.baseline} (the diff is above).")
+        print(f"the same as the baseline {args.baseline}", file=sys.stderr)
+    return 0
+
+
+def cmd_net(args):
+    session = load_session(args.session)
+    if not session.get("net"):
+        raise LiveError("This session has no network proxy: start it with --net NAME, NAME a --companion.")
+    routes = {}
+    if args.companion:
+        routes["name"] = args.companion
+    if args.instance != "all":
+        routes["instance"] = pick(session, args.instance)[0]
+    values = {k: getattr(args, k) for k in ("latency", "jitter", "loss") if getattr(args, k) is not None}
+    if any(v < 0 for v in values.values()) or values.get("loss", 0) > 100:
+        raise LiveError("--latency and --jitter take milliseconds, and --loss a percent from 0 to 100.")
+    if args.cut and args.heal:
+        raise LiveError("Give --cut or --heal, not both.")
+    if args.cut or args.heal:
+        values["cut"] = args.cut
+    try:
+        if values:
+            state = netem.request(session["net"], "set", routes, values)
+        if args.reset:
+            state = netem.request(session["net"], "reset", routes)
+        if not values and not args.reset:
+            state = netem.request(session["net"], "state", routes)
+    except netem.NetError as e:
+        raise LiveError(str(e)) from None
+    if args.json:
+        print(json.dumps({"routes": state}, indent=2))
+    else:
+        for route in state:
+            print(netem.describe(route))
     return 0
 
 
@@ -1313,6 +1423,19 @@ def add_parsers(sub):
     p.add_argument("--replay", metavar="FILE.jsonl",
                    help="Replay an input log (a session's <out>/inputs.jsonl) once the game is ready, back to the "
                         "frame it ended at; its seed too, unless --seed gives one")
+    p.add_argument("--timeline", action="store_true",
+                   help="Keep a timeline of every command, in <out>/timeline/index.html: what it sent, the frames it "
+                        "ran, its errors, notes and the game's output, and a thumbnail of the frame after it")
+    p.add_argument("--locale", metavar="CODE",
+                   help="Translate the game's text to this locale (fr, de_DE), or pseudo: every text 40%% longer, "
+                        "with accents, so text that won't fit shows (the text_overflow probe)")
+    p.add_argument("--net", action="append", default=[], metavar="NAME",
+                   help="Put companion NAME behind gdh's network proxy: each instance's {NAME.port} is a port of its "
+                        "own on the proxy, whose latency, loss and cuts `gdh live net` sets; repeatable")
+    p.add_argument("--net-latency", type=float, default=0, metavar="MS", help="With --net: the latency each way")
+    p.add_argument("--net-jitter", type=float, default=0, metavar="MS",
+                   help="With --net: up to this much more latency, drawn for each packet")
+    p.add_argument("--net-loss", type=float, default=0, metavar="PCT", help="With --net: the share of UDP datagrams dropped")
     p.add_argument("--recipe", metavar="FILE",
                    help="Run these command lines, written as for gdh live batch, once the game is ready (after "
                         "--replay); a line that fails stops the start, with exit 1, and leaves the session there")
@@ -1419,6 +1542,28 @@ def add_parsers(sub):
     p.add_argument("--name", metavar="PATTERN", help="The node's name; * and ? match anything (any case)")
     p.add_argument("--class", dest="class_name", metavar="CLASS",
                    help="The node's class, built in or a script's class_name, or one it extends")
+
+    p = command("snapshot", cmd_snapshot, "The UI on screen as a text outline: what shows a text or can be used, "
+                                          "with its state; compare it with a baseline file", instance=one)
+    p.add_argument("path", nargs="?", help="Only what's under this node (a path from the current scene, or /root/...)")
+    p.add_argument("--boxes", action="store_true", help="Add each node's box on screen (@x,y wxh)")
+    p.add_argument("--grid", type=int, default=1, metavar="PX",
+                   help="Round the boxes to PX pixels, so a small shift doesn't count as a change (implies --boxes)")
+    p.add_argument("--baseline", metavar="FILE",
+                   help="Compare with this file: print the diff and exit 1 when the outline isn't the same")
+    p.add_argument("--update-baseline", action="store_true", help="Write the outline to the --baseline FILE instead")
+
+    p = command("net", cmd_net, "Make the network to the companions behind --net worse, or better, and show what "
+                                "went through it", instance="Which game instance's link: a number, or all (the default)")
+    p.set_defaults(instance="all")
+    p.add_argument("--companion", metavar="NAME", help="Only the link to this companion (default: each one behind --net)")
+    p.add_argument("--latency", type=float, metavar="MS", help="The latency each way")
+    p.add_argument("--jitter", type=float, metavar="MS", help="Up to this much more latency, drawn for each packet")
+    p.add_argument("--loss", type=float, metavar="PCT", help="The share of UDP datagrams dropped, each way")
+    p.add_argument("--cut", action="store_true",
+                   help="Cut the link: nothing goes through (TCP data is held until --heal, UDP dropped)")
+    p.add_argument("--heal", action="store_true", help="Join a cut link again")
+    p.add_argument("--reset", action="store_true", help="Close the TCP connections through the link at once (a reset)")
 
     p = command("camera", cmd_camera, "Look through a camera of gdh's own, without game code, or give the view back",
                 instance=one)

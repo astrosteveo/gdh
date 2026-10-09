@@ -22,6 +22,7 @@ func _initialize() -> void:
 	# scene's, so a game's random choices repeat from one start to the next.
 	if args.has("seed"):
 		seed(int(args.seed))
+	Common.apply_locale(args)
 	# Wireframe data is only built for meshes created after this call.
 	RenderingServer.set_debug_generate_wireframes(true)
 	# Hold before the scene's first frame: _ready runs, _process doesn't.

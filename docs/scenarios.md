@@ -56,6 +56,7 @@ An object is a structured step, named by its one kind key:
 | `{"until": EXPR, ...}` | Steps until EXPR is truthy, checked every `every` frames (default 1), at most `max` frames (default 3600), with input as `step` takes it. A check: it passes when EXPR held |
 | `{"expect": EXPR, ...}` | A check of EXPR's value, below |
 | `{"shot": NAME, ...}` | A checkpoint shot, below |
+| `{"snapshot": NAME, ...}` | A snapshot of the UI on screen, below |
 | `{"eval": EXPR}` | Evaluates EXPR, as `eval` does, and checks nothing: an expression that sets a value (`get_node('Door').set('locked', false)`), or one to turn into an `expect` |
 | `{"request": CMD, "args": {...}}` | One request of the raw protocol ([live.md](live.md#protocol)), with an optional `timeout` |
 
@@ -70,6 +71,7 @@ Any step also takes `name`, the name its check is reported by, and `instance`, t
 | `{"expect": EXPR, "approx": VALUE, "within": D}` | It's within D (default 0.001) of VALUE: a number, or a list of numbers part by part, as a vector comes (`[x, y]`, rounded to 0.001) |
 | `{"until": EXPR}` | EXPR held within its frames |
 | `{"shot": NAME, "baseline": ...}` | The shot matches its baseline (below) |
+| `{"snapshot": NAME, "baseline": ...}` | The UI on screen reads the same as its baseline (below) |
 
 EXPR is a Godot expression with `eval`'s inputs ([live.md](live.md#seeing-the-game)): the current scene is its base, and `scene`, `tree`, `root`, the autoloads and the engine's singletons are available. A check is named by its `name`, else by its expression (`clicks == 1`, `until ...`, `shot NAME`).
 
@@ -84,6 +86,10 @@ Every scenario also has checks of its own. `steps` passes when every step ran. `
 With `"baseline": true` it's compared with `NAME.png` in the scenario's baselines folder, and `"baseline": "path.png"` names the file. The comparison is `gdh measure diff`'s ([measure.md](measure.md#what-changed-diffs-and-baselines)): the check fails when more than `tolerance` percent (default 0) of the pixels changed by more than `threshold` (default 2, of 255), and says how much changed and where. Changed shots get a heatmap and a crop of the largest change in `<out>/<scenario>/diffs/`, and the numbers are in the check's record. A missing baseline fails the check.
 
 `--update-baselines` writes each checkpoint shot that has a baseline into it, replacing what was there, and passes; where there was one, the check says what changed. A baselines folder gdh makes gets a `.gdignore`, so Godot doesn't import the PNGs as the project's textures. gdh draws a scene the same, pixel for pixel, run after run on one machine; another GPU or driver may not, so keep baselines per machine.
+
+### UI snapshots
+
+`{"snapshot": NAME}` saves the UI on screen as text, as `gdh live snapshot` prints it ([live.md](live.md#ui-snapshots-gdh-live-snapshot)), in `<out>/<scenario>/checkpoints/NAME.txt`. `path` keeps it to what's under one node, and `boxes` (with `grid`, the pixels they're rounded to) adds each node's box. With `"baseline": true` it's compared with `NAME.txt` in the baselines folder (`"baseline": "path.txt"` names the file): the check passes when every line is the same, and otherwise fails with a unified diff. It checks what the UI says and its state (a disabled button, a checked box, a slider's value, the focus) without depending on pixels, so it holds across GPUs and drivers. `--update-baselines` writes it as it does a shot's.
 
 ## Running: `gdh scenario run`
 
@@ -107,7 +113,7 @@ What the game printed, its engine errors and notes go to stderr as `gdh live` pr
 - **`--json`** prints `results.json` instead of the lines.
 - **Exit status:** 0 when every check of every scenario passed, 1 otherwise.
 
-`results.json` holds `passed`, and `scenarios`, one record per scenario: `name`, `file`, `session`, `out`, `passed`, `seconds`, `frame` (the game frame it ended at), `shots` (each checkpoint shot's file), `errors` (the engine errors, up to 50), and `checks`, each with `name`, `kind` (`expect`, `until`, `shot`, `step`, `steps`, `errors`, `start` or `load`), `passed` (`null` when skipped), `message`, `step` (`step 3`, `expect 1`), and what it found: an expect's `value`, a check's `frame`, a shot's `shot`, `baseline` and diff numbers. `junit.xml` has a test suite per scenario and a test case per check, failed or skipped as the check was, for CI.
+`results.json` holds `passed`, and `scenarios`, one record per scenario: `name`, `file`, `session`, `out`, `passed`, `seconds`, `frame` (the game frame it ended at), `shots` (each checkpoint shot's file), `errors` (the engine errors, up to 50), and `checks`, each with `name`, `kind` (`expect`, `until`, `shot`, `step`, `steps`, `errors`, `start` or `load`), `passed` (`null` when skipped), `message`, `step` (`step 3`, `expect 1`), and what it found: an expect's `value`, a check's `frame`, a shot's `shot`, `baseline` and diff numbers, a snapshot's `snapshot`, `baseline` and `diff`. `junit.xml` has a test suite per scenario and a test case per check, failed or skipped as the check was, for CI.
 
 ### Under `gdh test`
 
@@ -153,6 +159,7 @@ with Session.start("path/to/game", scene="res://level.tscn", resolution="1280x72
 | `click(text=, node=, at=(x, y), right=False, frames=2)` | Clicks what shows a text, a node, or a point, in a step of `frames` frames; the step's result, with `aimed` |
 | `find(text, name=, class_name=)` | The matching nodes that show, each with `path`, `class`, `text` and `screen` |
 | `shot(out=None, *, views, label, crop, node, margin, zoom, max_width, no_ui)` | Saves the frame; the file's path (`{view: path}` for several views) |
+| `snapshot(path="", *, boxes=False, grid=1)` | The UI on screen as text, as `gdh live snapshot` prints it |
 | `tree(path, depth, visible_only)`, `status()` | `tree`'s and `status`'s results |
 | `batch(lines, stop_on_error=True)` | Runs `gdh live` command lines in this process, as `gdh live batch --json` does; each line's `{line, ok, replies, error}` |
 | `request(cmd, args, instance, timeout)` | One request of the raw protocol; the whole reply |

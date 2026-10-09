@@ -53,6 +53,24 @@ static func _image_size(tree: SceneTree) -> Vector2i:
 ## an Array.
 ## The harness's own settings, which gdh passes in GDH_ARGS (a JSON array in
 ## the same --key value form) so the command line after `--` is all the game's.
+## --locale: the locale the game's text is translated to (TranslationServer.set_locale), or "pseudo", Godot's
+## pseudolocalization: every translated text 40% longer, with accents and in brackets, so text that won't fit shows
+## up. Set before the scene loads; a game that sets its locale itself afterwards (from a saved setting) wins.
+static func apply_locale(args: Dictionary) -> void:
+	var locale := str(args.get("locale", ""))
+	if locale.is_empty():
+		return
+	if locale != "pseudo":
+		TranslationServer.set_locale(locale)
+		return
+	var settings := {"expansion_ratio": 0.4, "replace_with_accents": true, "double_vowels": false, "fake_bidi": false,
+			"override": false, "prefix": "[", "suffix": "]", "skip_placeholders": true}
+	for key in settings:
+		ProjectSettings.set_setting("internationalization/pseudolocalization/" + key, settings[key])
+	TranslationServer.pseudolocalization_enabled = true
+	TranslationServer.reload_pseudolocalization()
+
+
 static func harness_args() -> Dictionary:
 	var parsed = JSON.parse_string(OS.get_environment("GDH_ARGS"))
 	var argv := PackedStringArray()

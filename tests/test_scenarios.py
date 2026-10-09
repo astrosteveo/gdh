@@ -164,6 +164,24 @@ def test_checkpoint_baselines_pass_unchanged_and_fail_changed(tmp_path):
     assert gone(session)
 
 
+def test_ui_snapshot_baselines_pass_unchanged_and_fail_with_a_diff(tmp_path):
+    session = f"test-scn-snap-{PID}"
+    path = scenario_file(tmp_path, "ui", {"steps": [
+        "step 2 --click-text Go", {"snapshot": "after-go", "path": "UI", "baseline": True}]})
+    proc = run_scenarios(path, out=tmp_path / "first", session=session, extra=["--update-baselines"])
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    baseline = tmp_path / "baselines" / "ui" / "after-go.txt"
+    assert '- GoButton (Button) "Go" [focused]' in baseline.read_text()
+    assert (tmp_path / "first" / "ui" / "checkpoints" / "after-go.txt").read_text() == baseline.read_text()
+    proc = run_scenarios(path, out=tmp_path / "second", session=session)
+    assert proc.returncode == 0 and "  pass  snapshot after-go: the same as the baseline" in proc.stdout
+    baseline.write_text(baseline.read_text().replace('"Go"', '"Stop"'))
+    proc = run_scenarios(path, out=tmp_path / "third", session=session)
+    assert proc.returncode == 1 and "  FAIL  snapshot after-go: the UI on screen isn't the same" in proc.stdout
+    assert '-  - GoButton (Button) "Stop" [focused]' in proc.stdout
+    assert '+  - GoButton (Button) "Go" [focused]' in proc.stdout
+
+
 def test_save_scenario_replays_to_the_same_state(tmp_path):
     """A session driven every way in (the client, gdh live step, a batch line), saved from its input log."""
     name = f"s10-record-{PID}"

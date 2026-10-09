@@ -32,6 +32,7 @@ KINDS = {
     "until": (*client.STEP_INPUTS, "every", "max"),
     "expect": ("equals", "approx", "within"),
     "shot": ("baseline", "tolerance", "threshold", *FRAMING),
+    "snapshot": ("baseline", "path", "boxes", "grid"),
     "eval": (),
     "request": ("args", "timeout"),
 }
@@ -127,9 +128,9 @@ def read_step(path, where, spec, only=None):
             raise ScenarioError(f"{path}: {where}: an expect takes equals or approx, not both.")
         if "within" in spec and "approx" not in spec:
             raise ScenarioError(f"{path}: {where}: within goes with approx.")
-    if kind == "shot" and not NAME.match(str(spec["shot"])):
-        raise ScenarioError(f"{path}: {where}: a shot's name is letters, digits, '.', '-' and '_' (its file's name), "
-                            f"not {spec['shot']!r}.")
+    if kind in ("shot", "snapshot") and not NAME.match(str(spec[kind])):
+        raise ScenarioError(f"{path}: {where}: a {kind}'s name is letters, digits, '.', '-' and '_' (its file's name), "
+                            f"not {spec[kind]!r}.")
     if kind == "shot" and "view" in spec and not isinstance(spec["view"], str):
         raise ScenarioError(f"{path}: {where}: a checkpoint shot takes one view.")
     return {"kind": kind, "spec": spec, "label": spec.get("name") or label(kind, spec)}
@@ -144,8 +145,8 @@ def label(kind, spec):
         return str(spec["expect"])
     if kind == "until":
         return f"until {spec['until']}"
-    if kind == "shot":
-        return f"shot {spec['shot']}"
+    if kind in ("shot", "snapshot"):
+        return f"{kind} {spec[kind]}"
     if kind == "request":
         return f"request {spec['request']}"
     if kind == "eval":
@@ -254,6 +255,38 @@ def checkpoint(game, spec, scenario, out, update):
     return path, (not over, f"{describe_change(d, threshold)}{within}", details)
 
 
+def ui_checkpoint(game, spec, scenario, out, update):
+    """A snapshot of the UI on screen, saved as <out>/checkpoints/NAME.txt, and compared with its baseline (NAME.txt in
+    the baselines folder) when it has one. Returns (its path, and the check: None without a baseline, else (passed,
+    message, details))."""
+    from gdh import snapshot
+    name = spec["snapshot"]
+    now = game.snapshot(spec.get("path", ""), boxes=spec.get("boxes", False), grid=spec.get("grid", 1),
+                        instance=spec.get("instance", 0))
+    path = out / "checkpoints" / f"{name}.txt"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(now)
+    baseline = spec.get("baseline")
+    if not baseline:
+        return path, None
+    base = scenario["baselines"] / f"{name}.txt" if baseline is True else scenario["dir"] / baseline
+    details = {"baseline": str(base)}
+    kept = base.read_text() if base.is_file() else None
+    if update:
+        base.parent.mkdir(parents=True, exist_ok=True)
+        (base.parent / ".gdignore").touch()
+        base.write_text(now)
+        changed = "" if kept is None or kept == now else "; it changed:\n" + snapshot.diff(kept, now, str(base))
+        return path, (True, f"wrote the baseline {base}{changed}", details)
+    if kept is None:
+        return path, (False, f"no baseline at {base} (gdh scenario run --update-baselines writes it)", details)
+    changed = snapshot.diff(kept, now, str(base), str(path))
+    if not changed:
+        return path, (True, "the same as the baseline", details)
+    details["diff"] = changed
+    return path, (False, f"the UI on screen isn't the same as the baseline:\n{changed}", details)
+
+
 def describe_change(d, threshold):
     return (f"{100 * d['changed_share']:.3g}% of pixels ({d['changed_px']}) changed by more than {threshold:g} from "
             f"the baseline, max {d['max_diff']}, in the box {','.join(map(str, d['box']))}"
@@ -283,7 +316,8 @@ class Run:
     def skip_rest(self, steps, expects, why):
         """The checks a failed step kept from running, as skipped."""
         for item, where in steps + expects:
-            if item["kind"] in ("expect", "until") or (item["kind"] == "shot" and item["spec"].get("baseline")):
+            if item["kind"] in ("expect", "until") or (item["kind"] in ("shot", "snapshot")
+                                                         and item["spec"].get("baseline")):
                 self.check(item["label"], item["kind"], None, f"not reached: {why}", where, skipped=True)
 
 
@@ -393,6 +427,12 @@ def run_step(run, game, item, where, out, update):
             passed, message, value = expect(game, spec)
             run.check(name, "expect", passed, message, where, value=value, frame=game.frame)
             return game_alive(game)
+        if kind == "snapshot":
+            path, verdict = ui_checkpoint(game, spec, run.scenario, out, update)
+            if verdict is not None:
+                passed, message, details = verdict
+                run.check(name, "snapshot", passed, message, where, snapshot=str(path), frame=game.frame, **details)
+            return True
         if kind == "shot":
             path, verdict = checkpoint(game, spec, run.scenario, out, update)
             run.result["shots"][spec["shot"]] = path
@@ -401,8 +441,8 @@ def run_step(run, game, item, where, out, update):
                 run.check(name, "shot", passed, message, where, shot=path, frame=game.frame, **details)
             return True
     except client.ClientError as e:
-        run.check(f"{where}: {name}", kind if kind in ("shot", "expect") else "step", False, str(e), where)
-        return kind in ("shot", "expect") and game_alive(game)
+        run.check(f"{where}: {name}", kind if kind in ("shot", "snapshot", "expect") else "step", False, str(e), where)
+        return kind in ("shot", "snapshot", "expect") and game_alive(game)
     raise ScenarioError(f"Unknown step kind {kind}.")
 
 

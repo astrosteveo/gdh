@@ -18,10 +18,12 @@ does the game meet the goal you were given? You don't change the game's files. Y
    random digits>`:
 
    ```sh
-   gdh live start --project <dir> [--scene res://...] --session <name>
+   gdh live start --project <dir> [--scene res://...] --session <name> --timeline
    ```
 
-   Read the reply's errors. Errors at startup are findings in themselves.
+   Read the reply's errors. Errors at startup are findings in themselves. `--timeline` keeps every command you send,
+   with its errors and a thumbnail of the frame after it, in `<out>/timeline/index.html` (the path is printed): the
+   record a person can look through to check your report.
 3. **Look before you act.** `gdh live find TEXT --session <name>` gives the visible nodes showing a text, with
    their screen boxes; `gdh live tree --visible-only --session <name>` the rest. `gdh live shot --session <name>`
    saves a screenshot; read it with the Read tool (`--node PATH --zoom 2` for a detail).
@@ -73,7 +75,8 @@ Return a short report the main conversation can act on:
 
 - **Result:** PASS, FAIL or COULDN'T TELL, in the first line, with the goal restated.
 - **What you did:** the steps, in frames and inputs, briefly.
-- **Evidence:** the numbers you measured, and the paths of the screenshots that show the result (and any defect).
+- **Evidence:** the numbers you measured, the paths of the screenshots that show the result (and any defect), and
+  the timeline's `index.html`.
 - **Scenario:** the path of the scenario file for each goal that passed, and whether its replay passed.
 - **Errors:** every engine error the game raised, with where it came from, even if the goal passed.
 - **Other findings:** anything else that looked wrong: visual glitches, a softlock, a missing sound cue in the log.

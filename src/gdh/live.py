@@ -30,7 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from gdh import companions, restart, spawned, timeline
+from gdh import companions, netem, restart, spawned, timeline
 from gdh.display import CHOICES, open_display, parse_resolution, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
                        size_mismatch, write_alert_shims)
@@ -64,6 +64,8 @@ def log_tail(path, lines=15):
 def remove_session(session):
     session_path(session["name"]).unlink(missing_ok=True)
     shutil.rmtree(session.get("shims", ""), ignore_errors=True)
+    if session.get("net"):
+        shutil.rmtree(Path(session["net"]["socket"]).parent, ignore_errors=True)
 
 
 def instances(session):
@@ -404,6 +406,15 @@ def cmd_start(args):
         companions.expand(command, ports, own=key)
     for arg in args.game_args:
         companions.expand(arg, ports, instance=0)
+    for key in args.net:
+        if key not in commands:
+            raise LiveError(f"--net names '{key}', which isn't a --companion.")
+    shaping = {"latency": args.net_latency, "jitter": args.net_jitter, "loss": args.net_loss}
+    if any(v < 0 for v in shaping.values()) or args.net_loss > 100:
+        raise LiveError("--net-latency and --net-jitter take milliseconds, and --net-loss a percent from 0 to 100.")
+    if not args.net and any(shaping.values()):
+        raise LiveError("--net-latency, --net-jitter and --net-loss go with --net NAME: the companion to put behind "
+                        "the network proxy.")
     project = Path(args.project).resolve()
     parse_resolution(args.resolution)
     restart.prepare_start(args, name)
@@ -430,10 +441,19 @@ def cmd_start(args):
             started_groups.append(record["pid"])
             session.setdefault("companions", []).append(record)
             print(f"companion '{key}': pid {record['pid']}, port {record['port']}, log {record['log']}")
+        if args.net:
+            net = netem.start(netem.plan(args.net, ports, args.instances, shaping), args.seed,
+                              SESSION_DIR / f"{name}-net", out)
+            started_groups.append(net["pid"])
+            session["net"] = net
+            for route in net["routes"]:
+                print(f"network: {netem.describe_route_start(route)}")
         deadline = time.monotonic() + args.timeout
         for index in range(args.instances):
             instance_out = out if args.instances == 1 else out / f"instance-{index}"
-            record, proc, ready = start_instance(project, args, index, args.instances, instance_out, shims, ports, ticks)
+            own_ports = {**ports, **netem.ports_for(session.get("net"), index)}
+            record, proc, ready = start_instance(project, args, index, args.instances, instance_out, shims, own_ports,
+                                                 ticks)
             started_groups += record["groups"]
             started.append((record, proc, ready))
         infos = [wait_ready(record, proc, ready, deadline, "" if args.instances == 1 else f" (instance {i})",
@@ -957,6 +977,39 @@ def cmd_snapshot(args):
     return 0
 
 
+def cmd_net(args):
+    session = load_session(args.session)
+    if not session.get("net"):
+        raise LiveError("This session has no network proxy: start it with --net NAME, NAME a --companion.")
+    routes = {}
+    if args.companion:
+        routes["name"] = args.companion
+    if args.instance != "all":
+        routes["instance"] = pick(session, args.instance)[0]
+    values = {k: getattr(args, k) for k in ("latency", "jitter", "loss") if getattr(args, k) is not None}
+    if any(v < 0 for v in values.values()) or values.get("loss", 0) > 100:
+        raise LiveError("--latency and --jitter take milliseconds, and --loss a percent from 0 to 100.")
+    if args.cut and args.heal:
+        raise LiveError("Give --cut or --heal, not both.")
+    if args.cut or args.heal:
+        values["cut"] = args.cut
+    try:
+        if values:
+            state = netem.request(session["net"], "set", routes, values)
+        if args.reset:
+            state = netem.request(session["net"], "reset", routes)
+        if not values and not args.reset:
+            state = netem.request(session["net"], "state", routes)
+    except netem.NetError as e:
+        raise LiveError(str(e)) from None
+    if args.json:
+        print(json.dumps({"routes": state}, indent=2))
+    else:
+        for route in state:
+            print(netem.describe(route))
+    return 0
+
+
 def cmd_camera(args):
     session = load_session(args.session)
     if bool(args.view) == args.release:
@@ -1371,6 +1424,13 @@ def add_parsers(sub):
     p.add_argument("--timeline", action="store_true",
                    help="Keep a timeline of every command, in <out>/timeline/index.html: what it sent, the frames it "
                         "ran, its errors, notes and the game's output, and a thumbnail of the frame after it")
+    p.add_argument("--net", action="append", default=[], metavar="NAME",
+                   help="Put companion NAME behind gdh's network proxy: each instance's {NAME.port} is a port of its "
+                        "own on the proxy, whose latency, loss and cuts `gdh live net` sets; repeatable")
+    p.add_argument("--net-latency", type=float, default=0, metavar="MS", help="With --net: the latency each way")
+    p.add_argument("--net-jitter", type=float, default=0, metavar="MS",
+                   help="With --net: up to this much more latency, drawn for each packet")
+    p.add_argument("--net-loss", type=float, default=0, metavar="PCT", help="With --net: the share of UDP datagrams dropped")
     p.add_argument("--recipe", metavar="FILE",
                    help="Run these command lines, written as for gdh live batch, once the game is ready (after "
                         "--replay); a line that fails stops the start, with exit 1, and leaves the session there")
@@ -1487,6 +1547,18 @@ def add_parsers(sub):
     p.add_argument("--baseline", metavar="FILE",
                    help="Compare with this file: print the diff and exit 1 when the outline isn't the same")
     p.add_argument("--update-baseline", action="store_true", help="Write the outline to the --baseline FILE instead")
+
+    p = command("net", cmd_net, "Make the network to the companions behind --net worse, or better, and show what "
+                                "went through it", instance="Which game instance's link: a number, or all (the default)")
+    p.set_defaults(instance="all")
+    p.add_argument("--companion", metavar="NAME", help="Only the link to this companion (default: each one behind --net)")
+    p.add_argument("--latency", type=float, metavar="MS", help="The latency each way")
+    p.add_argument("--jitter", type=float, metavar="MS", help="Up to this much more latency, drawn for each packet")
+    p.add_argument("--loss", type=float, metavar="PCT", help="The share of UDP datagrams dropped, each way")
+    p.add_argument("--cut", action="store_true",
+                   help="Cut the link: nothing goes through (TCP data is held until --heal, UDP dropped)")
+    p.add_argument("--heal", action="store_true", help="Join a cut link again")
+    p.add_argument("--reset", action="store_true", help="Close the TCP connections through the link at once (a reset)")
 
     p = command("camera", cmd_camera, "Look through a camera of gdh's own, without game code, or give the view back",
                 instance=one)

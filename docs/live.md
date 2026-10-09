@@ -271,6 +271,26 @@ gdh live start --project client --session vs \
 - **Logs:** each companion's output is in `<out>/<NAME>.log`. A companion that exits before it's ready, or isn't ready in time, stops the start with the end of its log, and nothing is left running.
 - **Stopping:** `stop` quits the game first, so it can sign off, then stops every companion's process group. A watchdog also stops them if the game ends by itself (its idle timeout, a crash). While the session runs, a companion that has exited is noted, with the end of its log, on every command, and `status` shows each companion.
 
+## A worse network: `--net`
+
+`--net NAME` puts companion NAME behind a network proxy of gdh's, so a test can give the game latency, lost packets and a link that goes down, as browser tests throttle and cut the network:
+
+```sh
+gdh live start --project game --instances 2 --net server --net-latency 80 \
+  --companion 'server=exec ./server --port {port}' -- --connect 127.0.0.1:{server.port}
+gdh live net --cut --instance 1          # instance 1's link goes down
+gdh live run; sleep 5; gdh live pause    # the game notices, in real time
+gdh live net --heal --instance 1
+gdh live net --reset --instance 0        # close instance 0's TCP connections now: does it reconnect?
+gdh live net                             # each link's settings, and what went through it
+```
+
+- **The links:** the companion keeps its port. Each game instance gets a port of its own on the proxy, which `{NAME.port}` names in its arguments, and the proxy passes what comes in, TCP and UDP alike (ENet, WebSockets, a game's own protocol), on to the companion and back. Only the instances' links go through it: the companion's own command still gets its real `{port}`.
+- **What it does:** `--latency MS` delays everything, each way; `--jitter MS` adds up to that much more to each packet, drawn at random, so UDP datagrams can arrive out of order; `--loss PCT` drops that share of UDP datagrams each way. TCP loses nothing (it resends: a game sees only delay), and its data stays in order. `--cut` is a link that's gone: UDP is dropped, and TCP data is held, without closing anything, until `--heal`, as a network that goes down and comes back does (a game that times out first closes the connection itself). `--reset` closes the link's TCP connections at once, with a reset, as a server that drops its clients does.
+- **Which link:** `gdh live net` changes every link, or one instance's with `--instance K`, or one companion's with `--companion NAME`. `--net-latency`, `--net-jitter` and `--net-loss` on `start` set every link from the start. With no change, `net` prints each link and what went through it: TCP connections and bytes each way, UDP datagrams each way and those dropped (`--json` for all of it).
+- **Time:** the delays are in real time, as a network's are. A held game doesn't read its sockets, and `step` runs frames as fast as the GPU goes, so let the game run in real time (`gdh live run`, then `pause`) or wait on what it measured (`step --until`, in a session of one instance). The random draws repeat with the session's seed: the same datagrams are dropped, in a game that sends the same ones.
+- The proxy is a process of the session's (its output is `<out>/net.log`), and stops with it.
+
 ## Several instances
 
 `--instances N` runs N instances of the game in one session, each on a display of its own, with its own output in `<out>/instance-K/`. `{instance}` in the game's arguments is each one's number, so they can be told apart (`-- --user pilot{instance}`).
@@ -492,6 +512,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - held input across steps
 - button clicks at the positions `tree` reports, with no stretching and in both stretch modes
 - `find` by text, name and class, its one-line output, the nodes that don't show and why, and its box matching `tree`'s in both stretch modes
+- `--net`: two instances of `testbed/live/net.tscn` reaching an echo server (`testbed/live/echo.py`) over UDP and TCP through ports of their own on the proxy; latency on one instance's link doubling into its round trips and not the other's; a cut link passing nothing until healed while the other talks on; a reset making the game connect again; the same seed dropping the same datagrams (`tests/test_net.py`)
 - `snapshot`: the arena's UI outline with a clicked button focused, a hidden menu left out, boxes on a 10-pixel grid, a dialog as a group with its title and the names Godot made left out; a baseline written, the same, then failing with the diff when the button was disabled; and a scenario's snapshot baseline passing, then failing with its diff (`tests/test_scenarios.py`)
 - `start --timeline`: a step, a click, an eval, a failed eval and a `batch`'s step and shot in `timeline/timeline.js` with their frames, values, error and thumbnails, `status` left out, the shot linked, a restart added to it and a new start beginning it again (`tests/test_timeline.py`)
 - a click on a button under a transparent panel failing without stepping and naming the panel, `--click` reporting the panel took it, and a panel with mouse_filter Ignore letting the click through; a control inside a button passing the click up with mouse_filter Pass and failing it with Stop; a click on a Node2D noting the control that stops it

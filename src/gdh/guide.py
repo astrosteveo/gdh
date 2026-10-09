@@ -22,6 +22,7 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live batch --session S < lines.txt                     many CLI lines, one process
   gdh live reload --session S                                GDScript edited: new code, same state
   gdh live restart --replay --session S                      anything else: rebuilt, back to the frame
+  gdh live net --latency 150 --cut --instance 1 --session S  with start --net NAME: a worse network to a companion
   gdh live list                                              every session, left-over ones included
   gdh live stop --session S
 

@@ -36,6 +36,9 @@ def build_parser():
     cap.add_argument("--scene", required=True, action="append", help="res:// path; repeatable")
     cap.add_argument("--out", required=True, help="Output directory")
     cap.add_argument("--modes", help="Comma list: normal,unshaded,lighting,normals,wireframe,overdraw")
+    cap.add_argument("--locale", metavar="CODE",
+                     help="Translate the game's text to this locale (fr, de_DE), or pseudo: every text 40%% longer, "
+                          "with accents, so the text_overflow probe finds what won't fit")
     cap.add_argument("--warmup", type=int, default=30, help="Frames to render before capturing")
     cap.add_argument("--resolution", default="1280x720")
     live.add_display_option(cap)

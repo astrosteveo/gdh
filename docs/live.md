@@ -248,6 +248,10 @@ gdh live step --until "Debug.state().scene == 'Hangar'" --max 600 --session s
 
 Keep it to reading state and jumping to it; what it skips (a login, a tutorial) still needs a playthrough of its own now and then.
 
+## Locales
+
+`start --locale CODE` translates the game's text to that locale, and `--locale pseudo` turns on Godot's pseudolocalization (every text 40% longer, with accents), so `probes` and `snapshot` show the text that won't fit ([probes.md](probes.md#text-that-wont-fit---locale)).
+
 ## The timeline: `--timeline`
 
 `gdh live start --timeline` keeps a record of the session in `<out>/timeline/`, as Playwright's trace viewer does for a browser test: `index.html` lists every command sent to the game, in order, with what it sent, the frames before and after it, how long it took, the engine errors (with their backtraces), notes and game output that came back, what a click went to, an eval's value, links to the shots it saved, and a thumbnail of the frame after each `step`, `run`, `pause`, `camera` and `reload` (320 pixels wide; click it for the full thumbnail). A checkbox shows only the commands that failed or raised errors or notes. It keeps the commands from every way in: commands, `batch`, `pipe`, a recipe and a replay; `status` is left out.

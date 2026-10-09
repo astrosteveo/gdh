@@ -23,6 +23,8 @@ def capture_one(project, scene, out_dir, args, shims, baseline=None):
     user_args = ["--scene", scene, "--out", str(out_dir), "--warmup", str(args.warmup)]
     if args.modes:
         user_args += ["--modes", args.modes]
+    if getattr(args, "locale", None):
+        user_args += ["--locale", args.locale]
     cmd = godot_cmd(project, args.resolution, ["--script", str(CAPTURE_SCRIPT)], args.game_args)
     display = open_display(args.display, args.resolution, out_dir / "display.log")
     try:

@@ -33,6 +33,7 @@ func _initialize() -> void:
 		quit(2)
 		return
 	DirAccess.make_dir_recursive_absolute(_args.out)
+	Common.apply_locale(_args)
 	# Wireframe data is only built for meshes created after this call.
 	RenderingServer.set_debug_generate_wireframes(true)
 	var packed := load(_args.scene) as PackedScene

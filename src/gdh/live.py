@@ -318,6 +318,8 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
         user_args += ["--scene", args.scene]
     if getattr(args, "seed", None) is not None:
         user_args += ["--seed", str(args.seed)]
+    if getattr(args, "locale", None):
+        user_args += ["--locale", args.locale]
     game_args = [companions.expand(a, ports, instance=index) for a in args.game_args]
     # --fixed-fps matching the tick rate makes every frame exactly one physics tick.
     # --gpu-profile makes the renderer capture a timestamp at each pass, which `frames` reads (harness/frames.gd).
@@ -1424,6 +1426,9 @@ def add_parsers(sub):
     p.add_argument("--timeline", action="store_true",
                    help="Keep a timeline of every command, in <out>/timeline/index.html: what it sent, the frames it "
                         "ran, its errors, notes and the game's output, and a thumbnail of the frame after it")
+    p.add_argument("--locale", metavar="CODE",
+                   help="Translate the game's text to this locale (fr, de_DE), or pseudo: every text 40%% longer, "
+                        "with accents, so text that won't fit shows (the text_overflow probe)")
     p.add_argument("--net", action="append", default=[], metavar="NAME",
                    help="Put companion NAME behind gdh's network proxy: each instance's {NAME.port} is a port of its "
                         "own on the proxy, whose latency, loss and cuts `gdh live net` sets; repeatable")

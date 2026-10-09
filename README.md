@@ -105,6 +105,7 @@ Options:
 |---|---|---|
 | `--scene` | required | Scene to capture. Repeat it to capture several scenes, each in its own subdirectory. |
 | `--modes` | all six | Comma-separated list of views, e.g. `normal,wireframe` |
+| `--locale CODE` | the project's | Translate the game's text to this locale, or `pseudo`: every text 40% longer with accents, so the `text_overflow` probe finds what won't fit ([docs/probes.md](docs/probes.md#text-that-wont-fit---locale)) |
 | `--warmup` | `30` | Frames to render before capturing |
 | `--resolution` | `1280x720` | The game window's size, checked once the game has started ([Window size](#window-size)) |
 | `--display` | `auto` | `gpu`, `xvfb` or `auto` ([Displays](#displays)) |

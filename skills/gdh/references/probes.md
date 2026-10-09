@@ -29,6 +29,7 @@ The probes check scene data after each capture, and on `gdh live probes`. Every 
 | `region_smear` | A `Sprite2D` region reaches outside its texture while texture repeat is disabled. | The edge pixels stretch across the rest of the sprite. |
 | `text_key` | Text looks like `SOME_KEY` and has no translation loaded. | A raw translation key is showing. |
 | `text_placeholder` | Text contains lorem ipsum, placeholder, TODO, TBD, FIXME, "sample text" or "insert text here". | These are generic placeholder markers. |
+| `text_overflow` | A Label's or Button's text, as it draws it (translated), is wider than its box while it cuts it (clip text, an overrun trim), a wrapping Label has more lines than show, or the text grew the node past its parent's edge (1 px allowed). | Text that doesn't fit is cut off or spills out of its panel. Run with `--locale pseudo` (every text 40% longer, Godot's pseudolocalization) to find what a longer language will break. |
 | `sibling_offset` | The same-named child of 4+ sibling containers sits 3 px or more off, while 75% of the others agree within 1 px. Positions are compared by center, so icons of different sizes still match. | This catches a misplaced grid slot or list-row item. |
 
 One more check runs over a recording rather than a frame (`gdh movie`, `gdh live record`, `gdh live measure`):

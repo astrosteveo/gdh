@@ -98,6 +98,8 @@ func run(tree: SceneTree) -> Dictionary:
 			if not entry.is_empty():
 				textured.append(entry)
 		_check_text(node)
+		if node is Label or node is Button:
+			_check_text_fit(node)
 
 	_check_texture_filters(textured)
 	_check_sibling_offsets(nodes)
@@ -484,6 +486,57 @@ func _check_text(node: Node) -> void:
 	if marker:
 		_add("text_placeholder", "warning", node,
 				"Text contains the placeholder marker \"%s\"." % marker.get_string(), {"text": text.left(80)}, rect)
+
+
+## Text that doesn't fit where it's drawn: a Label or Button whose text is wider than its box when it cuts it (clip
+## text, an overrun trim to "..."), a wrapping Label with more lines than show, or a box the text grew past its
+## parent's (a Label or Button spilling out of its panel). Translations and pseudolocalization (gdh --locale pseudo)
+## are applied first, as the node draws its text.
+func _check_text_fit(control: Control) -> void:
+	var raw := str(control.get("text")).strip_edges()
+	if raw.is_empty() or control.size.x <= 0:
+		return
+	_stats["text_fit_checked"] = int(_stats.get("text_fit_checked", 0)) + 1
+	var text := control.atr(raw)
+	var rect: Variant = _rect_2d(control)
+	var data := {"text": text.left(80)}
+	if control is Label and (control as Label).autowrap_mode != TextServer.AUTOWRAP_OFF:
+		var label := control as Label
+		var visible_lines := label.get_visible_line_count()
+		if visible_lines < label.get_line_count():
+			data.lines = label.get_line_count()
+			data.visible_lines = visible_lines
+			_add("text_overflow", "warning", control, "Shows %d of the %d lines of its text: the rest is cut off."
+					% [visible_lines, label.get_line_count()], data, rect)
+			return
+	else:
+		var font := control.get_theme_font("font")
+		var font_size := control.get_theme_font_size("font_size")
+		var style := control.get_theme_stylebox("normal")
+		var room := control.size.x - (style.get_margin(SIDE_LEFT) + style.get_margin(SIDE_RIGHT) if style else 0.0)
+		if control is Button and (control as Button).icon != null and not (control as Button).expand_icon:
+			room -= (control as Button).icon.get_width() + control.get_theme_constant("h_separation")
+		var widest := 0.0
+		for line in text.split("\n"):
+			widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+		var cuts := bool(control.get("clip_text")) or int(control.get("text_overrun_behavior")) != TextServer.OVERRUN_NO_TRIMMING
+		if cuts and widest > room + 1.0:
+			data.needs_px = ceili(widest)
+			data.has_px = floori(room)
+			_add("text_overflow", "warning", control, "Its text needs %d px and has %d: it's cut off%s."
+					% [ceili(widest), floori(room), " (clip text)" if control.get("clip_text") else " (trimmed)"], data, rect)
+			return
+	var parent := control.get_parent() as Control
+	if parent == null or not parent.is_visible_in_tree() or parent.size == Vector2.ZERO:
+		return
+	var own := control.get_global_rect()
+	var room_rect := parent.get_global_rect().grow(1.0)
+	if not room_rect.encloses(own):
+		data.box = [roundi(own.position.x), roundi(own.position.y), roundi(own.size.x), roundi(own.size.y)]
+		data.parent = _path(parent)
+		_add("text_overflow", "warning", control, "Its text makes it %dx%d, past the edge of %s (%dx%d)."
+				% [roundi(own.size.x), roundi(own.size.y), _path(parent), roundi(parent.size.x), roundi(parent.size.y)],
+				data, rect)
 
 
 func _check_sibling_offsets(nodes: Array[Node]) -> void:

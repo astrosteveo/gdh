@@ -30,7 +30,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from gdh import companions, restart, spawned
+from gdh import companions, restart, spawned, timeline
 from gdh.display import CHOICES, open_display, parse_resolution, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
                        size_mismatch, write_alert_shims)
@@ -190,6 +190,7 @@ def call(session, cmd, args=None, instance=0, timeout=300):
     games = instances(session)
     args = args or {}
     chosen = pick(session, instance)
+    started = time.time()
     if cmd in EVERY_INSTANCE:
         sends = [(i, args if i in chosen or cmd != "step" else {**args, "events": []}) for i in range(len(games))]
     else:
@@ -200,6 +201,8 @@ def call(session, cmd, args=None, instance=0, timeout=300):
         with ThreadPoolExecutor(len(sends)) as pool:
             replies = list(pool.map(lambda s: request(games[s[0]], cmd, s[1], timeout), sends))
     restart.log_input(session, cmd, args, instance, replies)
+    timeline.record(session, cmd, args, instance, replies, [i for i, _ in sends], started,
+                    lambda i, c, a: request(games[i], c, a, 60))
     if len(games) == 1:
         return replies[0]
     for (i, _), reply in zip(sends, replies):
@@ -454,6 +457,7 @@ def cmd_start(args):
                     "groups": [*started_groups, watchdog]})
     session["scene"] = infos[0].get("status", {}).get("scene", "")  # the scene it started in, for list
     restart.begin_log(args, session, infos)
+    timeline.begin(args, session, restarted=getattr(args, "_restarted", False))
     fd = os.open(session_path(name), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         json.dump(session, f)
@@ -488,7 +492,10 @@ def cmd_stop(args):
     # The display exits with Godot, but make sure every group is gone.
     stop_all(session)
     remove_session(session)
+    timeline.end(session)
     print(f"Stopped session '{args.session}'.")
+    if session.get("timeline"):
+        print(f"timeline: {Path(session['timeline']) / 'index.html'}")
     return 0
 
 
@@ -706,7 +713,11 @@ def cmd_step(args):
         for prefix, r in each(reply, result):
             print(f"{prefix}stepped {r['frames']} frames")
             for target in r.get("aimed", []):
-                print(f"{prefix}  clicked {describe_match(target)} at {target['at'][0]:g},{target['at'][1]:g}")
+                took = f", which passed it to {describe_took(target['took'])}" if "took" in target else ""
+                print(f"{prefix}  clicked {describe_match(target)} at {target['at'][0]:g},{target['at'][1]:g}{took}")
+            for click in r.get("clicked", []):
+                took = describe_took(click["took"]) if click["took"] else "no control (the game's _unhandled_input)"
+                print(f"{prefix}  click at {click['at'][0]:g},{click['at'][1]:g} went to {took}")
             for path in r.get("shots", []):
                 print(f"{prefix}  shot: {path}")
             print(describe_status(r["status"], prefix))
@@ -866,6 +877,12 @@ def numbers(text, count, option):
     return values
 
 
+def describe_took(took):
+    """What took a click: path (class, mouse_filter X)."""
+    filt = f", mouse_filter {took['mouse_filter']}" if "mouse_filter" in took else ""
+    return f"{took['path']} ({took['class']}{filt})"
+
+
 def describe_match(m):
     """One node `find` found, as a line: path (class) text="..." screen=[x, y, w, h]."""
     extras = [f"text={json.dumps(m['text'])}"] if "text" in m else []
@@ -899,6 +916,44 @@ def cmd_find(args):
             print(f"{prefix}not showing: {'; '.join(describe_match(m) for m in r['hidden'])}")
     if not found:
         raise LiveError("No node that shows matches.")
+    return 0
+
+
+def cmd_snapshot(args):
+    from gdh import snapshot
+    session = load_session(args.session)
+    if args.grid < 1:
+        raise LiveError("--grid takes a whole number of pixels, 1 or more.")
+    boxes = args.boxes or args.grid > 1
+    reply = call(session, "snapshot", {"path": args.path or ""}, instance=args.instance)
+    result = report(reply, args.json)
+    if isinstance(result, list):
+        if args.baseline or args.update_baseline:
+            raise LiveError("--baseline compares one instance's snapshot: give --instance N.")
+        if not args.json:
+            for prefix, r in each(reply, result):
+                print("".join(f"{prefix}{line}\n" for line in snapshot.lines(r["nodes"], boxes, args.grid)), end="")
+        return 0
+    now = snapshot.text(result["nodes"], boxes, args.grid)
+    if not args.json:
+        print(now or "Nothing on screen to read or use.", end="" if now else "\n")
+    if args.update_baseline:
+        if not args.baseline:
+            raise LiveError("--update-baseline writes the --baseline FILE: give one.")
+        Path(args.baseline).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.baseline).write_text(now)
+        print(f"wrote the baseline {args.baseline}", file=sys.stderr)
+        return 0
+    if args.baseline:
+        try:
+            kept = Path(args.baseline).read_text()
+        except OSError as e:
+            raise LiveError(f"Can't read the baseline {args.baseline}: {e.strerror}. --update-baseline writes it.") from None
+        changed = snapshot.diff(kept, now, str(args.baseline), "now")
+        if changed:
+            print(changed, end="", file=sys.stderr)
+            raise LiveError(f"The UI on screen isn't the same as the baseline {args.baseline} (the diff is above).")
+        print(f"the same as the baseline {args.baseline}", file=sys.stderr)
     return 0
 
 
@@ -1313,6 +1368,9 @@ def add_parsers(sub):
     p.add_argument("--replay", metavar="FILE.jsonl",
                    help="Replay an input log (a session's <out>/inputs.jsonl) once the game is ready, back to the "
                         "frame it ended at; its seed too, unless --seed gives one")
+    p.add_argument("--timeline", action="store_true",
+                   help="Keep a timeline of every command, in <out>/timeline/index.html: what it sent, the frames it "
+                        "ran, its errors, notes and the game's output, and a thumbnail of the frame after it")
     p.add_argument("--recipe", metavar="FILE",
                    help="Run these command lines, written as for gdh live batch, once the game is ready (after "
                         "--replay); a line that fails stops the start, with exit 1, and leaves the session there")
@@ -1419,6 +1477,16 @@ def add_parsers(sub):
     p.add_argument("--name", metavar="PATTERN", help="The node's name; * and ? match anything (any case)")
     p.add_argument("--class", dest="class_name", metavar="CLASS",
                    help="The node's class, built in or a script's class_name, or one it extends")
+
+    p = command("snapshot", cmd_snapshot, "The UI on screen as a text outline: what shows a text or can be used, "
+                                          "with its state; compare it with a baseline file", instance=one)
+    p.add_argument("path", nargs="?", help="Only what's under this node (a path from the current scene, or /root/...)")
+    p.add_argument("--boxes", action="store_true", help="Add each node's box on screen (@x,y wxh)")
+    p.add_argument("--grid", type=int, default=1, metavar="PX",
+                   help="Round the boxes to PX pixels, so a small shift doesn't count as a change (implies --boxes)")
+    p.add_argument("--baseline", metavar="FILE",
+                   help="Compare with this file: print the diff and exit 1 when the outline isn't the same")
+    p.add_argument("--update-baseline", action="store_true", help="Write the outline to the --baseline FILE instead")
 
     p = command("camera", cmd_camera, "Look through a camera of gdh's own, without game code, or give the view back",
                 instance=one)

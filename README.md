@@ -148,6 +148,8 @@ gdh live batch --session s < commands.txt                      # many commands, 
 
 After a code change, `gdh live reload` loads changed GDScript into the running game with its state kept, and `gdh live restart --replay` starts the session again with the same options and companions and replays its input log back to the same frame. `start --recipe FILE` runs lines written as for `batch` once the game is ready (a project's "get to the hangar"), `--seed N` makes the global random numbers repeat, and `--user-data fresh` or `--user-data-from DIR` give the session a `user://` of its own.
 
+`gdh live snapshot` prints the UI on screen as a text outline, each text, button, field and slider with its state, and compares it with a baseline file, a check that doesn't depend on pixels. `start --timeline` keeps a record of the session to look through afterwards, as Playwright's trace viewer does: `<out>/timeline/index.html` lists every command with its frames, errors, notes and values, and a thumbnail of the frame after it. `--click-text` and `--click-node` fail without stepping when something else would take the click, such as a transparent panel left over a button, and say what it is.
+
 Results go to stdout. Engine errors (with a script's backtrace), `DEFECT:` lines, notes and what the game printed go to stderr, so they survive a discarded stdout; `--strict` exits 1 when the game raised engine errors. `gdh live list` lists every session.
 
 A session can also start companion processes beside the game, such as a server, wait until they're ready, hand their ports to the game and stop them with it, and it can run several instances of the game that step together. A script can drive it over one pipe:

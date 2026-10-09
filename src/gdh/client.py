@@ -274,6 +274,12 @@ class Session:
         result = self._result(self._send("find", filters, instance))
         return [r["matches"] for r in result] if isinstance(result, list) else result["matches"]
 
+    def snapshot(self, path="", *, boxes=False, grid=1, instance=0):
+        """The UI on screen as a text outline (gdh live snapshot; snapshot.py), from `path` or the whole screen."""
+        from gdh import snapshot
+        result = self._result(self._send("snapshot", {"path": path}, instance))
+        return snapshot.text(result["nodes"], boxes or grid > 1, grid)
+
     def shot(self, out=None, *, views=("normal",), label="shot", crop=None, node=None, margin=0, zoom=1, max_width=0,
              no_ui=False, instance=0):
         """Save the current frame; the file's path (with several views, {view: path}). `out` names the file

@@ -269,6 +269,98 @@ static func _aimed(tree: SceneTree, node: Node, rect: Rect2) -> Dictionary:
 	return out
 
 
+# --- What takes a click ----------------------------------------------------------
+
+const MOUSE_FILTERS := ["Stop", "Pass", "Ignore"]
+
+
+## The node that takes a click at a screenshot pixel, as Godot picks it: it's sent a pointer motion there (so the
+## controls' hover follows), then each viewport's hovered control is read, into an embedded window under the pointer
+## and through a SubViewportContainer into its SubViewport. A visible exclusive window (a modal dialog) takes every
+## click outside itself. null when no control takes it: the click goes to the game's _unhandled_input.
+static func taker_at(tree: SceneTree, at: Vector2) -> Node:
+	var motion := InputEventMouseMotion.new()
+	motion.position = Common.shot_to_window(tree, at)
+	motion.global_position = motion.position
+	tree.root.push_input(motion)
+	return _taker(tree.root)
+
+
+static func _taker(viewport: Viewport) -> Node:
+	var windows := viewport.get_embedded_subwindows()
+	for i in range(windows.size() - 1, -1, -1):
+		var window := windows[i]
+		if not window.visible:
+			continue
+		var inside := _taker(window)
+		if inside != null:
+			return inside
+		var frame := Rect2(Vector2(window.position), Vector2(window.size)).grow_individual(0, window.get_theme_constant("title_height"), 0, 0)
+		if frame.has_point(viewport.get_mouse_position()) or window.exclusive:
+			return window
+	var hovered := viewport.gui_get_hovered_control()
+	if hovered is SubViewportContainer:
+		for child in hovered.get_children():
+			if child is SubViewport:
+				var inner := _taker(child)
+				if inner != null:
+					return inner
+	return hovered
+
+
+## Why a click meant for `target` doesn't reach it when `taker` takes it ("" when it does). It does when the taker is
+## the target, or a node inside it that passes the click up (no mouse_filter Stop on the way); for a target that lets
+## clicks through (a Label, a mouse_filter Ignore), when the taker is under it or nothing takes it; and for a node
+## that isn't a Control (a Sprite2D, a 3D object), when no control on the taker's way up stops the click (mouse_filter
+## Stop), so the game's _unhandled_input gets it.
+static func blocked(tree: SceneTree, target: Node, taker: Node) -> String:
+	if taker == target:
+		return ""
+	if taker != null and target.is_ancestor_of(taker):
+		var at := taker
+		while at != target:
+			if at is Control and (at as Control).mouse_filter == Control.MOUSE_FILTER_STOP:
+				return "%s inside it takes the click first (mouse_filter Stop)" % _named(tree, at)
+			at = at.get_parent()
+		return ""
+	if taker is Window:
+		return "%s is over it and takes the click%s" % [_named(tree, taker), " (an exclusive window)" if (taker as Window).exclusive else ""]
+	if not (target is Control):
+		var stop := _stopper(taker)
+		if stop == null:
+			return ""
+		return "%s takes the click, so the game's _unhandled_input never gets it (mouse_filter Stop)" % _named(tree, stop)
+	if (target as Control).mouse_filter == Control.MOUSE_FILTER_IGNORE and (taker == null or taker.is_ancestor_of(target)):
+		return ""
+	if taker == null:
+		return "nothing takes the click there"
+	return "%s is over it and takes the click (mouse_filter %s)" % [_named(tree, taker), MOUSE_FILTERS[(taker as Control).mouse_filter]]
+
+
+## The control that stops a click on its way up from the one that took it (mouse_filter Stop), or null.
+static func _stopper(taker: Node) -> Control:
+	var at := taker
+	while at is Control:
+		if (at as Control).mouse_filter == Control.MOUSE_FILTER_STOP:
+			return at
+		if (at as Control).top_level:
+			break
+		at = at.get_parent()
+	return null
+
+
+## What takes a click, for a reply: {path, class, mouse_filter?}.
+static func took(tree: SceneTree, taker: Node) -> Dictionary:
+	var out := {"path": path_of(tree, taker), "class": taker.get_class()}
+	if taker is Control:
+		out.mouse_filter = MOUSE_FILTERS[(taker as Control).mouse_filter]
+	return out
+
+
+static func _named(tree: SceneTree, node: Node) -> String:
+	return "%s (%s)" % [path_of(tree, node), node.get_class()]
+
+
 static func _line(m: Dictionary) -> String:
 	var parts := ["%s (%s)" % [m.path, m["class"]]]
 	if m.has("text"):
@@ -278,6 +370,101 @@ static func _line(m: Dictionary) -> String:
 	if m.has("why"):
 		parts.append(m.why)
 	return " ".join(parts)
+
+
+# --- Snapshots ------------------------------------------------------------------
+
+## A text outline of the UI on screen for `gdh live snapshot`, as a browser test's accessibility snapshot is: the
+## nodes that show something to read or use (a text, a button, a field, a slider, tabs, a list) and the named nodes
+## that group them, from `from` (the current scene and the autoloads when null). Each is
+## {name, class, path, children, text?, states?, value?, box?}; a group with only one child is left out, its child
+## in its place. Hidden nodes and everything under them are left out, and so are the parts Godot makes inside a field
+## or a slider, and scroll bars.
+static func snapshot(tree: SceneTree, from: Node) -> Array:
+	var roots: Array[Node] = []
+	if from != null:
+		roots.append(from)
+	else:
+		for child in tree.root.get_children():
+			if not str(child.name).begins_with("Gdh"):
+				roots.append(child)
+	var out := []
+	for node in roots:
+		out.append_array(_snap(tree, node))
+	return out
+
+
+## The entries for a node: [its own] with what's under it as children, or what's under it when it's left out.
+static func _snap(tree: SceneTree, node: Node) -> Array:
+	if not shows(node) or node is ScrollBar:
+		return []
+	var readable := _readable(node)
+	var children := []
+	for child in node.get_children(not readable):
+		children.append_array(_snap(tree, child))
+	var where := seen(tree, node) if readable else {}
+	if readable and where.has("box"):
+		var entry := _snap_entry(tree, node)
+		entry.box = to_array(where.box).map(func(v: float) -> int: return roundi(v))
+		entry.children = children
+		return [entry]
+	if node is Window and node != tree.root:
+		# A dialog or a window of the game's: always a group of its own, with its title.
+		var window := {"name": str(node.name), "class": node.get_class(), "path": path_of(tree, node), "children": children}
+		if not (node as Window).title.is_empty():
+			window.text = node.tr((node as Window).title)
+		return [window]
+	var named := (node is CanvasLayer or node is Control) and not str(node.name).begins_with("@")
+	if named and children.size() > 1 or node == tree.current_scene and not children.is_empty():
+		return [{"name": str(node.name), "class": node.get_class(), "path": path_of(tree, node), "children": children}]
+	return children
+
+
+static func _readable(node: Node) -> bool:
+	if node is BaseButton or node is LineEdit or node is TextEdit or node is Range or node is TabContainer \
+			or node is ItemList:
+		return true
+	return (node is Control or node is Label3D) and not text_of(node).is_empty()
+
+
+static func _snap_entry(tree: SceneTree, node: Node) -> Dictionary:
+	var entry := {"name": str(node.name), "class": node.get_class(), "path": path_of(tree, node)}
+	var text := text_of(node)
+	if node is LineEdit or node is TextEdit:
+		text = node.tr(node.get("text"))
+		if text.is_empty() and not str(node.get("placeholder_text")).is_empty():
+			entry.placeholder = node.tr(node.get("placeholder_text"))
+	if not text.is_empty():
+		entry.text = text.left(200)
+	var states := []
+	if node is BaseButton:
+		var button := node as BaseButton
+		if button.disabled:
+			states.append("disabled")
+		if button.toggle_mode and button.button_pressed:
+			states.append("checked" if node is CheckBox or node is CheckButton else "pressed")
+	if (node is LineEdit or node is TextEdit) and not node.get("editable"):
+		states.append("read-only")
+	if node is Control and (node as Control).has_focus():
+		states.append("focused")
+	if not states.is_empty():
+		entry.states = states
+	if node is Range:
+		var range := node as Range
+		entry.value = "%s/%s" % [_num(range.value), _num(range.max_value)]
+	elif node is TabContainer:
+		var tabs := node as TabContainer
+		if tabs.current_tab >= 0:
+			entry.value = "tab %s" % JSON.stringify(tabs.get_tab_title(tabs.current_tab))
+	elif node is ItemList:
+		var list := node as ItemList
+		var picked := Array(list.get_selected_items()).map(func(i: int) -> String: return JSON.stringify(list.get_item_text(i)))
+		entry.value = "%d items%s" % [list.item_count, ", selected " + ", ".join(picked) if not picked.is_empty() else ""]
+	return entry
+
+
+static func _num(v: float) -> String:
+	return str(roundi(v)) if is_equal_approx(v, roundf(v)) else "%.2f" % v
 
 
 # --- Shots ----------------------------------------------------------------------

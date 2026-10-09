@@ -367,6 +367,7 @@ def cmd_restart(args):
             live.cmd_stop(args)
     again = start_args(args.session, record)
     again.rebuild = args.rebuild
+    again._restarted = True
     again.strict = args.strict
     if entries is not None:
         again._entries, again._source, again._skip_recipe = entries, str(kept), True

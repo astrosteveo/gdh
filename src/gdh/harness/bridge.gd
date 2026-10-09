@@ -240,6 +240,8 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_tree(args)
 		"find":
 			result = _cmd_find(args)
+		"snapshot":
+			result = _cmd_snapshot(args)
 		"camera":
 			result = Camera.command(get_tree(), args)
 		"frames":
@@ -290,6 +292,9 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	var aimed: Variant = _aim_events(args.get("events", []))
 	if aimed is String:
 		return {"error": aimed}
+	var clicked: Variant = _check_clicks(args.get("events", []))
+	if clicked is String:
+		return {"error": clicked}
 	var frames := maxi(int(args.get("frames", 1)), 1)
 	var shot_every := int(args.get("shot_every", 0))
 	var cover_every := int(args.get("cover_every", 0))
@@ -356,6 +361,8 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		result.merge(_watch_result(watch))
 	if not aimed.is_empty():
 		result.aimed = aimed
+	if not clicked.is_empty():
+		result.clicked = clicked
 
 	if monitors_every >= 0:
 		result.monitors = monitor_samples
@@ -462,6 +469,17 @@ func _cmd_find(args: Dictionary) -> Dictionary:
 	return Screen.find(get_tree(), filters)
 
 
+## args: path (a node to start from; default the current scene and the autoloads). The UI on screen as an outline
+## (Screen.snapshot).
+func _cmd_snapshot(args: Dictionary) -> Dictionary:
+	var from: Node = null
+	if not str(args.get("path", "")).is_empty():
+		from = Screen.node_at(get_tree(), str(args.path))
+		if from == null:
+			return {"error": "No node at %s." % args.path}
+	return {"nodes": Screen.snapshot(get_tree(), from)}
+
+
 ## Events aimed at a node: "on": {"node": PATH} or {"text": TEXT} puts a mouse event at the centre of the part of it
 ## that shows, worked out once before the step's first frame. Returns [{path, class, text?, at}], one for each
 ## target, or an error naming the candidates.
@@ -480,8 +498,59 @@ func _aim_events(events: Array) -> Variant:
 			spec.mouse_motion = aimed[key].at
 		else:
 			spec.position = aimed[key].at
+			spec.aimed = aimed[key]
 		spec.erase("on")
 	return aimed.values()
+
+
+## Before the step's first frame: what takes each click that starts it, as Godot picks it (Screen.taker_at). A click
+## aimed at a node that something else takes fails the step, naming what took it; for a node that isn't a Control
+## (a click into the world), a control that keeps the click from the game's _unhandled_input is a note. Its aimed
+## entry gets "took" when something other than the node took it. Returns [{at, took}] for the clicks at a pixel, or
+## an error.
+func _check_clicks(events: Array) -> Variant:
+	var tree := get_tree()
+	var clicked := []
+	var done := {}
+	for spec in events:
+		if not (spec is Dictionary and spec.has("mouse_button") and spec.get("pressed", false) and spec.has("position")
+				and int(spec.get("at", 0)) == 0):
+			continue
+		var key := JSON.stringify(spec.position)
+		if done.has(key):
+			continue
+		done[key] = true
+		var taker := Screen.taker_at(tree, Vector2(spec.position[0], spec.position[1]))
+		if not spec.has("aimed"):
+			clicked.append({"at": spec.position, "took": Screen.took(tree, taker) if taker != null else null})
+			continue
+		var entry: Dictionary = spec.aimed
+		var target := Screen.node_at(tree, entry.path)
+		if taker != null and taker != target:
+			entry.took = Screen.took(tree, taker)
+		var why := Screen.blocked(tree, target, taker)
+		if why.is_empty():
+			continue
+		if not (target is Control):
+			_notes.append("The click on %s (%s) at %s: %s." % [entry.path, entry["class"], _xy(entry.at), why])
+			continue
+		_hover_back()
+		return ("%s (%s) can't be clicked at %s: %s. Hide that or set its mouse_filter to Ignore, or click there "
+				+ "anyway with --click %s.") % [entry.path, entry["class"], _xy(entry.at), why, _xy(entry.at)]
+	return clicked
+
+
+static func _xy(at: Array) -> String:
+	return ",".join(at.map(func(v: float) -> String: return str(roundi(v)) if is_equal_approx(v, roundf(v)) else "%.1f" % v))
+
+
+## Puts the controls' hover back where gdh's pointer is, after a click that won't happen moved it (Screen.taker_at).
+func _hover_back() -> void:
+	_sync_pointer()
+	var motion := InputEventMouseMotion.new()
+	motion.position = _mouse_at
+	motion.global_position = _mouse_at
+	get_tree().root.push_input(motion)
 
 
 ## Evaluates a Godot Expression with the current scene as base. Inputs: tree,

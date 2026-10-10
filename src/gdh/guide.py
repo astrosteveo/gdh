@@ -26,8 +26,7 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live reload --session S                                GDScript edited: new code, same state
   gdh live restart --replay --session S                      anything else: rebuilt, back to the frame
   gdh live net --latency 150 --cut --instance 1 --session S  with start --net NAME: a worse network to a companion
-  gdh live list                                              every session, left-over ones included
-  gdh live stop --session S
+  gdh live stop --session S; gdh live list                   stop yours; list every session (left-overs too)
 
 INPUT (step options)
   --press/--release/--hold/--tap INPUT   INPUT: action, key:Space, key:ctrl+s, joy:a, mouse:left
@@ -39,6 +38,7 @@ SEE MOTION, CHOOSE
   gdh live onion 40 --node PATH --hold ui_right --session S  frames over each other (filmstrip: side by side)
   gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
   gdh live anim 60 --node PATH --session S                    animation states, flip-flops; footslide, clipping
+  gdh live contrast --node PATH --session S                  stands out? contrast ratio; measure palette --reference
   gdh live sweep "OBJ.PROP=V1,V2,V3" --session S              a grid of options; gdh review --from it --wait
 
 KEEP IT

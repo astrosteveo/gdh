@@ -73,6 +73,7 @@ Some views make steadier baselines than others. `unshaded` (the albedo alone) an
 | `gdh live frames [--clear] [--reset] [--save FILE]` | The frame times recorded since the record last started over. `--clear` starts it over now (before a run), `--reset` after reading. |
 | `gdh live bench N [--budget-median MS] [--budget-p99 MS]` | Starts the record over, steps N frames (600 by default) and prints their times; exits 1 over a budget ([below](#a-budget-gdh-live-bench)). |
 | `gdh measure chart FILE.csv --out PNG` | A line chart of a trace that `gdh live step --trace-out` wrote: a panel for each column, a line for each component of a vector. `--rates` adds rates of change ([live.md](live.md#waiting-and-tracing)). |
+| `gdh measure palette SHOT --reference IMAGE` | A shot's lightness, contrast, black and white points, saturation and dominant colors against a reference or a mood board ([art.md](art.md#matching-a-look)). |
 | `gdh measure popin FRAMES...` | Pop-in: blocks that change all at once, beyond what any movement explains, while the rest moves smoothly ([art.md](art.md#pop-in)). |
 | `gdh measure changes FRAMES... --out PNG` | Where a run of frames changed and how often: each pixel by how many frame-to-frame steps it changed in, with the regions boxed and cropped ([motion.md](motion.md#change-maps)). |
 | `gdh measure sheet FRAMES... --out PNG` | A contact sheet of PNG frames or of a video: 16 frames spread evenly over the run, labeled, about 1220 px wide ([movie.md](movie.md#the-contact-sheet)). |

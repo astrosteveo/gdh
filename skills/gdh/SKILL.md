@@ -55,6 +55,8 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | A bug that shows up after doing something | `gdh live`: reproduce it step by step, then save it as a scenario |
 | How something moves: its path, timing, easing, overshoot; a pose, flash or transition frame by frame | `gdh live onion`, `step --trail`, `gdh live filmstrip`, `step --trace-chart` ([below](#seeing-motion)) |
 | Whether it holds up on other screens and settings: ultrawide, a phone, a Steam Deck, low quality | `gdh capture --matrix [16:9,21:9,phone] --quality low,high`: one grid, each cell a capture with its probe findings |
+| Animation bugs: frozen in its first pose, states flipping, feet sliding, limbs through walls | `gdh live anim`, `footslide`, `clipping` (`${CLAUDE_PLUGIN_ROOT}/docs/art.md`) |
+| Pop-in along a camera path; a character lost against the background; a shot drifting from the concept art | `gdh measure popin` on a recording; `gdh live contrast --node PATH`; `gdh measure palette SHOT --reference ART` |
 | A choice of taste: which value of a setting looks best | `gdh live sweep "OBJ.PROP=V1,V2,V3"`: one grid of the options; then `gdh review --from SWEEP.json --out DIR --wait` for the user to pick, and their choice comes back (`${CLAUDE_PLUGIN_ROOT}/docs/compare.md`) |
 | Responsiveness and movement: input latency, speeds, jumps, coyote time, hit-stop, shake, camera lag | `gdh live latency`, `feel`, `hitstop`, `shake`, `follow` (`${CLAUDE_PLUGIN_ROOT}/docs/feel.md`) |
 | What moves in a scene that should be still, or what's frozen that should move | `gdh live record`, then its `<dir>-changes.png`, or `gdh measure changes --still` |

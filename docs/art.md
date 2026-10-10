@@ -8,6 +8,8 @@ Some problems don't show in a still frame: an animation that never gets past its
 | `gdh live footslide N --skeleton PATH` | Feet that slide along the ground while they're planted ([below](#foot-sliding)) |
 | `gdh live clipping N --node PATH` | A character's bones and mesh points inside solid geometry, frame by frame ([below](#clipping)) |
 | `gdh measure popin FRAMES` | Pop-in in a recording: what appears all at once while the rest moves smoothly ([below](#pop-in)) |
+| `gdh live contrast --node PATH` | How well a node stands out from what's round it: a luminance contrast ratio and a color difference ([below](#readability)) |
+| `gdh measure palette SHOT --reference IMAGE` | A shot's brightness, contrast, saturation and colors against a reference or a mood board ([below](#matching-a-look)) |
 
 ## Animation timelines
 
@@ -95,6 +97,44 @@ pop-in over 120 frames: 1 pop, 0 cuts
 
 Each of the 10 biggest pops gets a crop in `<frames>-popin/` (`--out DIR`; `--no-crops` for none): the frame before, the frame and their difference amplified. `--fail` exits 1 when something popped. Very fast motion, more than 32 pixels a frame (a post right beside the camera), can't be followed and can leave a few levels unexplained; the floor of 12 keeps that out. A lower `--floor` finds subtler pops, such as a texture's detail level switching, with more of those false ones.
 
+## Readability
+
+```sh
+gdh live contrast --node Player --node Enemy --node Pickups/Coin --session s
+gdh live contrast --node UI/Crosshair --min-ratio 4.5 --fail --session s
+```
+
+A player has to pick out the character, the enemies and what can be picked up at a glance, against whatever is behind them. `contrast --node PATH` (repeatable) measures it on the frame as it is: it shoots the frame, hides the node and shoots it again, and the pixels that differ are the node's (its children's included). The ring round them, `--ring` (12) pixels wide, is what it's seen against. Two numbers compare the node's median color with the ring's:
+
+- **The contrast ratio**, WCAG's: the relative luminance of the brighter plus 0.05, over the darker's plus 0.05, from 1:1 (the same brightness) to 21:1 (white on black). It's what a player who can't tell the colors apart goes by, and what still shows in a dim room or on a washed-out screen. Under `--min-ratio` (3, the least WCAG asks of graphics that must be seen) is flagged: hard to pick out by brightness alone. `--fail` exits 1 then.
+- **The color difference**, ΔE (CIE76, in L\*a\*b\*): about 2.3 is just noticeable, 10 plain, over 40 two different colors. A node with a low ratio and a high ΔE stands out by its hue only.
+
+```
+Bright: contrast 4:1 with the 12 px round it (at least 3), color difference 46.8 (node (255, 255, 255), round it (127, 127, 127))  [captures/live/s/readability/Bright-contrast.png]
+Murky: contrast 1.04:1 with the 12 px round it (under 3: hard to pick out by brightness alone), color difference 9.7 (node (143, 127, 115), round it (127, 127, 127))  [captures/live/s/readability/Murky-contrast.png]
+```
+
+Each node gets a crop with its outline in white and its ring's in cyan, and the frame, in `--out DIR` (default `<session out>/readability`). `--no-ui` leaves the UI out of both shots. The node is shown again afterwards. Measure it where it matters: in the level's darkest and brightest places, in fog, behind effects.
+
+## Matching a look
+
+```sh
+gdh measure palette captures/hub/normal.png --reference art/hub_concept.png --out captures/hub-vs-concept.png
+gdh measure palette shot.png --reference board/01.jpg --reference board/02.jpg --reference board/03.jpg
+```
+
+`palette SHOT --reference IMAGE` compares a shot's look with a reference: concept art, a mood board (repeat `--reference`; its images are taken together), or an earlier shot. It gives, for each, the mean lightness (CIE L\*, 0 to 100), its spread (the contrast), the black and white points (the 2% darkest and brightest), the mean saturation, and the 6 dominant colors with their shares, and says how the shot differs in each:
+
+```
+  lightness (mean L*): 53.5 against 32.5, brighter by 21
+  contrast (L* spread): 3.9 against 2.6, about the same
+  black point (2% darkest, L*): 53.2 against 32.3, lifted blacks by 20.9
+  saturation (mean): 0.001 against 0.001, about the same
+  brightness histograms 21.96 L* apart (0: the same; under 3 hard to tell)
+```
+
+The histogram distance is the earth mover's distance between the two brightness histograms, in L\* units: how far the shot's brightness would have to move to match. `--out PNG` saves the two side by side, each with its dominant colors as a bar and its brightness histogram. Images over 2 million pixels are halved first. Compare like with like: the same view, or the reference's framing.
+
 ## Tests
 
 `tests/test_anim.py` runs `testbed/anim/anim.tscn`: an `AnimationPlayer` looping "bob" and an `AnimationTree` whose state machine is "idle", or "move" (a blend space by `speed`) while `moving`, with a switch for each bug. It checks:
@@ -117,3 +157,10 @@ On `testbed/anim/clip.tscn`, a hand bone swinging into a static wall, and a reco
 - clipping: two runs of 27 frames of the hand inside Wall, 60 frames apart, the character's own capsule left out, the crops; `--fail` with and without a run; a node that isn't there, and one with nothing to test
 - pop-in: one pop, on file 80, round the middle of the view, and none from the posts moving; `--fail`
 - pop-in on made-up frames: a texture panning 3 px a frame with a block appearing on frame 7 and a frame of black, found as one pop and two cuts
+
+`tests/test_readability.py` runs `testbed/anim/readability.tscn`, three squares on a mid-grey backdrop: white, a brownish grey of the backdrop's brightness, and a grey a shade lighter drawn by a child. It checks:
+
+- contrast: about 4:1 for white, under 1.1 and flagged for the other two, the brownish one with a plain color difference and the grey one without; the crops; every node shown again after
+- `--fail`, and a hidden node, which draws nothing
+- palette on made-up images: brighter than a darkened copy, more saturated than a grey copy, the same as itself, and a mood board taken together
+- the color math: white's luminance and L\*a\*b\*, the contrast ratio's range, and the differences and histogram distance

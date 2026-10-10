@@ -260,6 +260,19 @@ gdh live follow --target Player --hold ui_right --session s
 
 Feel is mostly timing, and these put numbers on it: the frames from an input to the game's state and to the pixels, a character's top speed and the time to it, stopping, a jump's height and airtime, air control, the coyote time and jump buffer (found by pressing at each frame offset), how long a hit-stop freezes time, a camera shake's size, frequency and decay, and how far a camera lags. Each draws a chart. See [docs/feel.md](docs/feel.md).
 
+## Check animation and art
+
+```sh
+gdh live anim 120 --node Player --hold ui_right --session s     # states, positions, blends; restarts and flip-flops
+gdh live footslide 120 --skeleton Player/Skeleton3D --session s  # planted feet sliding
+gdh live clipping 240 --node Player --session s                  # bones and mesh points inside walls
+gdh measure popin captures/flythrough                            # pop-in along a camera path
+gdh live contrast --node Player --node Enemy --session s         # how well each stands out
+gdh measure palette shot.png --reference concept.png             # against the concept art's look
+```
+
+These find what still frames miss: an animation that never gets past its start, a state machine flipping between two states, feet sliding, an arm through a wall, a mesh popping in, a character lost against the background, a shot that drifted from the concept art. See [docs/art.md](docs/art.md).
+
 ## Compare options
 
 ```sh
@@ -376,6 +389,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/motion.py`, `motion_cli.py`, `chart.py` | Motion in one image: onion skins, filmstrips, trails and change maps, with `gdh live onion` and `filmstrip` and their `gdh measure` forms; and trace charts |
 | `src/gdh/profile.py`, `debugger.py`, `variant.py` | `gdh live profile`, the debugger `start --profiler` runs beside the game, and Godot's binary Variant format it speaks |
 | `src/gdh/feel.py` | `gdh live latency`, `feel`, `hitstop`, `shake` and `follow` |
+| `src/gdh/anim.py`, `footslide.py`, `clipping.py`, `readability.py`, `src/gdh/harness/clip.gd` | `gdh live anim`, `footslide`, `clipping` and `contrast`, and `gdh measure popin` and `palette` |
 | `src/gdh/compare.py`, `review.py` | Options side by side: `gdh live sweep`, `gdh capture --matrix` and their grids, and `gdh review`'s page for the user's choice |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
 | `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |
@@ -393,7 +407,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd`, `check.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, gdh's own test runner, and the script check with no editor, which loads scripts as the game does, autoloads and all |
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays; the bridge and hooks, `api`, `test` and `export`, which run headless, once. `claude plugin test .` runs the band's tests. |
-| `docs/` | Live control, the editor, measuring frames, seeing motion, game feel, comparing options, movies, displays, probes, and test reports |
+| `docs/` | Live control, the editor, measuring frames, seeing motion, game feel, animation and art checks, comparing options, movies, displays, probes, and test reports |
 | `skills/`, `agents/`, `.claude-plugin/` | The Claude Code skills, the playtester agent, and the plugin manifests |
 
 ## License

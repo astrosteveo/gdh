@@ -230,6 +230,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N] [--visible-only]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
 | `sweep "TARGET=V1,V2"...` | The same frame with each value of a property, in a labeled grid; two make rows and columns ([compare.md](compare.md#sweeps)) |
+| `anim N --node PATH` | An animation's state, position and blend parameters frame by frame, as a chart, with restarts and flip-flops flagged ([art.md](art.md#animation-timelines)) |
 | `pick X,Y...` | What's drawn at each point, topmost first: 2D and UI nodes in draw order, then 3D meshes by distance, with textures, surfaces and materials (above) |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
 | `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |

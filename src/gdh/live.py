@@ -1803,6 +1803,8 @@ def add_parsers(sub):
     compare.add_live_parsers(commands, command)
     from gdh import profile
     profile.add_live_parsers(commands, command)
+    from gdh import anim
+    anim.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

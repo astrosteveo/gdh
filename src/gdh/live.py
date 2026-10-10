@@ -1807,6 +1807,8 @@ def add_parsers(sub):
     anim.add_live_parsers(commands, command)
     from gdh import footslide
     footslide.add_live_parsers(commands, command)
+    from gdh import clipping
+    clipping.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

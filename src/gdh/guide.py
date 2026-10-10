@@ -38,7 +38,7 @@ INPUT (step options)
 SEE MOTION, CHOOSE
   gdh live onion 40 --node PATH --hold ui_right --session S  frames over each other (filmstrip: side by side)
   gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
-  gdh live anim 60 --node PATH --session S                    animation states, flip-flops; also footslide
+  gdh live anim 60 --node PATH --session S                    animation states, flip-flops; footslide, clipping
   gdh live sweep "OBJ.PROP=V1,V2,V3" --session S              a grid of options; gdh review --from it --wait
 
 KEEP IT
@@ -55,7 +55,7 @@ MEASURE
   gdh live profile 600 --session S                           (start --profiler) which script functions took it
   gdh live monitors --leak --session S                       nodes, orphans, memory growing
   gdh live audio --session S                                 bus peaks, what played
-  gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black|changes D
+  gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black|changes|popin D
 
 BUILDS AND THE EDITOR
   gdh export --project P --preset Linux --smoke 10           build, run it off-screen, fail on errors

@@ -6,6 +6,8 @@ Some problems don't show in a still frame: an animation that never gets past its
 |---|---|
 | `gdh live anim N --node PATH` | An `AnimationPlayer`'s or `AnimationTree`'s state, position and blend parameters frame by frame, with restarts and flip-flops flagged ([below](#animation-timelines)) |
 | `gdh live footslide N --skeleton PATH` | Feet that slide along the ground while they're planted ([below](#foot-sliding)) |
+| `gdh live clipping N --node PATH` | A character's bones and mesh points inside solid geometry, frame by frame ([below](#clipping)) |
+| `gdh measure popin FRAMES` | Pop-in in a recording: what appears all at once while the rest moves smoothly ([below](#pop-in)) |
 
 ## Animation timelines
 
@@ -50,6 +52,49 @@ crops: captures/live/s/feel/footslide/footslide.png
 
 With a slide, it saves crops of the `--crops` (3) worst frames side by side, each 160 px round the foot on screen, zoomed 3 times and marked: each foot's worst first, then the next worst of any (`--out FILE.png`; `--crops 0` saves no frames). A slide as fast as the character walks means the foot moves with the body: the stride doesn't cover the ground.
 
+## Clipping
+
+```sh
+gdh live clipping 240 --node Player --hold ui_up --session s          # an arm through a wall, a cape through the floor
+gdh live clipping 120 --node Enemy --mask 1 --fail --session s       # only layer 1; exit 1 if anything clipped
+```
+
+`clipping N --node PATH` steps N frames, with any of `step`'s input options, and tests a character's points against the solid collision shapes around it after every frame:
+
+- **The points** are every bone of each `Skeleton3D` under the node, and the vertices (up to 200 of each) of each `MeshInstance3D` under it that isn't skinned. A skinned mesh's vertices move with its bones on the GPU, where gdh can't read them, so its bones stand for it.
+- **The shapes** are those on `--mask` (every layer by default), less the collision bodies under the node itself: the character's own capsule always holds its bones. A point is inside when the physics space's `intersect_point` says so, which finds it inside a box, sphere, capsule, convex polygon or height map. A concave trimesh has no inside, so a point inside one isn't found: give walls that matter a convex shape, or check them by eye.
+
+The frames each point spent inside each body are grouped into runs, longest first:
+
+```
+clipping of Reacher over 120 frames (2 points tested a frame):
+  hand inside Wall: frames 17 to 43 (27 frames), at 3.004,1,0
+  hand inside Wall: frames 77 to 103 (27 frames), at 3.004,1,0
+crops: captures/live/s/feel/clipping/clipping.png
+```
+
+With a run, it saves crops of the `--crops` (3) longest runs at their first frame, each 160 px round the point, zoomed and marked (`--out FILE.png`; `--crops 0` saves no frames). `--fail` exits 1 when a point was inside.
+
+## Pop-in
+
+```sh
+gdh live record 300 --out captures/flythrough --session s      # a camera path through the level
+gdh measure popin captures/flythrough
+```
+
+`measure popin FRAMES` reads a recording (PNG files, or directories taken in name order) from any game and looks for what appears or changes all at once: a mesh switching its LOD or appearing at the end of its visibility range, a texture streaming in, a light switching on. The recording should move smoothly, a camera on a path, as pop-in is what breaks that.
+
+1. For each 24-pixel block (`--block`), it finds the shift of the frame before, up to 32 pixels each way, that best explains the block in this frame: what moved is explained, and what appeared isn't. The search runs at a quarter of the size, so it takes a few seconds for a hundred frames.
+2. A block pops when the change that no shift explains is over `--ratio` (4) times its typical change in the 3 frames before and after, and over it by at least `--floor` (12) luminance levels, and stays changed: 2 frames on, its brightness is still at least half the jump away from the frame before. Something passing through the block leaves it as it was.
+3. Blocks that pop together in a frame are one pop, listed with the frame (the recording's file index from 0), its box and its change against the change around it, the biggest first. A frame where most of the screen (30%) changes at once is a cut or a flash, and is listed as one.
+
+```
+pop-in over 120 frames: 1 pop, 0 cuts
+  frame 80: the box 576,312,696,408 changed by 70.62 against 0 in the frames around it  [captures/flythrough-popin/01-pop.png]
+```
+
+Each of the 10 biggest pops gets a crop in `<frames>-popin/` (`--out DIR`; `--no-crops` for none): the frame before, the frame and their difference amplified. `--fail` exits 1 when something popped. Very fast motion, more than 32 pixels a frame (a post right beside the camera), can't be followed and can leave a few levels unexplained; the floor of 12 keeps that out. A lower `--floor` finds subtler pops, such as a texture's detail level switching, with more of those false ones.
+
 ## Tests
 
 `tests/test_anim.py` runs `testbed/anim/anim.tscn`: an `AnimationPlayer` looping "bob" and an `AnimationTree` whose state machine is "idle", or "move" (a blend space by `speed`) while `moving`, with a switch for each bug. It checks:
@@ -66,3 +111,9 @@ On `testbed/anim/walker.tscn`, a `Skeleton3D` walking along x at 1.2 m/s with it
 - with `slide`, each planted foot sliding at 1.2 m/s, 0.02 m a frame, and the crops saved; `--bones` with one foot
 - a node that isn't there, one that isn't a skeleton, and a bone it doesn't have
 - foot bones guessed from several naming styles
+
+On `testbed/anim/clip.tscn`, a hand bone swinging into a static wall, and a recording of `testbed/anim/popin.tscn`, a camera gliding past posts toward a cube that appears on the 81st frame:
+
+- clipping: two runs of 27 frames of the hand inside Wall, 60 frames apart, the character's own capsule left out, the crops; `--fail` with and without a run; a node that isn't there, and one with nothing to test
+- pop-in: one pop, on file 80, round the middle of the view, and none from the posts moving; `--fail`
+- pop-in on made-up frames: a texture panning 3 px a frame with a block appearing on frame 7 and a frame of black, found as one pop and two cuts

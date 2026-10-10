@@ -5,6 +5,7 @@ Polish is full of choices of taste: how bright the bloom, how strong the shake, 
 | Command | What it shows |
 |---|---|
 | `gdh live sweep "TARGET=V1,V2,V3" [...]` | The same frame with each value of one property, or two for rows and columns ([below](#sweeps)) |
+| `gdh capture --matrix [SCREENS] --quality PRESETS` | A scene at several screen shapes and quality settings, each a capture with its probe findings ([below](#screens-and-quality-capture---matrix)) |
 
 ## Sweeps
 
@@ -26,6 +27,37 @@ The grid goes to `--out FILE.png` (default `<session out>/sweep/sweep.png`), and
 
 **Settings that show in motion** (a camera's smoothing, a jump's height, a particle's lifetime) need more than a frame. `--record N` steps N frames for each cell, with any of `step`'s input options (`--press jump`, `--hold ui_right`), saving every `--every K` frame, and makes the cell a contact sheet of 9 of them, or with `--as onion --node PATH` an onion skin of the node's movement ([motion.md](motion.md#onion-skins)). Each cell's recording goes on from where the one before ended, unless `--reset EXPR` runs an expression before each cell that puts the game back in the same state (a debug autoload's `Debug.goto('jump_test')`, or setting a position); without it, a note says so.
 
+## Screens and quality: `capture --matrix`
+
+```sh
+gdh capture --project game --scene res://levels/hub.tscn --out captures/hub --matrix
+gdh capture --project game --scene res://ui/main_menu.tscn --out captures/menu --matrix 16:9,21:9,phone --modes normal
+gdh capture --project game --scene res://levels/hub.tscn --out captures/hub --matrix 16:9 --quality low,medium,high
+gdh capture --project game --scene res://levels/hub.tscn --out captures/hub --matrix deck --set rendering/scaling_3d/mode=2
+```
+
+`--matrix` captures a scene at each screen, by each `--quality`, as a capture of its own (its views, `report.json` with the probe findings, crops, logs) in `OUT/<screen>-<quality>/`, and lays their `normal` views out in `OUT/matrix.png`: a row for each screen, a column for each quality, each cell labeled with its size and its warnings, or FAILED. `OUT/matrix.json` lists every cell: its screen, size, quality, directory, whether it went through, its warnings and findings, and the settings it ran with. With several `--scene`s, each gets its own `OUT/<scene>/`. A UI that doesn't fit a phone, a HUD cut off at 21:9 or a probe that only fires at low quality shows in one image.
+
+**Screens** are window sizes, comma-separated: `16:9` (1280x720), `16:10` (1152x720), `21:9` (1720x720), `32:9` (2560x720), `4:3` (960x720), `deck` (1280x800), `phone` (720x1280), `phone-landscape` (1280x720), `tablet` (1024x768), or any `WxH`. The default is `16:9,21:9,4:3,deck,phone`. The game's own stretch settings decide how it fills each, which is what the matrix shows. A game that sizes its own window fails the cell that differs, as `--resolution` does.
+
+**Qualities** are sets of project settings, comma-separated: `project` (the project's own settings, the default), `low`, `medium` and `high`. Godot reads these settings only from the project, so gdh writes them into an `override.cfg` beside `project.godot` for each run and removes it once the run ends; a project that has an `override.cfg` of its own is refused, as for `gdh movie`. `--set SECTION/KEY=VALUE` (repeatable) adds a setting to every cell, on top of its quality: a number, `true` or `false`, a Godot value written as one (`Color(0.1, 0.1, 0.1, 1)`), or text.
+
+| Setting | `low` | `medium` | `high` |
+|---|---|---|---|
+| `rendering/scaling_3d/scale` | 0.5 | 0.75 | 1.0 |
+| `rendering/anti_aliasing/quality/msaa_3d` | 0 | 0 | 2 |
+| `rendering/anti_aliasing/quality/screen_space_aa` | 0 | 1 | 0 |
+| `rendering/lights_and_shadows/directional_shadow/size` | 1024 | 2048 | 4096 |
+| `rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality` | 0 | 2 | 3 |
+| `rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality` | 0 | 2 | 3 |
+| `rendering/environment/ssao/quality` | 0 | 1 | 2 |
+| `rendering/environment/ssil/quality` | 0 | 1 | 2 |
+| `rendering/environment/glow/use_high_quality` | false | the project's | true |
+
+The values are Godot's: `msaa_3d` 2 is 4x MSAA, `screen_space_aa` 1 is FXAA, a shadow filter quality runs from 0 (hard) to 5 (ultra), and an SSAO or SSIL quality from 0 (very low) to 4 (ultra). "The project's" leaves that setting as the project has it.
+
+`--modes` picks the views each cell saves (all six by default; `--modes normal` is quicker), and `--warmup`, `--timeout`, `--display` and the game's arguments after `--` apply to every cell. `--baseline` doesn't go with `--matrix`.
+
 ## Tests
 
 `tests/test_compare.py` runs `testbed/motion/motion.tscn`, with Ball (a `Node2D` drawn by its 32 px red `Body`) held still. It checks:
@@ -35,3 +67,6 @@ The grid goes to `--out FILE.png` (default `<session out>/sweep/sweep.png`), and
 - `--record` with onion-skin cells and a reset, and the note without a reset
 - a sweep that isn't one, one value, a property the object doesn't have (nothing set), `--reset` without `--record`, `--as onion` without `--node`
 - how values and targets are split
+- a matrix of `motion.tscn` at 16:9, phone and 1000x500 by the project's quality and `low`, with a clear color set by `--set`: 6 cells in order, each at its size with the clear color it was given, `low`'s settings recorded, the grid within 1280 px, and no `override.cfg` left behind
+- an unknown screen or quality, `--quality` without `--matrix`, a `--set` that isn't a setting, and `--matrix` with `--baseline`
+- how screens, qualities and settings are read and written

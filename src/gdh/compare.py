@@ -3,6 +3,9 @@
 
 A sweep sets a property of the running game to each of a few values in turn and saves the same frame with each, into
 one labeled grid: a row of cells for one property, rows by columns for two. Every value is put back afterwards.
+
+A matrix captures a scene at several window sizes (screen shapes) and quality settings, each a capture of its own
+with its probe findings, and lays them out in a grid: rows by screen, columns by quality.
 """
 import json
 import shutil
@@ -29,10 +32,10 @@ class CompareError(GdhError):
 # --- Grids -------------------------------------------------------------------------------------------------------------
 
 
-def grid(cells, out, columns, title=None, row_labels=None, column_labels=None, width=MAX_WIDTH):
+def grid(cells, out, columns, title=None, row_labels=None, column_labels=None, width=MAX_WIDTH, labeled=None):
     """Cells ([(label, image path or PIL image)], row by row) in a grid at most `width` wide, each fitted inside one
-    cell's size (the first's aspect) at its own aspect, each labeled; with row and column labels, those go down the left and along the
-    top instead. Returns {"out", "cell_size", "columns", "rows"}."""
+    cell's size (the first's aspect) at its own aspect, each labeled; row and column labels go down the left and along
+    the top, and with both a cell's own label is left out unless `labeled`. Returns {"out", "cell_size", "columns", "rows"}."""
     images = [(label, img if isinstance(img, Image.Image) else Image.open(img)) for label, img in cells]
     if not images:
         raise CompareError("A grid needs cells.")
@@ -45,7 +48,7 @@ def grid(cells, out, columns, title=None, row_labels=None, column_labels=None, w
     first = images[0][1]
     cell_w = min(cell_w, first.width * 2)  # scaled up at most twice
     cell_h = max(1, round(first.height * cell_w / first.width))
-    own_label = 0 if row_labels and column_labels else LABEL
+    own_label = LABEL if labeled or not (row_labels and column_labels) else 0
     sheet_w = left + GAP + columns * (cell_w + GAP)
     sheet_h = (HEADER if title else 0) + top + GAP + rows * (cell_h + own_label + GAP)
     sheet = Image.new("RGB", (sheet_w, sheet_h), BACKGROUND)
@@ -270,3 +273,145 @@ def add_live_parsers(commands, command):
     p.add_argument("--reset", metavar="EXPR",
                    help="With --record: an expression run before each cell, to start each from the same state")
     add_input_options(p)
+
+
+# --- gdh capture --matrix -------------------------------------------------------------------------------------------
+
+# Window sizes by name: a screen's shape at 720 pixels high, or a device's own.
+SCREENS = {
+    "16:9": "1280x720",
+    "16:10": "1152x720",
+    "21:9": "1720x720",
+    "32:9": "2560x720",
+    "4:3": "960x720",
+    "deck": "1280x800",
+    "phone": "720x1280",
+    "phone-landscape": "1280x720",
+    "tablet": "1024x768",
+}
+DEFAULT_SCREENS = "16:9,21:9,4:3,deck,phone"
+# Quality presets: project settings, written into an override.cfg for the run.
+QUALITY = {
+    "low": {
+        "rendering/scaling_3d/scale": 0.5,
+        "rendering/anti_aliasing/quality/msaa_3d": 0,
+        "rendering/anti_aliasing/quality/screen_space_aa": 0,
+        "rendering/lights_and_shadows/directional_shadow/size": 1024,
+        "rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality": 0,
+        "rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality": 0,
+        "rendering/environment/ssao/quality": 0,
+        "rendering/environment/ssil/quality": 0,
+        "rendering/environment/glow/use_high_quality": False,
+    },
+    "medium": {
+        "rendering/scaling_3d/scale": 0.75,
+        "rendering/anti_aliasing/quality/msaa_3d": 0,
+        "rendering/anti_aliasing/quality/screen_space_aa": 1,
+        "rendering/lights_and_shadows/directional_shadow/size": 2048,
+        "rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality": 2,
+        "rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality": 2,
+        "rendering/environment/ssao/quality": 1,
+        "rendering/environment/ssil/quality": 1,
+    },
+    "high": {
+        "rendering/scaling_3d/scale": 1.0,
+        "rendering/anti_aliasing/quality/msaa_3d": 2,
+        "rendering/anti_aliasing/quality/screen_space_aa": 0,
+        "rendering/lights_and_shadows/directional_shadow/size": 4096,
+        "rendering/lights_and_shadows/directional_shadow/soft_shadow_filter_quality": 3,
+        "rendering/lights_and_shadows/positional_shadow/soft_shadow_filter_quality": 3,
+        "rendering/environment/ssao/quality": 2,
+        "rendering/environment/ssil/quality": 2,
+        "rendering/environment/glow/use_high_quality": True,
+    },
+}
+
+
+def parse_screens(text):
+    """--matrix's screens: names from SCREENS, or WxH. Returns [(name, "WxH")]."""
+    from gdh.display import parse_resolution
+    out = []
+    for name in [w.strip() for w in (text or DEFAULT_SCREENS).split(",") if w.strip()]:
+        size = SCREENS.get(name, name)
+        try:
+            parse_resolution(size)
+        except Exception:
+            raise CompareError(f"Unknown screen {name!r}: {', '.join(SCREENS)}, or WxH.") from None
+        out.append((name, size))
+    return out
+
+
+def parse_value(text):
+    """A project setting's value from the command line: a boolean, a number, a Godot value written as one
+    (Color(1, 0, 0, 1), Vector2i(1280, 720)), or text."""
+    import re
+    from gdh.override import Raw
+    if re.fullmatch(r"[A-Z][A-Za-z0-9]*\(.*\)", text):
+        return Raw(text)
+    if text in ("true", "false"):
+        return text == "true"
+    try:
+        return int(text)
+    except ValueError:
+        pass
+    try:
+        return float(text)
+    except ValueError:
+        return text
+
+
+def parse_qualities(text, sets):
+    """--quality's presets (project: the project's own settings), each with --set's settings on top. Returns
+    [(name, {setting: value})]."""
+    extra = {}
+    for item in sets:
+        key, sep, value = item.partition("=")
+        if not sep or "/" not in key:
+            raise CompareError(f"--set takes SECTION/KEY=VALUE, a project setting as project.godot names it; not "
+                               f"{item!r}.")
+        extra[key.strip()] = parse_value(value.strip())
+    out = []
+    for name in [w.strip() for w in (text or "project").split(",") if w.strip()]:
+        if name != "project" and name not in QUALITY:
+            raise CompareError(f"Unknown quality {name!r}: project, {', '.join(QUALITY)}.")
+        out.append((name, {**QUALITY.get(name, {}), **extra}))
+    return out
+
+
+def capture_matrix(project, scene, out_dir, args, shims):
+    """Capture one scene at every screen and quality of the matrix into out_dir/<screen>-<quality>/, and lay their
+    normal views out in out_dir/matrix.png. Returns whether every cell's capture went through."""
+    import copy
+    from gdh.capture import capture_one
+    from gdh.override import project_override
+    screens = parse_screens(args.matrix)
+    qualities = parse_qualities(args.quality, args.set)
+    cells, results, ok = [], [], True
+    for screen, size in screens:
+        for quality, settings in qualities:
+            name = f"{screen.replace(':', 'x')}-{quality}"
+            cell_args = copy.copy(args)
+            cell_args.resolution = size
+            cell_dir = out_dir / name
+            if settings:
+                with project_override(project, settings):
+                    went = capture_one(project, scene, cell_dir, cell_args, shims)
+            else:
+                went = capture_one(project, scene, cell_dir, cell_args, shims)
+            ok &= went
+            report_path = cell_dir / "report.json"
+            report = json.loads(report_path.read_text()) if report_path.exists() else {}
+            findings = report.get("findings", [])
+            warnings = sum(f["severity"] == "warning" for f in findings)
+            label = f"{size}: {warnings} warning{'s' if warnings != 1 else ''}" if went else f"{size}: FAILED"
+            image = cell_dir / "normal.png"
+            cells.append((label, image if image.exists() else Image.new("RGB", (16, 9), (80, 0, 0))))
+            results.append({"screen": screen, "size": size, "quality": quality, "dir": str(cell_dir), "ok": bool(went),
+                            "warnings": warnings, "findings": len(findings), "settings": settings,
+                            **({"size_mismatch": report["size_mismatch"]} if report.get("size_mismatch") else {})})
+    info = grid(cells, out_dir / "matrix.png", len(qualities), f"{scene} at each screen and quality",
+                [s for s, _ in screens], [q for q, _ in qualities], labeled=True)
+    (out_dir / "matrix.json").write_text(json.dumps({"scene": scene, **info, "cells": results}, indent=1) + "\n")
+    print(f"matrix: {info['out']} ({len(screens)} screens by {len(qualities)} qualit"
+          f"{'y' if len(qualities) == 1 else 'ies'}; each cell's capture in its own directory, matrix.json beside it)")
+    return ok

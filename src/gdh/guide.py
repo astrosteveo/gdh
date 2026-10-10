@@ -8,6 +8,7 @@ LOOK
   gdh capture --project P --scene res://s.tscn --out D     6 views, errors, probe findings, crops/
   gdh capture ... --baseline B [--update-baseline]           exit 1 naming each view that changed
   gdh measure diff a.png b.png --out D                       share changed, its box, crop.png
+  gdh capture ... --matrix [16:9,21:9,phone] [--quality low,high]   each screen and quality, one grid
 
 PLAY (one session per task, a name of your own; always stop it)
   gdh live start --project P --session S [--scene res://...] [--recipe F] [--seed N] [--timeline] [-- game args]

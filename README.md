@@ -115,6 +115,9 @@ Options:
 | `--update-baseline` | off | Write the views into `--baseline DIR` instead |
 | `--tolerance PCT` | `0` | With `--baseline`: the percent of a view's pixels that may change |
 | `--threshold T` | `2` | With `--baseline`: a pixel has changed when a channel differs by more than T (of 255) |
+| `--matrix [SCREENS]` | off | Capture at each screen (16:9, 21:9, 4:3, deck, phone and more, or WxH) by each `--quality`, each into a directory of its own, and lay them out in `matrix.png` ([docs/compare.md](docs/compare.md#screens-and-quality-capture---matrix)) |
+| `--quality PRESETS` | `project` | With `--matrix`: `project`, `low`, `medium`, `high`, comma-separated: rendering settings for each run |
+| `--set SECTION/KEY=VALUE` | none | With `--matrix`: a project setting for every cell; repeatable |
 | `--no-import` | off | Don't import the project first when its import cache is missing or stale ([Importing](#importing)) |
 
 Environment variables:
@@ -261,9 +264,10 @@ Feel is mostly timing, and these put numbers on it: the frames from an input to 
 ```sh
 gdh live sweep "get_node('World').environment.glow_intensity=0.4, 0.8, 1.2" --session s
 gdh live sweep "get_node('Sun').light_energy=0.5, 1, 2" "get_node('Sun').rotation_degrees:x=-30, -60" --session s
+gdh capture --project game --scene res://ui/hud.tscn --out captures/hud --matrix 16:9,21:9,phone --quality low,high
 ```
 
-`gdh live sweep` sets a property of the running game to each of a few values, saves the same frame with each, and lays them out in one labeled grid; two sweeps make rows and columns, and every value is put back after. `--record N` shows settings that only show in motion as a contact sheet or an onion skin per cell. See [docs/compare.md](docs/compare.md).
+`gdh capture --matrix` captures a scene at several screen shapes and quality presets into one grid, each cell a capture with its own probe findings. `gdh live sweep` sets a property of the running game to each of a few values, saves the same frame with each, and lays them out in one labeled grid; two sweeps make rows and columns, and every value is put back after. `--record N` shows settings that only show in motion as a contact sheet or an onion skin per cell. See [docs/compare.md](docs/compare.md).
 
 ## Record a movie
 
@@ -369,7 +373,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |
 | `src/gdh/motion.py`, `motion_cli.py`, `chart.py` | Motion in one image: onion skins, filmstrips, trails and change maps, with `gdh live onion` and `filmstrip` and their `gdh measure` forms; and trace charts |
 | `src/gdh/feel.py` | `gdh live latency`, `feel`, `hitstop`, `shake` and `follow` |
-| `src/gdh/compare.py` | Options side by side: `gdh live sweep` and its grids |
+| `src/gdh/compare.py` | Options side by side: `gdh live sweep`, `gdh capture --matrix` and their grids |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
 | `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |
 | `src/gdh/api.py`, `testing.py`, `export.py` | `gdh api`, `gdh test` and `gdh export` |

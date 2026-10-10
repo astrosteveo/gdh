@@ -137,8 +137,9 @@ def label(v, step):
     return text
 
 
-def draw(panels, out, title=None):
-    """Draw the panels one under another, sharing the frame axis, and save the PNG. Returns out."""
+def draw(panels, out, title=None, axis="game frame"):
+    """Draw the panels one under another, sharing the frame axis (captioned `axis`), and save the PNG. Returns
+    out."""
     if not panels:
         raise ChartError("Nothing to chart: no expressions.")
     if len(panels) > MAX_PANELS:
@@ -222,7 +223,7 @@ def draw(panels, out, title=None):
     for t in frame_ticks:
         text = label(t, frame_step)
         d.text((fx(t) - d.textlength(text, font=small) / 2, axis_y), text, fill=MUTED, font=small)
-    caption = "game frame"
+    caption = axis
     d.text(((x0 + x1) / 2 - d.textlength(caption, font=font) / 2, axis_y + 16), caption, fill=INK, font=font)
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     img.save(out)

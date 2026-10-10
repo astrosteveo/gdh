@@ -195,6 +195,342 @@ def cmd_latency(args):
     return 0
 
 
+# --- gdh live feel ---------------------------------------------------------------------------------------------------
+
+# A speed within this share of the top counts as the top; under this share of it, stopped.
+TOP_SHARE = 0.99
+STOPPED_SHARE = 0.01
+# Moving up by more than this many units in the frames after a press counts as a jump.
+JUMPED = 0.5
+
+
+class Body:
+    """The node `feel` measures: where it is, how to put it back, and which way is up."""
+
+    def __init__(self, game, args):
+        self.game = game
+        self.path = args.node
+        self.ref = f"get_node({json.dumps(args.node)})"
+        if not isinstance(game.eval(f"{self.ref}.global_position"), list):
+            raise FeelError(f"{args.node} has no global_position: feel measures a Node2D or Node3D.")
+        self.has_velocity = bool(game.eval(f"'velocity' in {self.ref}"))
+        self.has_floor = bool(game.eval(f"{self.ref}.has_method('is_on_floor')"))
+        # At rest before the start is read, as it's where every reset goes back to: on the floor when it has one.
+        if args.reset:
+            game.eval(args.reset)
+        if self.has_floor:
+            game.step(600, until=f"{self.ref}.is_on_floor()")
+        game.step(args.settle)
+        self.start = game.eval(f"{self.ref}.global_position")
+        self.three_d = len(self.start) == 3
+        self.reset_expr = args.reset
+        self.settle = args.settle
+        self.notes = []
+        if self.has_floor and not game.eval(f"{self.ref}.is_on_floor()"):
+            self.notes.append(f"{args.node} didn't land in 600 frames, and each measure starts from where it is: "
+                              f"give it a floor, or --reset.")
+
+    def position(self):
+        return f"{self.ref}.global_position"
+
+    def reset(self):
+        """Back to where it started, at rest (or --reset), then settle. A game's own timers (a jump still buffered,
+        a cooldown) aren't reset, so with a floor it also waits for the character to land, and settles again."""
+        if self.reset_expr:
+            self.game.eval(self.reset_expr)
+        else:
+            vector = f"Vector3({', '.join(map(str, self.start))})" if self.three_d else \
+                f"Vector2({', '.join(map(str, self.start))})"
+            zero = "Vector3(0, 0, 0)" if self.three_d else "Vector2(0, 0)"
+            sets = [f"{self.ref}.set_global_position({vector})"]
+            if self.has_velocity:
+                sets.append(f"{self.ref}.set_velocity({zero})")
+            self.game.eval(f"[{', '.join(sets)}]")
+        self.game.step(self.settle)
+        if self.has_floor and not self.game.eval(f"{self.ref}.is_on_floor()"):
+            self.game.step(600, until=f"{self.ref}.is_on_floor()")
+            self.game.step(self.settle)
+            if not self.reset_expr:  # landed somewhere after a leftover jump: back to the start again
+                self.game.eval(f"[{', '.join(sets)}]")
+                self.game.step(self.settle)
+
+    def up(self, a, b):
+        """How far b is above a."""
+        return (b[1] - a[1]) if self.three_d else (a[1] - b[1])
+
+    def across(self, a, b):
+        """How far b is from a along the ground."""
+        if self.three_d:
+            return math.hypot(b[0] - a[0], b[2] - a[2])
+        return abs(b[0] - a[0])
+
+
+def positions(result):
+    """[(frame, position)] from a step's trace of the position."""
+    return [(row[0], row[1]) for row in result["trace"]["rows"] if row[1] is not None]
+
+
+def speeds(body, points, ticks):
+    """[(frame, speed along the ground)] between consecutive points, per second."""
+    return [(f1, body.across(p0, p1) * ticks / max(f1 - f0, 1)) for (f0, p0), (f1, p1) in zip(points, points[1:])]
+
+
+def acceleration(series, ticks):
+    """How fast speed grows while speeding up: the slope of a straight line fit through [(frame, speed)] up to the
+    first reaching 90% of the most, per second. None with fewer than two points."""
+    if not series:
+        return None
+    top = max(s for _, s in series)
+    end = next(i for i, (_, s) in enumerate(series) if s >= 0.9 * top)
+    part = series[:end + 1]
+    if len(part) < 2:
+        return None
+    t = np.array([f for f, _ in part], dtype=float) / ticks
+    v = np.array([s for _, s in part], dtype=float)
+    return round(float(np.polyfit(t, v, 1)[0]), 1)
+
+
+def run_profile(game, body, args):
+    """Hold the run input, then let go: top speed, time to it, stopping distance and time."""
+    body.reset()
+    go = game.step(args.run_frames, press(args.right, 0, args.run_frames), trace=[body.position()])
+    start = go["status"]["frame"] - args.run_frames
+    stop = game.step(args.stop_frames, trace=[body.position()])
+    ticks = game.ticks
+    points = [(start, None)] + positions(go) + positions(stop)
+    points[0] = (start, body.start if not args.reset else points[1][1])
+    v = speeds(body, points, ticks)
+    run_v = [(f - start, s) for f, s in v if f - start <= args.run_frames]
+    stop_v = [(f - start - args.run_frames, s) for f, s in v if f - start > args.run_frames]
+    top = max((s for _, s in run_v), default=0.0)
+    out = {"frames_held": args.run_frames, "speed": [[f, round(s, 2)] for f, s in run_v + [(args.run_frames + f, s) for f, s in stop_v]]}
+    if top < 1e-6:
+        out["note"] = f"It didn't move holding {args.right} for {args.run_frames} frames."
+        return out
+    out["top_speed"] = round(top, 2)
+    out["frames_to_top"] = next(f for f, s in run_v if s >= TOP_SHARE * top)
+    out["frames_to_90"] = next(f for f, s in run_v if s >= 0.9 * top)
+    out["acceleration"] = acceleration(run_v, ticks)
+    end_speed = run_v[-1][1]
+    if end_speed < TOP_SHARE * top:
+        out["note"] = f"Still speeding up after {args.run_frames} frames: give more --run-frames."
+    let_go = points[args.run_frames][1] if len(points) > args.run_frames else None
+    stopped = next((f for f, s in stop_v if s < STOPPED_SHARE * top), None)
+    out["frames_to_stop"] = stopped
+    if stopped is not None and let_go is not None:
+        at = dict((f - start - args.run_frames, p) for f, p in points if f - start > args.run_frames)
+        out["stopping_distance"] = round(body.across(let_go, at[stopped]), 2)
+    return out
+
+
+def jump_profile(game, body, args, hold, across=False):
+    """A jump from rest: held for `hold` frames (0: the whole jump), with the run input held too when `across`.
+    Apex height and the frames to it, airtime, and how far and fast it went along the ground in the air."""
+    body.reset()
+    frames = args.jump_frames
+    events = press(args.jump, 0, hold or frames)
+    if across:
+        events += press(args.right, 0, frames)
+    trace = [body.position()] + ([f"{body.ref}.is_on_floor()"] if body.has_floor else [])
+    result = game.step(frames, events, trace=trace)
+    start = result["status"]["frame"] - frames
+    rows = result["trace"]["rows"]
+    origin = body.start if not args.reset else rows[0][1]
+    heights = [(row[0] - start, body.up(origin, row[1])) for row in rows if row[1] is not None]
+    out = {"held_frames": hold or frames, "height": [[f, round(h, 2)] for f, h in heights]}
+    if not heights or max(h for _, h in heights) <= JUMPED:
+        out["note"] = f"It didn't leave the ground pressing {args.jump}."
+        return out
+    apex_frame, apex = max(heights, key=lambda fh: fh[1])
+    out["apex_height"] = round(apex, 2)
+    out["frames_to_apex"] = apex_frame
+    took_off = next(f for f, h in heights if h > JUMPED)
+    if body.has_floor:
+        floors = [(row[0] - start, row[2]) for row in rows]
+        landed = next((f for f, on in floors if on and f > took_off), None)
+    else:
+        landed = next((f for f, h in heights if f > apex_frame and h <= JUMPED), None)
+    out["frames_to_takeoff"] = took_off
+    out["airtime_frames"] = None if landed is None else landed - took_off + 1
+    if landed is None:
+        out["note"] = f"It hadn't landed after {frames} frames: give more --jump-frames."
+    if across:
+        points = [(row[0], row[1]) for row in rows if row[1] is not None]
+        air = [(f, s) for f, s in speeds(body, [(start, origin)] + points, game.ticks)
+               if took_off <= f - start and (landed is None or f - start <= landed)]
+        out["air_top_speed"] = round(max((s for _, s in air), default=0.0), 2)
+        out["air_acceleration"] = acceleration(air, game.ticks)
+        end = landed if landed is not None else frames
+        land_at = dict((row[0] - start, row[1]) for row in rows)
+        out["air_distance"] = round(body.across(land_at.get(took_off, origin), land_at.get(end, points[-1][1])), 2)
+    return out
+
+
+def jumped_after(game, body, args, frames, hold_right):
+    """Tap the jump now and step `frames`: whether it went up."""
+    events = press(args.jump, 0, 1) + (press(args.right, 0, frames) if hold_right else [])
+    result = game.step(frames, events, trace=[body.position()])
+    points = [p for _, p in positions(result)]
+    return any(body.up(a, b) > JUMPED for a, b in zip(points, points[1:]))
+
+
+def coyote_window(game, body, args):
+    """Walk off the ledge, then tap the jump k frames after leaving the floor, for k = 0, 1...: how many frames
+    after leaving it still jumps."""
+    if not body.has_floor:
+        return {"note": f"{body.path} has no is_on_floor(), so the coyote window can't be found."}
+    floor = f"{body.ref}.is_on_floor()"
+    worked = 0
+    for k in range(args.max_window + 1):
+        body.reset()
+        walk = game.step(args.walk_max, press(args.right, 0, args.walk_max), until=f"not {floor}")
+        if not walk["until"]["met"]:
+            return {"note": f"It never left the floor walking {args.right} for {args.walk_max} frames: put it near "
+                            f"a ledge with --reset, or give more --walk-max."}
+        if k:
+            game.step(k, press(args.right, 0, k))
+        if not jumped_after(game, body, args, 4, True):
+            break
+        worked = k + 1
+    out = {"frames": worked}
+    if worked > args.max_window:
+        out["note"] = f"It still jumped {args.max_window} frames after leaving the floor: give more --max-window."
+    return out
+
+
+def buffer_window(game, body, args):
+    """Jump, then tap the jump again k frames before the frame it lands, for k = 0, 1...: how early a press still
+    jumps on landing."""
+    if not body.has_floor:
+        return {"note": f"{body.path} has no is_on_floor(), so the jump buffer can't be found."}
+    first = jump_profile(game, body, args, 1)
+    if first.get("airtime_frames") is None:
+        return {"note": "It didn't land after a tapped jump, so the jump buffer can't be found."}
+    landing = first["frames_to_takeoff"] + first["airtime_frames"] - 1  # the frame it lands, from the first press
+    worked = 0
+    for k in range(args.max_window + 1):
+        if k >= landing - 1:
+            break
+        body.reset()
+        game.step(landing - 1 - k, press(args.jump, 0, 1))
+        # The press goes in on frame landing - k; the landing is k frames on, and the jump on the frame after.
+        if not jumped_after(game, body, args, k + 4, False):
+            break
+        worked = k + 1
+    out = {"frames": worked}
+    if worked > args.max_window:
+        out["note"] = f"A press {args.max_window} frames before landing still jumped: give more --max-window."
+    return out
+
+
+PARTS = ("run", "jump", "air", "coyote", "buffer")
+
+
+def cmd_feel(args):
+    skip = {w.strip() for w in (args.skip or "").split(",") if w.strip()}
+    if skip - set(PARTS):
+        raise FeelError(f"--skip takes {', '.join(PARTS)}, separated by commas.")
+    game = Driver(args)
+    body = Body(game, args)
+    result = {"node": args.node, "notes": body.notes}
+    if "run" not in skip:
+        result["run"] = run_profile(game, body, args)
+    if "jump" not in skip:
+        result["jump"] = jump_profile(game, body, args, 0)
+        result["short_jump"] = jump_profile(game, body, args, 1)
+    if "air" not in skip:
+        result["air"] = jump_profile(game, body, args, 0, across=True)
+    if "coyote" not in skip:
+        result["coyote"] = coyote_window(game, body, args)
+    if "buffer" not in skip:
+        result["buffer"] = buffer_window(game, body, args)
+    body.reset()
+    ticks = game.ticks
+    result["ticks_per_second"] = ticks
+    out = Path(args.chart) if args.chart else game.out_dir("feel") / "feel.png"
+    panels = feel_panels(result, body)
+    if panels:
+        chart.draw(panels, out, f"feel of {args.node}", "frames after the press")
+        result["chart"] = str(out)
+    emit(result, args.json, feel_lines(result, args, body, ticks))
+    return 0
+
+
+def feel_panels(result, body):
+    unit = "m" if body.three_d else "px"
+    panels = []
+    run = result.get("run")
+    if run and run.get("speed"):
+        panels.append({"title": f"run: speed ({unit}/s), held {run['frames_held']} frames then let go",
+                       "frames": [f for f, _ in run["speed"]], "lines": [("speed", [s for _, s in run["speed"]])]})
+    lines = []
+    for key, name in (("jump", "held"), ("short_jump", "tapped"), ("air", "held, moving")):
+        part = result.get(key)
+        if part and part.get("height"):
+            lines.append((name, part))
+    if lines:
+        frames = sorted({f for _, part in lines for f, _ in part["height"]})
+        series = []
+        for name, part in lines:
+            at = dict((f, h) for f, h in part["height"])
+            series.append((name, [at.get(f) for f in frames]))
+        panels.append({"title": f"jump: height ({unit}) after the press", "frames": frames, "lines": series})
+    return panels
+
+
+def seconds(frames, ticks):
+    return f"{frames} frame{'s' if frames != 1 else ''} ({frames * 1000 / ticks:.0f} ms)"
+
+
+def feel_lines(result, args, body, ticks):
+    unit = "m" if body.three_d else "px"
+    lines = [f"feel of {args.node} at {ticks:g} frames a second:"] + [f"  note: {n}" for n in result["notes"]]
+    run = result.get("run")
+    if run:
+        if "top_speed" in run:
+            lines.append(f"  run ({args.right}): top speed {run['top_speed']:g} {unit}/s, reached in "
+                         f"{seconds(run['frames_to_top'], ticks)} (90% in {run['frames_to_90']})")
+            if run.get("frames_to_stop") is not None:
+                lines.append(f"  stop: {run['stopping_distance']:g} {unit} in {seconds(run['frames_to_stop'], ticks)} "
+                             f"after letting go")
+            else:
+                lines.append(f"  stop: still moving {args.stop_frames} frames after letting go")
+        if run.get("note"):
+            lines.append(f"  run: {run['note']}")
+    for key, name in (("jump", "jump (held)"), ("short_jump", "jump (tapped)")):
+        part = result.get(key)
+        if not part:
+            continue
+        if "apex_height" in part:
+            air = f", airtime {seconds(part['airtime_frames'], ticks)}" if part.get("airtime_frames") else ""
+            lines.append(f"  {name}: apex {part['apex_height']:g} {unit} after {seconds(part['frames_to_apex'], ticks)}"
+                         f"{air}")
+        if part.get("note"):
+            lines.append(f"  {name}: {part['note']}")
+    air = result.get("air")
+    if air and "air_top_speed" in air:
+        ground = run and run.get("acceleration") is not None
+        speed = f" (on the ground: {run['top_speed']:g})" if ground else ""
+        accel = (f"speeds up at {air['air_acceleration']:g} {unit}/s² in the air"
+                 + (f" (on the ground: {run['acceleration']:g})" if ground else "") + ", "
+                 if air.get("air_acceleration") is not None else "")
+        lines.append(f"  air control: {accel}{air['air_top_speed']:g} {unit}/s at most{speed}, "
+                     f"{air['air_distance']:g} {unit} covered from takeoff to landing")
+    for key, name, what in (("coyote", "coyote time", "after leaving the floor"),
+                            ("buffer", "jump buffer", "before landing, the landing frame included")):
+        part = result.get(key)
+        if not part:
+            continue
+        if "frames" in part:
+            lines.append(f"  {name}: a jump pressed up to {seconds(part['frames'], ticks)} {what} still jumps"
+                         if part["frames"] else f"  {name}: none")
+        if part.get("note"):
+            lines.append(f"  {name}: {part['note']}")
+    if result.get("chart"):
+        lines.append(f"chart: {result['chart']}")
+    return lines
+
+
 # --- Parsers ---------------------------------------------------------------------------------------------------------
 
 
@@ -217,3 +553,22 @@ def add_live_parsers(commands, command):
     p.add_argument("--threshold", type=float, default=LATENCY_THRESHOLD, metavar="T",
                    help="A pixel changed when a channel differs by more than T, of 255 (default 8)")
     p.add_argument("--keep", action="store_true", help="Keep the frames saved for --node")
+
+    p = command("feel", cmd_feel, "A character's movement in numbers: top speed and the time to it, stopping, a jump's "
+                                  "apex and airtime, air control, coyote time and the jump buffer", instance=one)
+    p.add_argument("--node", required=True, metavar="PATH", help="The character (a Node2D or Node3D)")
+    p.add_argument("--right", default="ui_right", metavar="INPUT", help="The input that runs (default ui_right)")
+    p.add_argument("--jump", default="ui_accept", metavar="INPUT", help="The input that jumps (default ui_accept)")
+    p.add_argument("--skip", metavar="PARTS", help=f"Leave out some of {', '.join(PARTS)}, separated by commas")
+    p.add_argument("--reset", metavar="EXPR",
+                   help="An expression that puts the character back before each measure (default: its position "
+                        "and velocity as they were at the start)")
+    p.add_argument("--settle", type=int, default=20, metavar="N", help="Frames after each reset (default 20)")
+    p.add_argument("--run-frames", type=int, default=90, metavar="N", help="Frames holding --right (default 90)")
+    p.add_argument("--stop-frames", type=int, default=60, metavar="N", help="Frames after letting go (default 60)")
+    p.add_argument("--jump-frames", type=int, default=120, metavar="N", help="Frames for a jump (default 120)")
+    p.add_argument("--walk-max", type=int, default=600, metavar="N",
+                   help="For the coyote time: at most this many frames walking to the ledge (default 600)")
+    p.add_argument("--max-window", type=int, default=15, metavar="N",
+                   help="The most frames tried for the coyote time and the jump buffer (default 15)")
+    p.add_argument("--chart", metavar="FILE.png", help="Where the chart goes (default <session out>/feel/feel/feel.png)")

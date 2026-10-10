@@ -61,3 +61,39 @@ def test_latency_prints_and_says_when_nothing_answers(feel):
     assert "state (get_node('Hero').pressed_at): no response; no change within 5 frames in 2" in proc.stdout
     proc = run("latency", "--press", "ui_accept", check=False)
     assert proc.returncode == 1 and "latency needs what responds" in proc.stderr
+
+
+# --- Movement profile -------------------------------------------------------------------------------------------------
+
+
+def test_feel_measures_running_jumping_and_the_forgiving_frames(feel):
+    settle()
+    reply = live("feel", "--node", "Hero")
+    assert reply["notes"] == [] and reply["ticks_per_second"] == 60
+    run = reply["run"]
+    # 1200 px/s² to 240 px/s: 12 frames. Friction 1800 px/s²: 8 frames, and 14 px (210 + 180 + ... + 30 px/s, a
+    # frame each).
+    assert run["top_speed"] == 240 and run["frames_to_top"] == 12 and run["acceleration"] == pytest.approx(1200, rel=0.02)
+    assert run["frames_to_stop"] == 8 and run["stopping_distance"] == pytest.approx(14)
+    jump = reply["jump"]
+    # 600 px/s against 1800 px/s²: the top a third of a second up, about 100 px high (105 in whole frames).
+    assert jump["frames_to_apex"] == 20 and jump["apex_height"] == pytest.approx(105, abs=1)
+    assert jump["airtime_frames"] == pytest.approx(41, abs=1)
+    assert reply["short_jump"]["apex_height"] == jump["apex_height"]  # no variable jump height
+    assert reply["air"]["air_acceleration"] == pytest.approx(600, rel=0.05) and reply["air"]["air_top_speed"] == 240
+    assert reply["coyote"] == {"frames": 6} and reply["buffer"] == {"frames": 5}
+    assert reply["chart"].endswith("feel.png")
+
+
+def test_feel_prints_and_skips(feel, tmp_path):
+    settle()
+    proc = run("feel", "--node", "Hero", "--skip", "jump,air,buffer", "--chart", tmp_path / "f.png")
+    assert "run (ui_right): top speed 240 px/s, reached in 12 frames (200 ms)" in proc.stdout
+    assert "stop: 14 px in 8 frames (133 ms) after letting go" in proc.stdout
+    assert "coyote time: a jump pressed up to 6 frames (100 ms) after leaving the floor still jumps" in proc.stdout
+    assert "jump (held)" not in proc.stdout and (tmp_path / "f.png").exists()
+    proc = run("feel", "--node", "Floor", "--skip", "jump,air,buffer", check=False)
+    assert "run: It didn't move holding ui_right for 90 frames." in proc.stdout
+    assert "coyote time: Floor has no is_on_floor()" in proc.stdout
+    proc = run("feel", "--node", "Hero", "--skip", "walk", check=False)
+    assert proc.returncode == 1 and "--skip takes run, jump, air, coyote, buffer" in proc.stderr

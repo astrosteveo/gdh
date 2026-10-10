@@ -1,0 +1,57 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://annotate/two_sided.gd" id="two"]
+
+[sub_resource type="BoxMesh" id="mesh"]
+
+[sub_resource type="BoxShape3D" id="box"]
+
+[sub_resource type="BoxMesh" id="wall"]
+size = Vector3(12, 6, 0.2)
+
+[sub_resource type="NavigationMesh" id="nav"]
+vertices = PackedVector3Array(-3, 0, -1, 3, 0, -1, 3, 0, 2, -3, 0, 2)
+polygons = [PackedInt32Array(0, 1, 2, 3)]
+
+[sub_resource type="GDScript" id="mover"]
+script/source = "extends CharacterBody3D
+
+func _ready() -> void:
+	velocity = Vector3(2, 0, 0)
+"
+
+[node name="Annotate3D" type="Node3D"]
+
+[node name="Camera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.894427, 0.447214, 0, -0.447214, 0.894427, 0, 3, 7)
+current = true
+
+[node name="Light" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.707107, 0.707107, 0, -0.707107, 0.707107, 0, 4, 0)
+
+[node name="Floor" type="NavigationRegion3D" parent="."]
+navigation_mesh = SubResource("nav")
+
+[node name="Crate" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0.5, 0)
+
+[node name="Mesh" type="MeshInstance3D" parent="Crate"]
+mesh = SubResource("mesh")
+
+[node name="Shape" type="CollisionShape3D" parent="Crate"]
+shape = SubResource("box")
+
+[node name="Runner" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.5, 0.5, 0)
+script = SubResource("mover")
+
+[node name="Mesh" type="MeshInstance3D" parent="Runner"]
+mesh = SubResource("mesh")
+
+[node name="Sign" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.8, 0)
+script = ExtResource("two")
+
+[node name="Back" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, -3)
+mesh = SubResource("wall")

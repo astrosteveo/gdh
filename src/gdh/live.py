@@ -921,9 +921,9 @@ def write_trace(trace, path):
             out.writerow([row[0], *("" if v is None else v if isinstance(v, str) else json.dumps(v) for v in row[1:])])
 
 
-def shot(session, views, label, tiles, as_json, instance=0, framing=None):
+def shot(session, views, label, tiles, as_json, instance=0, framing=None, echo=True):
     reply = call(session, "shot", {"views": views, "label": label, **(framing or {})}, instance=instance)
-    result = report(reply, as_json)
+    result = report(reply, as_json, echo)
     for prefix, r in each(reply, result):
         for view, path in r["shots"].items():
             if not as_json:
@@ -958,8 +958,60 @@ def cmd_shot(args):
         framing["max_width"] = args.max_width
     if args.no_ui:
         framing["no_ui"] = True
-    shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance, framing)
+    if args.filter and args.annotate is None:
+        raise LiveError("--filter picks what --annotate labels: give --annotate.")
+    if args.annotate is None:
+        shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance, framing)
+        return 0
+    from gdh import annotate
+    try:
+        layers, filters = annotate.parse_layers(args.annotate), annotate.parse_filters(args.filter)
+    except annotate.AnnotateError as e:
+        raise LiveError(str(e)) from None
+    if len(pick(session, args.instance)) > 1:
+        raise LiveError("--annotate labels one instance's shot: give --instance K.")
+    result = shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance, framing,
+                  echo=False)
+    reply = call(session, "annotate", {"layers": layers, "filter": filters, "no_ui": args.no_ui},
+                 instance=args.instance)
+    found = report(reply, args.json, echo=False)
+    if result.get("crop"):  # only what's in a framed shot
+        x, y, w, h = result["crop"]
+        found["nodes"] = [n for n in found.get("nodes", []) if n["box"][0] < x + w and n["box"][0] + n["box"][2] > x
+                          and n["box"][1] < y + h and n["box"][1] + n["box"][3] > y]
+    for n, node in enumerate(found.get("nodes", []), 1):
+        node["n"] = n
+    frame = annotate.Frame(found["image_size"], result.get("crop"), result.get("size"))
+    images = {}
+    for view, path in result["shots"].items():
+        images[view] = str(Path(path).with_name(Path(path).stem + "-annotated.png"))
+        drawn = annotate.draw(path, found, frame, images[view])
+    if args.json:
+        print(json.dumps({**result, "annotated": images, "annotations": found, **drawn}, indent=2))
+        return 0
+    print_annotations(images, found, drawn)
     return 0
+
+
+def print_annotations(images, found, drawn):
+    """An annotated shot's files, and each numbered node with its box, as text."""
+    for view, path in images.items():
+        print(f"{view} annotated: {path}")
+    for node in found.get("nodes", []):
+        print(f"  {node['n']}: {node['path']} ({node['class']}) box={node['box']}")
+    if found.get("more"):
+        print(f"  ... {found['more']} more not boxed (at most {len(found['nodes'])}): narrow it with --filter")
+    for node in found.get("backdrops", []):
+        print(f"  backdrop, not boxed: {node['path']} ({node['class']}) box={node['box']}")
+    for shape in found.get("shapes", []):
+        print(f"  collision {shape['kind']}: {shape['path']}")
+    for region in found.get("nav", []):
+        print(f"  navigation: {region['path']}, {len(region['polygons'])} polygons")
+    for v in found.get("velocity", []):
+        print(f"  velocity: {v['path']} {v['speed']:g} {v['unit']}")
+    if drawn["numbered"]:
+        many = drawn["numbered"] > 1
+        print(f"  ({drawn['numbered']} label{'s' if many else ''} had no room: {'those nodes show their number' if many else 'that node shows its number'} only)")
 
 
 def numbers(text, count, option):
@@ -1013,6 +1065,48 @@ def cmd_find(args):
     if not found:
         raise LiveError("No node that shows matches.")
     return 0
+
+
+def cmd_pick(args):
+    session = load_session(args.session)
+    points = [xy(p, "pick") for p in args.points]
+    reply = call(session, "pick", {"points": points}, instance=args.instance)
+    result = report(reply, args.json)
+    if args.json:
+        return 0
+    for prefix, r in each(reply, result):
+        for point in r["points"]:
+            print(f"{prefix}at {point['at'][0]:g},{point['at'][1]:g}:")
+            if not point["hits"]:
+                print(f"{prefix}  nothing drawn there (the background, or the clear color)")
+            for i, hit in enumerate(point["hits"], 1):
+                print(f"{prefix}  {i}. {describe_hit(hit)}")
+            if point["more"]:
+                print(f"{prefix}  ... {point['more']} more under those")
+            if point.get("takes_click"):
+                print(f"{prefix}  a click there goes to {describe_took(point['takes_click'])}")
+    return 0
+
+
+def describe_hit(hit):
+    """One thing pick found at a point, as a line: path (class, kind) and what it drew there."""
+    extras = []
+    if "text" in hit:
+        extras.append(f"text={json.dumps(hit['text'])}")
+    if hit.get("texture"):
+        texel = f" at texel {hit['texel'][0]},{hit['texel'][1]}" if "texel" in hit else ""
+        extras.append(f"texture {hit['texture']}{texel}")
+    if hit["kind"] == "3d":
+        if hit.get("surface") is not None and hit.get("surface", -1) >= 0:
+            extras.append(f"surface {hit['surface']}, material {hit.get('material') or 'none'}")
+        if hit.get("mesh"):
+            extras.append(f"mesh {hit['mesh']}")
+        extras.append(f"at {','.join(f'{v:g}' for v in hit['world'])}, {hit['distance']:g} from the camera")
+        if hit.get("by") == "bounds":
+            extras.append("by its bounds")
+        if hit.get("note"):
+            extras.append(hit["note"])
+    return f"{hit['path']} ({hit['class']}, {hit['kind']}){': ' + '; '.join(extras) if extras else ''}"
 
 
 def cmd_snapshot(args):
@@ -1618,6 +1712,12 @@ def add_parsers(sub):
                    help="Scale down to at most W pixels wide, for reading the image (never up)")
     p.add_argument("--no-ui", action="store_true",
                    help="Leave the UI out of this shot: hide every CanvasLayer over the game (layer 1 and up) for it")
+    p.add_argument("--annotate", nargs="?", const="names", metavar="LAYERS",
+                   help="Also save each view annotated (NAME-annotated.png): names (the default; each node that "
+                        "draws, boxed and numbered), collisions, nav, velocity, comma-separated, or all")
+    p.add_argument("--filter", action="append", default=[], metavar="WHAT",
+                   help="With --annotate: only what's under node PATH, or in group:NAME, or of class:NAME (a class "
+                        "name labels those nodes, drawn or not); repeat to narrow")
 
     command("probes", cmd_probes, "Run the probes on the current frame", instance=one)
 
@@ -1632,6 +1732,11 @@ def add_parsers(sub):
     p.add_argument("--name", metavar="PATTERN", help="The node's name; * and ? match anything (any case)")
     p.add_argument("--class", dest="class_name", metavar="CLASS",
                    help="The node's class, built in or a script's class_name, or one it extends")
+
+    p = command("pick", cmd_pick, "What's drawn at points on screen, topmost first: the UI and 2D nodes in draw order "
+                                  "(a sprite's texture and texel), then the 3D meshes by distance (the surface, its "
+                                  "material, where the ray met it)", instance=one)
+    p.add_argument("points", nargs="+", metavar="X,Y", help="Points in screenshot pixels")
 
     p = command("snapshot", cmd_snapshot, "The UI on screen as a text outline: what shows a text or can be used, "
                                           "with its state; compare it with a baseline file", instance=one)

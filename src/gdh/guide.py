@@ -14,6 +14,7 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live step 30 --hold ui_right --session S               exactly 30 frames, then held
   gdh live step --until "EXPR" --max 1200 --session S        wait for it; exit 1 with the last value
   gdh live step 120 --trace "EXPR" --every 10 --session S    a value, frame by frame
+    ... --trace-chart F.png [--trace-rates]                  as a line chart (with velocity, acceleration)
   gdh live eval "[EXPR, EXPR]" --session S                   several values in one call
   gdh live find TEXT --session S                             visible nodes showing TEXT, with boxes
   gdh live snapshot [PATH] --session S                       the UI on screen as text, with states

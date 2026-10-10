@@ -767,6 +767,10 @@ def step_length(args, session):
         raise LiveError("--every sets how often --until and --trace check (--shot-every saves frames).")
     if args.trace_out and not args.trace:
         raise LiveError("--trace-out writes the values of --trace.")
+    if args.trace_chart and not args.trace:
+        raise LiveError("--trace-chart draws the values of --trace.")
+    if args.trace_rates and not args.trace_chart:
+        raise LiveError("--trace-rates adds panels to the --trace-chart: give one.")
     if args.until is None:
         if args.max is not None:
             raise LiveError("--max bounds a step with --until.")
@@ -796,10 +800,13 @@ def watched(reply, result, args):
     parts = each(reply, result)
     for i, (prefix, r) in enumerate(parts):
         until, trace = r.get("until"), r.get("trace")
-        path = None
+        path = chart = None
         if trace and args.trace_out:
             path = Path(args.trace_out) if len(parts) == 1 else Path(args.trace_out).with_suffix(f".{i}.csv")
             write_trace(trace, path)
+        if trace and args.trace_chart:
+            chart = Path(args.trace_chart) if len(parts) == 1 else Path(args.trace_chart).with_suffix(f".{i}.png")
+            chart_trace(trace, chart, args.trace_rates, r["status"].get("ticks_per_second", 60), prefix)
         if trace:
             for expr, error in trace.get("failed", {}).items():
                 sys.stdout.flush()
@@ -817,7 +824,21 @@ def watched(reply, result, args):
             print_trace(trace, prefix)
         if path:
             print(f"{prefix}trace: {path}")
+        if chart:
+            print(f"{prefix}chart: {chart}")
     return unmet
+
+
+def chart_trace(trace, path, rates, ticks, prefix=""):
+    """Draw a trace as a chart (chart.py), with a note on stderr for each expression it couldn't draw."""
+    from gdh import chart
+    try:
+        _, notes = chart.trace_chart(trace, path, rates, ticks)
+    except chart.ChartError as e:
+        raise LiveError(str(e)) from None
+    for note in notes:
+        sys.stdout.flush()
+        print(f"{prefix}note: chart: {note}", file=sys.stderr)
 
 
 def print_trace(trace, prefix=""):
@@ -1508,6 +1529,12 @@ def add_parsers(sub):
                    help="Record EXPR's value after every --every frames; repeatable")
     p.add_argument("--every", type=int, metavar="K", help="Check --until and --trace every K frames (default 1)")
     p.add_argument("--trace-out", metavar="FILE.csv", help="Also write the --trace values here as CSV")
+    p.add_argument("--trace-chart", metavar="FILE.png",
+                   help="Also draw the --trace values as a line chart: a panel for each expression, a line for each "
+                        "component of a vector, against game frames")
+    p.add_argument("--trace-rates", action="store_true",
+                   help="With --trace-chart: add each expression's rate of change per second and the rate of that "
+                        "(velocity and acceleration for a position)")
 
     p.add_argument("--monitors", action="store_true",
                    help="Godot's Performance monitors (objects, nodes, orphan nodes, draw calls, video memory...) "

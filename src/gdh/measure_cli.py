@@ -249,6 +249,8 @@ def cmd_measure(args):
             mask = m.silhouette(args.with_, args.without, args.threshold, not args.no_fill)
             print(json.dumps(m.save_mask(mask, args.out), indent=1))
             return 0
+        if args.kind == "chart":
+            return cmd_chart(args)
         if args.kind == "sheet":
             print(json.dumps({"sheet": str(make_sheet(args.frames, args.out))}, indent=1))
             return 0
@@ -273,6 +275,25 @@ def cmd_measure(args):
         return fail_code(args, out)
     except m.MeasureError as e:
         raise MeasureCliError(str(e)) from None
+
+
+def cmd_chart(args):
+    """A --trace-out CSV as a line chart (chart.py)."""
+    from gdh import chart
+    try:
+        trace = chart.read_trace_csv(args.csv)
+        if args.only:
+            missing = [e for e in args.only if e not in trace["exprs"]]
+            if missing:
+                raise MeasureCliError(f"{args.csv} has no column {missing[0]!r}; its columns: "
+                                      f"{', '.join(trace['exprs'])}.")
+            keep = [trace["exprs"].index(e) + 1 for e in args.only]
+            trace = {"exprs": args.only, "rows": [[row[0], *(row[k] for k in keep)] for row in trace["rows"]]}
+        out, notes = chart.trace_chart(trace, args.out, args.rates, args.ticks, args.title)
+    except chart.ChartError as e:
+        raise MeasureCliError(str(e)) from None
+    print(json.dumps({"chart": str(out), "rows": len(trace["rows"]), "notes": notes}, indent=1))
+    return 0
 
 
 VIDEO_SUFFIXES = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".ogv"}
@@ -376,6 +397,19 @@ def add_parsers(sub):
                                        "to see at a glance which screen was up when")
     k.add_argument("frames", nargs="+", help="PNG files or directories of them (in name order), or one video file")
     k.add_argument("--out", required=True, metavar="PNG", help="Where the sheet goes")
+    k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
+    k.set_defaults(func=cmd_measure)
+    k = kinds.add_parser("chart", help="Draw a trace CSV (gdh live step --trace-out) as a line chart: a panel for each "
+                                       "expression, a line for each component of a vector, against game frames")
+    k.add_argument("csv", help="The CSV --trace-out wrote")
+    k.add_argument("--out", required=True, metavar="PNG", help="Where the chart goes")
+    k.add_argument("--only", action="append", metavar="EXPR", help="Chart only this column; repeatable")
+    k.add_argument("--rates", action="store_true",
+                   help="Add each column's rate of change per second and the rate of that (velocity and acceleration "
+                        "for a position)")
+    k.add_argument("--ticks", type=float, default=60, metavar="N",
+                   help="Game frames a second, for --rates (default 60, the physics tick rate)")
+    k.add_argument("--title", help="A title over the chart")
     k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
     k.set_defaults(func=cmd_measure)
     k = kinds.add_parser("times", help="Summarize a frame-time record (gdh live frames --save)")

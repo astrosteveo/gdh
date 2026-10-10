@@ -72,6 +72,7 @@ Some views make steadier baselines than others. `unshaded` (the albedo alone) an
 | `gdh live measure KIND [--frames N]` | Records N frames (120 by default) and measures them; any image measure but `dissolve` and `term`, with its options. The frames are deleted after unless `--keep`. |
 | `gdh live frames [--clear] [--reset] [--save FILE]` | The frame times recorded since the record last started over. `--clear` starts it over now (before a run), `--reset` after reading. |
 | `gdh live bench N [--budget-median MS] [--budget-p99 MS]` | Starts the record over, steps N frames (600 by default) and prints their times; exits 1 over a budget ([below](#a-budget-gdh-live-bench)). |
+| `gdh measure chart FILE.csv --out PNG` | A line chart of a trace that `gdh live step --trace-out` wrote: a panel for each column, a line for each component of a vector. `--rates` adds rates of change ([live.md](live.md#waiting-and-tracing)). |
 | `gdh measure sheet FRAMES... --out PNG` | A contact sheet of PNG frames or of a video: 16 frames spread evenly over the run, labeled, about 1220 px wide ([movie.md](movie.md#the-contact-sheet)). |
 
 `record` and `measure` also write a contact sheet of the frames beside their directory (`<dir>-sheet.png`; `--no-sheet` skips it), and flag a UI panel that covered the middle of the screen for most of the frames, as a `covered` warning with a crop in `<dir>-crops/` ([movie.md](movie.md#panels-that-cover-the-screen)).

@@ -112,8 +112,47 @@ The summary warns of two things that make its times read high:
 
 `gdh live bench N` times N frames (600 by default) in one call. In one request to the game it draws held frames back to back for a second (`--warmup SECONDS`), so the GPU has clocked up and no game time passes; starts the frame record over; and steps N frames, all with no gap for the GPU to idle. Then it prints the summary, with its warnings, and checks the GPU's times against `--budget-median MS` and `--budget-p99 MS`: it prints each, and exits 1 if one is over, or if no frame was measured to check it against. `--save FILE.json` keeps the record. `--hold`, `--press`, `--release` and `--move` go in as `step`'s do, to time the game while it's played. Every instance steps; `--instance` picks whose times (and who gets the input). `--json` adds `"budgets"` (`[{"stat", "gpu_ms", "budget_ms", "over"}]`) and `"over_budget"` to the summary.
 
+## Script time: `gdh live profile`
+
+```sh
+gdh live start --project game --session s --profiler
+gdh live profile 600 --hold ui_right --session s           # 10 s of play: which scripts took the time
+gdh live profile 300 --budget 8.3 --session s              # the frames over 8.3 ms, and what ran in them
+```
+
+`bench` and `frames` say that a frame was slow; `profile` says which script functions it spent its time in. It reads Godot's script profiler, the one the editor's Profiler tab shows, which reports only to a debugger. So the session has to start with `--profiler`: gdh then starts its own debugger beside the game (`<out>/debugger.log`) and the game with `--remote-debug` pointing at it. The debugger tells the game to skip breakpoints and not to break on errors, so a script error is reported as always and the game runs on. `--profiler` takes one instance; `restart` keeps it.
+
+`profile N` turns the profiler on, steps N frames with any of `step`'s input options, turns it off, and sums the frames the step ran. On `testbed/profile/profile.tscn`, where `heavy()` runs every 30 frames and spends its time in `crunch()`:
+
+```
+profile of 92 frames (90 game frames stepped): the game's processing and physics 0.341 ms median, 6.413 p99, 8.17 worst (whole frames, rendering included: 0.36 median)
+  process 0.305 ms median (2.274 worst), physics 0.031 (6.048); gdh's own 0.02 (49.583), left out of the frames' times
+  physics_2d: 0.16 ms over the run, 0.005 at most in a frame
+  physics_3d: 0.079 ms over the run, 0.002 at most in a frame
+  audio_thread: 0.006 ms over the run, 0.006 at most in a frame
+  the game's top functions by self time (4 called):
+    crunch (res://profile/profile.gd:30): self 17.537 ms, total 17.537 ms, 3 calls
+    _physics_process (res://profile/profile.gd:15): self 0.063 ms, total 17.651 ms, 90 calls
+    light (res://profile/profile.gd:22): self 0.006 ms, total 0.006 ms, 90 calls
+    heavy (res://profile/profile.gd:26): self 0.001 ms, total 17.54 ms, 3 calls
+  6 spike frames (over 1.34 ms: 3 times the median, and 1 ms over it at least): 54 (1.612 ms), 82 (8.17 ms), 112 (5.913 ms), 125 (2.303 ms), 140 (1.745 ms), 142 (6.413 ms)
+  on them, by total time:
+    _physics_process (res://profile/profile.gd:15): self 0.005 ms, total 17.548 ms, 6 calls
+    heavy (res://profile/profile.gd:26): self 0.001 ms, total 17.54 ms, 3 calls
+    crunch (res://profile/profile.gd:30): self 17.537 ms, total 17.537 ms, 3 calls
+    light (res://profile/profile.gd:22): self 0 ms, total 0 ms, 6 calls
+```
+
+- **Functions.** Each function's calls, its self time (in its own body) and its total time (with the functions it called), added up over the run, with its script and line. The top `--top` (10) by self time are printed; `--json` has the top by self and by total. A function with a large total and a small self time spends its time in what it calls: follow it down. gdh's own functions (its harness in the game) are left out.
+- **The game's time.** For each frame, the game's processing and physics time, less gdh's own (its frame pacing, the bridge, saving frames). Rendering and presenting the frame are left out of it, as `bench` and `frames` measure those; the whole frame's time is given beside it. The process and physics times, the servers' (`physics_2d`, `physics_3d`, the audio thread and the rest, as Godot reports them) and gdh's own time are each given as a median and the worst.
+- **Spikes.** Frames whose game time is over `--budget MS`, or by default over 3 times the median and at least 1 ms over it, each listed with its game frame, and the top functions over just those frames, by total time: what ran in the slow frames. The engine has slow frames of its own now and then with no script in them; they count too.
+
+`--max-functions` (256) is the most functions the profiler reports a frame. The profiler adds a little time to every script call, so compare profiles with each other, and time a budget with `bench` in a session without `--profiler`. Godot's script profiler covers GDScript: C# methods don't appear in it.
+
 ## Tests
 
 `tests/test_diff.py` checks `diff` on made-up frames whose change is known (its numbers, box, regions, heatmap and crop, and directories by name), and `capture --baseline` on a copy of `testbed/smoke/smoke.tscn`: written, passed unchanged, failed with the box named when the box turns blue, passed within a tolerance, and written again.
+
+`tests/test_profile.py` runs `testbed/profile/profile.tscn` under `--profiler`: the game's four functions and none of gdh's, `crunch()` first by self time with its 3 calls and its line, `heavy()`'s total as `crunch()`'s and its self time next to nothing; with a budget between a typical frame and a heavy one, the 3 heavy frames among the spikes, 30 frames apart, with `heavy()` and `crunch()` on top; a script error reported with the game running on; `profile` refused without `--profiler`, and `--profiler` with two instances; the default spike rule on made-up frames; and the debugger's Variant encoding both ways, and a profiler frame read field by field.
 
 `tests/test_measure.py` checks each definition on made-up frames whose answers are known, and each live path on `testbed/measure/measure.tscn`, whose modes (`-- --mode NAME`) draw a still scene, the same with noise, a smooth and a shaken orbit, lines 1, 3 and 6 px wide, points of three sizes beside a block that isn't one (made up, not live), a sphere whose shader makes a NaN beside a black patch in a dark frame, ACES over a dark gradient, a dissolve whose layers match or don't, and a compositor pass with a timestamp of its own.

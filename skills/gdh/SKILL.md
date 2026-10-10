@@ -61,6 +61,7 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
 | A thin effect's width, a point's size, a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
 | Frame time against a budget, or which render pass costs what | `gdh live bench`; `gdh live start --gpu-passes`, then `gdh live frames` |
+| Which script functions a slow frame spent its time in | `gdh live start --profiler`, then `gdh live profile N`: the game's functions by self and total time, overall and on the spike frames |
 | Leaks, sound | `gdh live monitors --leak`, `gdh live audio` |
 | An exported build, a launcher, anything where `OS.has_feature("editor")` matters | `gdh live start --binary PATH`; `gdh export --smoke` |
 | What the editor shows: tool scripts, `@tool` previews | `gdh editor` |

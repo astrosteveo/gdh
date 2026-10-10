@@ -68,7 +68,7 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | Leaks, sound | `gdh live monitors --leak`, `gdh live audio` |
 | An exported build, a launcher, anything where `OS.has_feature("editor")` matters | `gdh live start --binary PATH`; `gdh export --smoke` |
 | What the editor shows: tool scripts, `@tool` previews | `gdh editor` |
-| Footage: a clip, a trailer shot, a video of a bug | `gdh movie` |
+| Footage: a clip, a trailer shot, a video of a bug | `gdh movie` (its `audio.png` shows the sound: waveform, spectrogram, clipping, frame by frame) |
 | Logic with no picture to check: rules, save data, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
 | Where the game breaks over a long run: stuck spots, soft locks, holes, leaving the level | `gdh live explore N --node PATH` (at random, or `--goal X,Y`): each problem a replayable scenario, and a heat map (`${CLAUDE_PLUGIN_ROOT}/docs/explore.md`) |
 | A long play-through against a goal, kept out of the main conversation | the `playtester` agent |

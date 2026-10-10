@@ -226,6 +226,7 @@ gdh live bench 600 --budget-p99 8.3 --session s            # time 600 frames in 
 gdh live profile 600 --session s                           # with start --profiler: which script functions took the time
 gdh live monitors --leak --session s                       # nodes, orphans, objects, memory: exit 1 on steady growth
 gdh live audio --session s                                 # each bus's peak over the last step, and what played
+gdh measure audio captures/clip/movie.mp4                 # its waveform and spectrogram, marked in frames; clipping
 gdh measure sheet frames/still --out still-sheet.png      # 16 frames of a run (or a video) in one image
 gdh measure diff before.png after.png --out diff          # what changed: share, box, heatmap, amplified crop
 ```
@@ -401,6 +402,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/anim.py`, `footslide.py`, `clipping.py`, `readability.py`, `src/gdh/harness/clip.gd` | `gdh live anim`, `footslide`, `clipping` and `contrast`, and `gdh measure popin` and `palette` |
 | `src/gdh/events.py`, `src/gdh/addon/gdh_events/` | `gdh events install` and `gdh live events`, and the `GdhEvents` autoload a game calls |
 | `src/gdh/explore.py` | `gdh live explore`: the bot, the problems it finds and the heat map |
+| `src/gdh/audio.py` | `gdh measure audio` and `gdh movie`'s `audio.png`: a recording's waveform and spectrogram, clipping and silences |
 | `src/gdh/compare.py`, `review.py` | Options side by side: `gdh live sweep`, `gdh capture --matrix` and their grids, and `gdh review`'s page for the user's choice |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
 | `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |

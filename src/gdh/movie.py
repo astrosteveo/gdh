@@ -123,7 +123,7 @@ def cmd_movie(args):
     tool("ffprobe")
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    for old in ("movie.mp4", "movie.avi", "sheet.png", "report.json"):
+    for old in ("movie.mp4", "movie.avi", "sheet.png", "audio.png", "report.json"):
         (out / old).unlink(missing_ok=True)
     shutil.rmtree(out / "crops", ignore_errors=True)
     if not args.no_build:
@@ -212,6 +212,10 @@ def finish(args, out, work, avi, frames, code, result, applied, display_kind, re
     sheet = None
     if not args.no_sheet and final["frames"]:
         sheet = sheet_from_video(avi, raw["frames"], args.fps, out / "sheet.png", work)
+    heard = None
+    if not args.no_sheet and audio is not None and not audio["silent"]:
+        from gdh import audio as audio_image
+        heard = audio_image.picture(avi, out / "audio.png", args.fps, f"{result.get('scene')}: its sound, frame by frame")
     findings = covered_findings(result.get("cover_samples", []))
     if findings and sheet:
         # The crop shows the panel on the middle frame of the run.
@@ -225,7 +229,7 @@ def finish(args, out, work, avi, frames, code, result, applied, display_kind, re
         "movie": str(mp4), "sheet": str(sheet) if sheet else None, "scene": result.get("scene"),
         "frames": final["frames"], "fps": args.fps, "seconds": round(final["frames"] / args.fps, 3),
         "size": [final["width"], final["height"]], "window_size": result.get("window_size"),
-        "audio": audio, "quality": args.quality, "crf": args.crf, "display": display_kind,
+        "audio": audio, **({"sound": heard} if heard else {}), "quality": args.quality, "crf": args.crf, "display": display_kind,
         "adapter": result.get("adapter"),
         "recorded_s": round(recorded_s, 2), "encoded_s": round(encoded_s, 2),
         "errors": result.get("errors", []), "findings": findings, "problems": problems,
@@ -242,6 +246,9 @@ def finish(args, out, work, avi, frames, code, result, applied, display_kind, re
     print(f"  recorded in {recorded_s:.1f} s (Movie Maker, MJPEG), encoded in {encoded_s:.1f} s (H.264, crf {args.crf})")
     if sheet:
         print(f"  contact sheet: {sheet}")
+    if heard:
+        clip = f", clipping {heard['clipped_samples']} samples" if heard["clipping"] else ""
+        print(f"  sound: {heard['image']} (peak {heard['peak_db']:g} dBFS{clip}, {len(heard['silences'])} silences)")
     for f in findings:
         crop = f"  [{f['crop']}]" if f.get("crop") else ""
         print(f"  {f['severity']}: {f['probe']} {f['node']}: {f['message']}{crop}")
@@ -270,7 +277,8 @@ def add_parser(sub, add_display_option):
     p.add_argument("--crf", type=int, default=18,
                    help="The H.264 encode's quality: lower is better and larger (18)")
     p.add_argument("--keep-avi", action="store_true", help="Keep Movie Maker's MJPEG AVI as movie.avi")
-    p.add_argument("--no-sheet", action="store_true", help="Don't make the contact sheet")
+    p.add_argument("--no-sheet", action="store_true",
+                   help="Don't make the contact sheet, or audio.png (the sound's waveform and spectrogram)")
     p.add_argument("--timeout", type=int, help="Seconds allowed for the recording (default 120 plus a second a frame)")
     p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     p.add_argument("--no-import", action="store_true",

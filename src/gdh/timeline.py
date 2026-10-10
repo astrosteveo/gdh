@@ -60,7 +60,7 @@ def record(session, cmd, args, instance, replies, games, started, request):
         part = {"frame": reply.get("frame")}
         if many:
             part["instance"] = game
-        for key in ("error", "errors", "notes", "output"):
+        for key in ("error", "errors", "notes", "output", "events"):
             if reply.get(key):
                 part[key] = reply[key]
         if "result" in reply:
@@ -274,6 +274,7 @@ function render() {
       }
       for (const x of r.notes || []) body.append($("div", "note", pre + "note: " + x));
       if (r.output && r.output.length) body.append($("div", "out", r.output.map(l => pre + "game: " + l).join("\n")));
+      if (r.events && r.events.length) body.append($("div", "out", r.events.map(x => `${pre}event: ${x.name} at frame ${x.frame}` + (x.data !== null && x.data !== undefined ? `: ${JSON.stringify(x.data)}` : "")).join("\n")));
       const res = r.result;
       if (res && res.value !== undefined && e.cmd === "eval") body.append($("div", "out", pre + "= " + JSON.stringify(res.value)));
       if (res && res.aimed) for (const a of res.aimed)

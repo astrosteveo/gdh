@@ -23,11 +23,9 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live shot --session S [--node PATH --zoom 2] [--out F.png] [--max-width 1280]
     ... --annotate [names,collisions,nav,velocity|all] [--filter class:X]   which node drew what, numbered
   gdh live batch --session S < lines.txt                     many CLI lines, one process
-  gdh live reload --session S                                GDScript edited: new code, same state
-  gdh live restart --replay --session S                      anything else: rebuilt, back to the frame
+  gdh live reload --session S                                GDScript edited: same state; else restart --replay
   gdh live net --latency 150 --cut --instance 1 --session S  with start --net NAME: a worse network to a companion
-  gdh live list                                              every session, left-over ones included
-  gdh live stop --session S
+  gdh live stop --session S; gdh live list                   stop yours; list every session (left-overs too)
 
 INPUT (step options)
   --press/--release/--hold/--tap INPUT   INPUT: action, key:Space, key:ctrl+s, joy:a, mouse:left
@@ -38,23 +36,26 @@ INPUT (step options)
 SEE MOTION, CHOOSE
   gdh live onion 40 --node PATH --hold ui_right --session S  frames over each other (filmstrip: side by side)
   gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
+  gdh live anim 60 --node PATH --session S                    animation states, flip-flops; footslide, clipping
+  gdh live contrast --node PATH --session S                  stands out? contrast ratio; measure palette --reference
   gdh live sweep "OBJ.PROP=V1,V2,V3" --session S              a grid of options; gdh review --from it --wait
 
 KEEP IT
+  gdh live events --session S                                the game's GdhEvents.emit() calls (gdh events install)
+  gdh live explore 6000 --node PATH [--goal X,Y] --session S   a bot: stuck, soft locks, falls; scenarios, heat map
   gdh live save-scenario --session S test/x.scenario.json    then add "expect" checks
   gdh scenario run test/x.scenario.json                      replays frame-exactly; gdh test too; gdh.client
 
 FEEL
   gdh live latency --press ui_accept --watch EXPR --node PATH --session S   frames to the state, to the pixels
-  gdh live feel --node PATH --session S                      speeds, stopping, jumps, coyote time, jump buffer
-  gdh live hitstop --do EXPR --hold ui_right --node PATH     a hit-stop's frames; also shake, follow --target
+  gdh live feel --node PATH --session S                      speeds, jumps, coyote, buffer; hitstop, shake, follow
 
 MEASURE
   gdh live bench 600 --budget-p99 8.3 --session S            frame times; exit 1 over budget
   gdh live profile 600 --session S                           (start --profiler) which script functions took it
   gdh live monitors --leak --session S                       nodes, orphans, memory growing
   gdh live audio --session S                                 bus peaks, what played
-  gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black|changes D
+  gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black|changes|popin D
 
 BUILDS AND THE EDITOR
   gdh export --project P --preset Linux --smoke 10           build, run it off-screen, fail on errors
@@ -66,8 +67,7 @@ RULES
   Results go to stdout; engine errors, DEFECT lines and the game's prints go to stderr. Never 2>/dev/null.
   --strict exits 1 when the game raised engine errors.
   Read every image you report: open it with your image reader, at about 1280 px wide or less.
-  A DEFECT line means resources failed to load: report it.
-  gdh builds C# and imports assets itself when they changed.
+  A DEFECT line means resources failed to load: report it. gdh builds C# and imports assets itself.
   Docs: README.md and docs/ in gdh's source; gdh <command> --help.
 """
 

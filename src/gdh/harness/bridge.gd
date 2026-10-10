@@ -17,6 +17,7 @@ extends Node
 
 const Annotate := preload("annotate.gd")
 const Camera := preload("camera.gd")
+const Clip := preload("clip.gd")
 const Common := preload("common.gd")
 const Covered := preload("covered.gd")
 const ErrorCollector := preload("errors.gd")
@@ -67,6 +68,11 @@ var _size_noted := false
 var _next_frame_us := 0
 ## What `set` changed: {key: [object, property, the value before]}, for `restore`.
 var _changed := {}
+## The game's events ({frame, name, data}): all of them (the latest MAX_EVENTS) for `events`, and the ones since the
+## last reply, which go with it.
+var _events := []
+var _new_events := []
+const MAX_EVENTS := 20000
 
 
 func _ready() -> void:
@@ -74,6 +80,8 @@ func _ready() -> void:
 	process_priority = 1 << 30  # Run after every game node each frame.
 	get_tree().paused = true
 	_last_request_ms = Time.get_ticks_msec()
+	# The game's own events (GdhEvents.emit, from gdh events install) come here; outside gdh nothing takes them.
+	Engine.set_meta("gdh_event", _on_game_event)
 	_start.call_deferred()
 
 
@@ -207,6 +215,9 @@ func _reply(conn: Dictionary, id: Variant, ok: bool, payload: Variant) -> void:
 	if not _notes.is_empty():
 		reply.notes = _notes
 		_notes = []
+	if not _new_events.is_empty():
+		reply.events = _new_events
+		_new_events = []
 	var printed := errors.drain_output()
 	if not printed.output.is_empty():
 		reply.output = printed.output
@@ -251,6 +262,8 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_annotate(args)
 		"pick":
 			result = _cmd_pick(args)
+		"events":
+			result = _cmd_events(args)
 		"set":
 			result = _cmd_set(args)
 		"restore":
@@ -298,7 +311,8 @@ func _set_held(held: bool) -> void:
 ## every K frames: covered.gd), until, trace and every (_watch_start), warmup (seconds of held frames drawn back to
 ## back first, so the GPU has clocked up), clear_record (start the frame record over just before the first frame),
 ## monitors (-1: none; 0: the Performance monitors before the first frame and after the last; K: every K frames too),
-## track ([node path, ...]: where each is before the first frame and after every frame, track.gd).
+## track ([node path, ...]: where each is before the first frame and after every frame, track.gd), clip ({node, mask}:
+## the node's points inside solid geometry after every frame, clip.gd).
 ## Events with "at": k are injected before frame k+1 of the step (0 = before
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
@@ -329,6 +343,11 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		if not track.error.is_empty():
 			return {"error": track.error}
 		track.sample(_game_frames)
+	var clip: Clip = null
+	if args.get("clip") is Dictionary:
+		clip = Clip.new(get_tree(), str(args.clip.get("node", "")), int(args.clip.get("mask", 0xFFFFFFFF)))
+		if not clip.error.is_empty():
+			return {"error": clip.error}
 
 	# gdh live bench: no gap for the GPU to idle and clock down between the warm-up, the record's start and the step.
 	var warm_until := Time.get_ticks_msec() + int(float(args.get("warmup", 0.0)) * 1000.0)
@@ -357,6 +376,8 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		await _frame_done
 		if track != null:
 			track.sample(_game_frames)
+		if clip != null:
+			clip.sample(_game_frames)
 		if shot_every > 0 and (i + 1) % shot_every == 0:
 			await RenderingServer.frame_post_draw
 			shots.append(_save_image("step-f%d" % (i + 1)))
@@ -383,6 +404,8 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		result.shot_frames = shot_frames
 	if track != null:
 		result.track = track.result()
+	if clip != null:
+		result.clip = clip.result()
 	if cover_every > 0:
 		result.cover_samples = cover_samples
 	if not watch.is_empty():
@@ -521,6 +544,24 @@ func _cmd_annotate(args: Dictionary) -> Dictionary:
 	Screen.show_layers(get_tree(), hidden)
 	found.image_size = Common.image_size(get_tree())
 	return found
+
+
+func _on_game_event(event: Variant, data: Variant = null) -> void:
+	var entry := {"frame": _game_frames, "name": str(event), "data": _to_json(data)}
+	_events.append(entry)
+	if _events.size() > MAX_EVENTS:
+		_events.pop_front()
+	_new_events.append(entry)
+
+
+## args: name (only events of that name), clear (forget them after). The game's events: {"events", "dropped"}.
+func _cmd_events(args: Dictionary) -> Dictionary:
+	var wanted := str(args.get("name", ""))
+	var found := _events if wanted.is_empty() else _events.filter(func(e: Dictionary) -> bool: return e.name == wanted)
+	var result := {"events": found.duplicate(), "kept": MAX_EVENTS}
+	if args.get("clear", false):
+		_events.clear()
+	return result
 
 
 ## args: object (an expression, as eval takes; "" for the current scene), property (a name, or a path with ":" as

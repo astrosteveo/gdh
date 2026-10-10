@@ -154,7 +154,7 @@ gdh live batch --session s < commands.txt                      # many commands, 
 
 After a code change, `gdh live reload` loads changed GDScript into the running game with its state kept, and `gdh live restart --replay` starts the session again with the same options and companions and replays its input log back to the same frame. `start --recipe FILE` runs lines written as for `batch` once the game is ready (a project's "get to the hangar"), `--seed N` makes the global random numbers repeat, and `--user-data fresh` or `--user-data-from DIR` give the session a `user://` of its own.
 
-`start --net NAME` puts a companion behind gdh's network proxy, and `gdh live net` adds latency, jitter and packet loss, cuts and heals one instance's link, or resets its connections, to test a multiplayer game's lag, desync and reconnects. `gdh live snapshot` prints the UI on screen as a text outline, each text, button, field and slider with its state, and compares it with a baseline file, a check that doesn't depend on pixels. `start --timeline` keeps a record of the session to look through afterwards, as Playwright's trace viewer does: `<out>/timeline/index.html` lists every command with its frames, errors, notes and values, and a thumbnail of the frame after it. `--click-text` and `--click-node` fail without stepping when something else would take the click, such as a transparent panel left over a button, and say what it is.
+`start --net NAME` puts a companion behind gdh's network proxy, and `gdh live net` adds latency, jitter and packet loss, cuts and heals one instance's link, or resets its connections, to test a multiplayer game's lag, desync and reconnects. `gdh live snapshot` prints the UI on screen as a text outline, each text, button, field and slider with its state, and compares it with a baseline file, a check that doesn't depend on pixels. `start --timeline` keeps a record of the session to look through afterwards, as Playwright's trace viewer does: `<out>/timeline/index.html` lists every command with its frames, errors, notes and values, and a thumbnail of the frame after it. A game that calls `GdhEvents.emit(name, data)` (`gdh events install` adds the autoload) has its events printed with their frames as they happen, and `gdh live events` lists, counts and charts them. `--click-text` and `--click-node` fail without stepping when something else would take the click, such as a transparent panel left over a button, and say what it is.
 
 Results go to stdout. Engine errors (with a script's backtrace), `DEFECT:` lines, notes and what the game printed go to stderr, so they survive a discarded stdout; `--strict` exits 1 when the game raised engine errors. `gdh live list` lists every session.
 
@@ -259,6 +259,28 @@ gdh live follow --target Player --hold ui_right --session s
 ```
 
 Feel is mostly timing, and these put numbers on it: the frames from an input to the game's state and to the pixels, a character's top speed and the time to it, stopping, a jump's height and airtime, air control, the coyote time and jump buffer (found by pressing at each frame offset), how long a hit-stop freezes time, a camera shake's size, frequency and decay, and how far a camera lags. Each draws a chart. See [docs/feel.md](docs/feel.md).
+
+## Check animation and art
+
+```sh
+gdh live anim 120 --node Player --hold ui_right --session s     # states, positions, blends; restarts and flip-flops
+gdh live footslide 120 --skeleton Player/Skeleton3D --session s  # planted feet sliding
+gdh live clipping 240 --node Player --session s                  # bones and mesh points inside walls
+gdh measure popin captures/flythrough                            # pop-in along a camera path
+gdh live contrast --node Player --node Enemy --session s         # how well each stands out
+gdh measure palette shot.png --reference concept.png             # against the concept art's look
+```
+
+These find what still frames miss: an animation that never gets past its start, a state machine flipping between two states, feet sliding, an arm through a wall, a mesh popping in, a character lost against the background, a shot that drifted from the concept art. See [docs/art.md](docs/art.md).
+
+## Explore with a bot
+
+```sh
+gdh live explore 6000 --node Player --seed 4 --session s           # at random
+gdh live explore 3000 --node Player --goal 2400,380 --session s    # toward a point
+```
+
+`gdh live explore` plays for thousands of frames, unattended, and reports where the character got stuck, where nothing it pressed did anything (a soft lock), where it fell forever and where it left `--bounds`. Each problem is a scenario that `gdh scenario run` replays to it, and the run ends with a heat map of where it went and a count of the game's own events. See [docs/explore.md](docs/explore.md).
 
 ## Compare options
 
@@ -376,6 +398,9 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/motion.py`, `motion_cli.py`, `chart.py` | Motion in one image: onion skins, filmstrips, trails and change maps, with `gdh live onion` and `filmstrip` and their `gdh measure` forms; and trace charts |
 | `src/gdh/profile.py`, `debugger.py`, `variant.py` | `gdh live profile`, the debugger `start --profiler` runs beside the game, and Godot's binary Variant format it speaks |
 | `src/gdh/feel.py` | `gdh live latency`, `feel`, `hitstop`, `shake` and `follow` |
+| `src/gdh/anim.py`, `footslide.py`, `clipping.py`, `readability.py`, `src/gdh/harness/clip.gd` | `gdh live anim`, `footslide`, `clipping` and `contrast`, and `gdh measure popin` and `palette` |
+| `src/gdh/events.py`, `src/gdh/addon/gdh_events/` | `gdh events install` and `gdh live events`, and the `GdhEvents` autoload a game calls |
+| `src/gdh/explore.py` | `gdh live explore`: the bot, the problems it finds and the heat map |
 | `src/gdh/compare.py`, `review.py` | Options side by side: `gdh live sweep`, `gdh capture --matrix` and their grids, and `gdh review`'s page for the user's choice |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
 | `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |
@@ -393,7 +418,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd`, `check.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, gdh's own test runner, and the script check with no editor, which loads scripts as the game does, autoloads and all |
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays; the bridge and hooks, `api`, `test` and `export`, which run headless, once. `claude plugin test .` runs the band's tests. |
-| `docs/` | Live control, the editor, measuring frames, seeing motion, game feel, comparing options, movies, displays, probes, and test reports |
+| `docs/` | Live control, the editor, measuring frames, seeing motion, game feel, animation and art checks, exploring with a bot, comparing options, movies, displays, probes, and test reports |
 | `skills/`, `agents/`, `.claude-plugin/` | The Claude Code skills, the playtester agent, and the plugin manifests |
 
 ## License

@@ -232,6 +232,9 @@ def problems(part, prefix=""):
     sys.stdout.flush()  # the results so far first, when stdout and stderr go to one place
     for line in part.get("output", []):
         print(f"{prefix}game: {line}", file=sys.stderr)
+    for event in part.get("events", []):
+        data = f": {json.dumps(event['data'])}" if event.get("data") is not None else ""
+        print(f"{prefix}event: {event['name']} at frame {event['frame']}{data}", file=sys.stderr)
     for note in part.get("notes", []):
         print(f"{prefix}note: {note}", file=sys.stderr)
     for e in part.get("errors", []):
@@ -1803,6 +1806,18 @@ def add_parsers(sub):
     compare.add_live_parsers(commands, command)
     from gdh import profile
     profile.add_live_parsers(commands, command)
+    from gdh import anim
+    anim.add_live_parsers(commands, command)
+    from gdh import footslide
+    footslide.add_live_parsers(commands, command)
+    from gdh import clipping
+    clipping.add_live_parsers(commands, command)
+    from gdh import readability
+    readability.add_live_parsers(commands, command)
+    from gdh import events
+    events.add_live_parsers(commands, command)
+    from gdh import explore
+    explore.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

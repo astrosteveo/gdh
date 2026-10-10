@@ -38,7 +38,7 @@ INPUT (step options)
 SEE MOTION, CHOOSE
   gdh live onion 40 --node PATH --hold ui_right --session S  frames over each other (filmstrip: side by side)
   gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
-  gdh live anim 60 --node PATH --session S                    states, positions, blends; restarts, flip-flops
+  gdh live anim 60 --node PATH --session S                    animation states, flip-flops; also footslide
   gdh live sweep "OBJ.PROP=V1,V2,V3" --session S              a grid of options; gdh review --from it --wait
 
 KEEP IT

@@ -1,12 +1,16 @@
 """gdh live anim against testbed/anim/anim.tscn: Player (an AnimationPlayer looping "bob", 1 s) and Tree (an
 AnimationTree whose state machine is "idle", or "move" while `moving`, "move" a blend space by `speed`), with two bugs
-to switch on: `restart_bug` restarts "bob" every frame, `flip_bug` flips the state machine every 2 frames."""
+to switch on: `restart_bug` restarts "bob" every frame, `flip_bug` flips the state machine every 2 frames.
+
+gdh live footslide against testbed/anim/walker.tscn: a Skeleton3D walking along x at 1.2 m/s, its feet foot.L and
+foot.R taking turns on a 40-frame stride, each planted half of it; with `slide`, a planted foot moves with the body."""
 import os
 
 import pytest
 
 from conftest import TESTBED, gdh, gdh_json
 from gdh.anim import changes, flips, restarts
+from gdh.footslide import guess_feet
 
 SESSION = f"test-anim-{os.getpid()}"
 
@@ -87,3 +91,58 @@ def test_anim_rules():
     assert flips(found) == [(3, "a", "b")]
     back, longest = restarts(["x"] * 5, [0.5, 0.0, 0.0, 0.0, 0.05], [True] * 5, [1, 2, 3, 4, 5], 60)
     assert back == [2, 3, 4] and longest == 3
+
+
+# --- Foot sliding ---------------------------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def walker(tmp_path_factory, display):
+    out = tmp_path_factory.mktemp("walker")
+    session = f"{SESSION}-walk"
+    gdh("live", "start", "--project", TESTBED, "--scene", "res://anim/walker.tscn", "--session", session, "--out", out)
+    yield session
+    gdh("live", "stop", "--session", session)
+
+
+def test_footslide_finds_planted_feet_that_stay_put(walker):
+    reply = gdh_json("live", "footslide", "80", "--skeleton", "Walker/Skeleton", "--session", walker)
+    assert reply["feet"] == ["foot.L", "foot.R"]
+    for r in reply["reports"]:
+        # Each foot is down about half the time, and doesn't move then.
+        assert 38 <= r["planted_frames"] <= 44 and r["slide"] == pytest.approx(0, abs=1e-3)
+        assert r["sliding_frames"] == 0 and r["worst"] is None
+    assert "crops" not in reply
+
+
+def test_footslide_finds_planted_feet_sliding(walker, tmp_path):
+    gdh_json("live", "eval", "set('slide', true)", "--session", walker)
+    try:
+        reply = gdh_json("live", "footslide", "80", "--skeleton", "Walker/Skeleton", "--out", tmp_path / "slide.png",
+                         "--session", walker)
+    finally:
+        gdh_json("live", "eval", "set('slide', false)", "--session", walker)
+    for r in reply["reports"]:
+        # A planted foot moving with the body: 1.2 m/s, 0.02 m a frame.
+        assert r["worst"]["speed"] == pytest.approx(1.2, abs=0.01)
+        assert r["sliding_frames"] >= 35 and r["slide"] == pytest.approx(0.02 * r["sliding_frames"], abs=0.03)
+    assert reply["crops"] == str(tmp_path / "slide.png") and (tmp_path / "slide.png").exists()
+    proc = gdh("live", "footslide", "40", "--skeleton", "Walker/Skeleton", "--bones", "foot.L", "--crops", "0",
+               "--session", walker)
+    assert "foot.L: planted" in proc.stdout and "foot.R" not in proc.stdout.split("feet")[1].split("\n", 1)[1]
+
+
+def test_footslide_says_what_it_cant_follow(walker):
+    for args, said in ((["--skeleton", "Nope"], "No node at Nope."),
+                       (["--skeleton", "Walker"], "isn't a Skeleton3D"),
+                       (["--skeleton", "Walker/Skeleton", "--bones", "toe.X"], "No bone 'toe.X' in Walker/Skeleton")):
+        proc = gdh("live", "footslide", "5", *args, "--session", walker, check=False)
+        assert proc.returncode == 1 and said in proc.stderr, (args, proc.stderr)
+
+
+def test_foot_bones_are_guessed_by_name():
+    assert guess_feet(["Hips", "foot.L", "foot.R", "toe.L"]) == ["foot.L", "foot.R"]
+    assert guess_feet(["mixamorig:LeftFoot", "mixamorig:RightFoot", "mixamorig:LeftToeBase"]) == [
+        "mixamorig:LeftFoot", "mixamorig:RightFoot"]
+    assert guess_feet(["Ankle_L", "Ankle_R", "Hand_L"]) == ["Ankle_L", "Ankle_R"]
+    assert guess_feet(["Spine", "Head"]) == []

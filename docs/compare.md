@@ -6,6 +6,7 @@ Polish is full of choices of taste: how bright the bloom, how strong the shake, 
 |---|---|
 | `gdh live sweep "TARGET=V1,V2,V3" [...]` | The same frame with each value of one property, or two for rows and columns ([below](#sweeps)) |
 | `gdh capture --matrix [SCREENS] --quality PRESETS` | A scene at several screen shapes and quality settings, each a capture with its probe findings ([below](#screens-and-quality-capture---matrix)) |
+| `gdh review LABEL=PATH... --out DIR --wait` | A page with the options side by side for the user to pick from, and their choice and notes read back ([below](#asking-the-user-gdh-review)) |
 
 ## Sweeps
 
@@ -58,6 +59,24 @@ The values are Godot's: `msaa_3d` 2 is 4x MSAA, `screen_space_aa` 1 is FXAA, a s
 
 `--modes` picks the views each cell saves (all six by default; `--modes normal` is quicker), and `--warmup`, `--timeout`, `--display` and the game's arguments after `--` apply to every cell. `--baseline` doesn't go with `--matrix`.
 
+## Asking the user: `gdh review`
+
+```sh
+gdh review Warm=captures/warm.png Cool=captures/cool.png --settings "Warm=tint 1.2, 0.9" --out captures/tint --wait --open
+gdh review --from captures/sweep/sweep.json --out captures/glow-review --wait
+gdh review --from captures/hud/matrix.json --out captures/hud-review --question "Which screens look wrong?"
+gdh review --read captures/tint
+```
+
+A choice of taste is the user's. `review` makes the page they choose on: each option an image or a video (`LABEL=PATH`, or a `PATH` labeled by its file's name), with the settings that made it under it (`--settings LABEL=TEXT`), side by side, the question (`--question`) and title (`--title`) at the top, and a notes box. They pick by clicking or with the keys 1 to 9, and save. `--from FILE.json` takes the options from a sweep's cells (`gdh live sweep` writes `FILE.json` beside its grid) or a matrix's (`matrix.json`), each with its values or its screen, size and settings; long settings fold under their first line.
+
+The page and copies of the files go into `--out DIR` (`index.html` and `media/`), so it opens anywhere, and a video plays in it. Getting the choice back:
+
+- **`--wait`** serves the page on 127.0.0.1 (`--port`, default a free one), prints its address, and waits up to `--timeout` seconds (1800) for the user to save. The page posts the choice with a token only it has, gdh writes it to `DIR/choice.json` and prints it (`--json`: all of it), and stops. `--open` opens the page in the browser. With no choice in time it exits 1, leaving the page.
+- **Without `--wait`**, the page is a file: saving downloads `choice.json`, which the user puts in the page's folder.
+
+`gdh review --read DIR` prints a choice saved there: the label chosen and the notes. `choice.json` holds `choice`, `notes`, `options` (the labels shown, in order), the chosen option's `settings`, and `saved_at`.
+
 ## Tests
 
 `tests/test_compare.py` runs `testbed/motion/motion.tscn`, with Ball (a `Node2D` drawn by its 32 px red `Body`) held still. It checks:
@@ -70,3 +89,6 @@ The values are Godot's: `msaa_3d` 2 is 4x MSAA, `screen_space_aa` 1 is FXAA, a s
 - a matrix of `motion.tscn` at 16:9, phone and 1000x500 by the project's quality and `low`, with a clear color set by `--set`: 6 cells in order, each at its size with the clear color it was given, `low`'s settings recorded, the grid within 1280 px, and no `override.cfg` left behind
 - an unknown screen or quality, `--quality` without `--matrix`, a `--set` that isn't a setting, and `--matrix` with `--baseline`
 - how screens, qualities and settings are read and written
+- a review page of two images with their settings and copies of the files, and `--read` before anything is saved
+- `--wait`: the page served, a post with the wrong token refused, the right one saved into `choice.json` and printed, and `--read` printing it after
+- a review from a sweep's JSON, and the errors: one option, a missing file, a file that isn't an image or a video, and settings for a label that isn't there

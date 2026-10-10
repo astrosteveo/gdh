@@ -27,6 +27,7 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
   gdh live filmstrip 24 --node PATH --session S               the node's box from each frame, side by side
   gdh live sweep "OBJ.PROP=V1,V2,V3" ["OBJ.PROP=A,B"] --session S   the same frame with each value, in a grid
+  gdh review A=a.png B=b.png --out D --wait                  a page for the user to pick; prints the choice
   gdh live batch --session S < lines.txt                     many CLI lines, one process
   gdh live reload --session S                                GDScript edited: new code, same state
   gdh live restart --replay --session S                      anything else: rebuilt, back to the frame

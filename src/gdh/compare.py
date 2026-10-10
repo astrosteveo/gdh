@@ -198,6 +198,8 @@ def cmd_sweep(args):
     else:
         info = grid(cells, out, columns, title)
     result = {**info, "cells": made, "restored": restored["restored"]}
+    # Beside the grid, for gdh review --from.
+    out.with_suffix(".json").write_text(json.dumps(result, indent=1) + "\n")
     if args.json:
         print(json.dumps(result, indent=1))
         return 0
@@ -255,7 +257,8 @@ def add_live_parsers(commands, command):
                    help="OBJECT.PROPERTY=VALUE,VALUE...: OBJECT an expression as eval takes (a bare PROPERTY is the "
                         "scene's), PROPERTY:part for a part of it (position:x), each VALUE an expression. One or two")
     p.add_argument("--out", metavar="FILE.png", help="Where the grid goes (default <session out>/sweep/sweep.png); "
-                                                     "each cell's full image goes beside it in FILE-cells/")
+                                                     "each cell's full image goes beside it in FILE-cells/, and a "
+                                                     "record of the cells in FILE.json (for gdh review --from)")
     p.add_argument("--view", default="normal", help="The view each cell shows (default normal)")
     p.add_argument("--node", metavar="PATH",
                    help="Frame the cells on this node: the box round it with every value (with --margin), the same "

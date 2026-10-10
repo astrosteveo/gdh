@@ -273,6 +273,15 @@ gdh measure palette shot.png --reference concept.png             # against the c
 
 These find what still frames miss: an animation that never gets past its start, a state machine flipping between two states, feet sliding, an arm through a wall, a mesh popping in, a character lost against the background, a shot that drifted from the concept art. See [docs/art.md](docs/art.md).
 
+## Explore with a bot
+
+```sh
+gdh live explore 6000 --node Player --seed 4 --session s           # at random
+gdh live explore 3000 --node Player --goal 2400,380 --session s    # toward a point
+```
+
+`gdh live explore` plays for thousands of frames, unattended, and reports where the character got stuck, where nothing it pressed did anything (a soft lock), where it fell forever and where it left `--bounds`. Each problem is a scenario that `gdh scenario run` replays to it, and the run ends with a heat map of where it went and a count of the game's own events. See [docs/explore.md](docs/explore.md).
+
 ## Compare options
 
 ```sh
@@ -391,6 +400,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/feel.py` | `gdh live latency`, `feel`, `hitstop`, `shake` and `follow` |
 | `src/gdh/anim.py`, `footslide.py`, `clipping.py`, `readability.py`, `src/gdh/harness/clip.gd` | `gdh live anim`, `footslide`, `clipping` and `contrast`, and `gdh measure popin` and `palette` |
 | `src/gdh/events.py`, `src/gdh/addon/gdh_events/` | `gdh events install` and `gdh live events`, and the `GdhEvents` autoload a game calls |
+| `src/gdh/explore.py` | `gdh live explore`: the bot, the problems it finds and the heat map |
 | `src/gdh/compare.py`, `review.py` | Options side by side: `gdh live sweep`, `gdh capture --matrix` and their grids, and `gdh review`'s page for the user's choice |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
 | `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |
@@ -408,7 +418,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd`, `check.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, gdh's own test runner, and the script check with no editor, which loads scripts as the game does, autoloads and all |
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays; the bridge and hooks, `api`, `test` and `export`, which run headless, once. `claude plugin test .` runs the band's tests. |
-| `docs/` | Live control, the editor, measuring frames, seeing motion, game feel, animation and art checks, comparing options, movies, displays, probes, and test reports |
+| `docs/` | Live control, the editor, measuring frames, seeing motion, game feel, animation and art checks, exploring with a bot, comparing options, movies, displays, probes, and test reports |
 | `skills/`, `agents/`, `.claude-plugin/` | The Claude Code skills, the playtester agent, and the plugin manifests |
 
 ## License

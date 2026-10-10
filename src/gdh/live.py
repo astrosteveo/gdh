@@ -1816,6 +1816,8 @@ def add_parsers(sub):
     readability.add_live_parsers(commands, command)
     from gdh import events
     events.add_live_parsers(commands, command)
+    from gdh import explore
+    explore.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

@@ -88,3 +88,60 @@ def test_install_puts_the_autoload_in_a_project(tmp_path):
     assert 'GdhEvents="*res://addons/gdh_events/gdh_events.gd"\nState=' in (other / "project.godot").read_text()
     proc = gdh("events", "install", "--project", tmp_path / "nothing", check=False)
     assert proc.returncode == 1 and "No project.godot in" in proc.stderr
+
+
+# --- The explorer bot -----------------------------------------------------------------------------------------------
+
+RESET = "[get_node('Explorer').set_global_position(Vector2({x}, 380)), get_node('Explorer').set_velocity(Vector2(0, 0)), " \
+        "get_node('Explorer').set('trapped', false), get_node('Explorer').set('fell', false)]"
+
+
+def test_explore_at_random_finds_the_trap_and_the_pit(level, tmp_path):
+    reply = live("explore", "3000", "--node", "Explorer", "--seed", "7", "--reset", RESET.format(x=420),
+                 "--out", tmp_path)
+    kinds = {p["kind"] for p in reply["problems"]}
+    assert {"soft lock", "falling"} <= kinds and reply["mode"] == "random" and reply["frames"] == 3000
+    trap = next(p for p in reply["problems"] if p["kind"] == "soft lock")
+    assert 260 <= trap["at"][0] <= 320  # in the trap
+    pit = [p for p in reply["problems"] if p["kind"] == "falling"]
+    assert all(560 <= p["at"][0] <= 700 for p in pit)  # each fall began at the pit
+    assert reply["events"]["trapped"] >= 1 and reply["events"]["fell"] >= 1
+    for p in reply["problems"]:
+        doc = json.loads(open(p["scenario"]).read())
+        assert doc["steps"] and doc["expect"][0]["expect"] == "get_node(\"Explorer\").global_position"
+    assert (tmp_path / "heat.png").exists() and reply["reached"]["x"][0] < 320
+
+
+def test_explore_stops_at_a_soft_lock_it_cant_undo_and_the_scenario_replays_it(tmp_path):
+    session = f"{SESSION}-fresh"
+    gdh("live", "start", "--project", TESTBED, "--scene", "res://explore/explore.tscn", "--session", session,
+        "--out", tmp_path / "game")
+    try:
+        reply = gdh_json("live", "explore", "1200", "--node", "Explorer", "--seed", "3", "--out", tmp_path / "run",
+                         "--session", session)
+    finally:
+        gdh("live", "stop", "--session", session)
+    assert [p["kind"] for p in reply["problems"]] == ["soft lock"]
+    assert "soft-locked at frame" in reply["stopped"] and reply["frames"] < 1200
+    proc = gdh("scenario", "run", reply["problems"][0]["scenario"], "--out", tmp_path / "replay")
+    assert "1 passed" in proc.stdout
+
+
+def test_explore_toward_a_goal_finds_the_wall(level, tmp_path):
+    reply = live("explore", "600", "--node", "Explorer", "--goal", "1300,380", "--reset", RESET.format(x=800),
+                 "--out", tmp_path)
+    assert reply["mode"] == "goal"
+    stuck = [p for p in reply["problems"] if p["kind"] == "stuck"]
+    # The wall's face is at x 1100, the explorer 24 px wide: as close as it gets, 1088.
+    assert stuck and stuck[0]["at"][0] == pytest.approx(1088, abs=2)
+    proc = gdh("live", "explore", "60", "--node", "Explorer", "--goal", "1300,380", "--reset", RESET.format(x=420),
+               "--fail", "--session", SESSION, check=False)
+    assert proc.returncode == 0  # nothing found in 60 frames
+
+
+def test_explore_says_what_it_cant_do(level):
+    for args, said in ((["--node", "Nope"], "No node at Nope."),
+                       (["--node", "Explorer", "--mode", "goal"], "--mode goal needs --goal"),
+                       (["--node", "Explorer", "--goal", "1,2,3"], "--goal takes X,Y for Explorer")):
+        proc = gdh("live", "explore", "10", *args, "--session", SESSION, check=False)
+        assert proc.returncode == 1 and said in proc.stderr, (args, proc.stderr)

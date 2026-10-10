@@ -235,6 +235,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `clipping N --node PATH` | A character's bones and mesh points inside solid geometry, as runs of frames, with crops ([art.md](art.md#clipping)) |
 | `contrast --node PATH` | How well a node stands out from what's round it: a luminance contrast ratio and a color difference, with a crop ([art.md](art.md#readability)) |
 | `events [--name N] [--clear]` | The game's own events (`GdhEvents.emit`) so far, with their frames, counts and a chart ([below](#the-games-events-gdhevents)) |
+| `explore N --node PATH` | A bot that plays N frames, at random or toward a goal, and reports where it got stuck, soft-locked, fell forever or left the bounds, each as a replayable scenario, with a heat map ([explore.md](explore.md)) |
 | `pick X,Y...` | What's drawn at each point, topmost first: 2D and UI nodes in draw order, then 3D meshes by distance, with textures, surfaces and materials (above) |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
 | `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |

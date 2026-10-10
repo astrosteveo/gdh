@@ -6,6 +6,7 @@ An image reader sees one still frame at a time, and a contact sheet of 16 frames
 |---|---|
 | `gdh live step N --trace EXPR --trace-chart F.png` | Values over time as a line chart, with velocity and acceleration (`--trace-rates`) ([live.md](live.md#waiting-and-tracing)) |
 | `gdh live onion N --node PATH` | A node's movement as an onion skin: its frames laid over each other, the oldest faintest ([below](#onion-skins)) |
+| `gdh live step N --trail PATH` | Where nodes went, drawn on the last frame with a dot every K frames, and the pixels between the dots ([below](#trails)) |
 
 Each live command steps the game with the same input options as `step` (`--hold`, `--press`, `--click`, `--axis` and the rest), so the movement can be one the player makes. A recording of frames saved earlier (`gdh live record`, or any game's PNGs) works with the `gdh measure` forms.
 
@@ -33,11 +34,33 @@ So one image shows a whole movement:
 
 `gdh measure onion FRAMES... --out FILE.png` does the same from saved PNG frames (files, or directories taken in name order), every `--every K` of them (default every one), in `--box X0,Y0,X1,Y1` (default the whole frame). Its frames are numbered from 0 in the order given. An onion skin takes at most 24 frames, since more can't be told apart.
 
+## Trails
+
+```sh
+gdh live step 60 --hold ui_right --trail Player --every 5 --session s           # the run, a dot every 5 frames
+gdh live step 90 --tap ui_accept --trail Player --trail Camera --every 3 --trail-out jump.png --session s
+```
+
+`--trail PATH` (repeatable) on `step` records where each node is before the step's first frame and after every frame, then saves a shot of the last frame with each node's path drawn on it: a line through its positions, a dot every `--every K` frames (default 1) from where it started, and its first and last game frame numbered at the ends, the last with the node's name. Each node gets its own color, over a dark outline so it shows on light scenes too. The image goes to `--trail-out FILE.png`, or to the session's shots as `NNNN-trail.png`.
+
+A node's position is a `Node2D`'s or `Node3D`'s global position, or a `Control`'s middle. The path is the one through the world, seen through the last frame's view: the node's canvas transform (with its camera or `CanvasLayer`) for a 2D node, its viewport's camera for a 3D one. So a camera that followed the node, which keeps it in one place on screen, still shows the path it took to get there, ending where the node is now. UI on a `CanvasLayer` stays where it is on screen.
+
+The dots' spacing is the motion's timing. Dots at even frame intervals are evenly spaced for constant speed, bunch up where it slows (easing out, a landing) and spread where it speeds up. As text, `step` prints each trail's start and end and the pixels between consecutive dots:
+
+```
+trail: captures/live/s/shots/0007-trail.png
+  Player: from 200,360 at frame 120 to 320,360 at frame 150; px between dots every 5 frames: 20, 20, 20, 20, 20, 20
+```
+
+With `--json` the reply gets `"trails": {"image", "every", "trails": [{"node", "dots": [[frame, x, y], ...], "spacing", "missing", "off_screen"}]}`, and the step's result holds every frame's point and box under `"track"`. A point off the frame is still drawn toward, with the line leaving the frame there; a point behind a 3D camera, or after the node was freed, has no place (`null`), and the line breaks there. Both are counted, with a note on stderr. A session of several instances draws one: give `--instance K`.
+
 ## Tests
 
-`tests/test_motion.py` runs `testbed/motion/motion.tscn`, where Ball moves right 4 pixels a physics frame, Spinner turns 6 degrees a frame in place, Blinker changes color every 10 frames and the rest stands still; with `follow`, the camera keeps Ball at the screen's centre. It checks:
+`tests/test_motion.py` runs `testbed/motion/motion.tscn`, where Ball moves right 4 pixels a physics frame, Spinner turns 6 degrees a frame in place, Blinker changes color every 10 frames and the rest stands still; with `follow`, the camera keeps Ball at the screen's centre. In `motion3d.tscn`, Cube moves along x 0.05 a frame in front of the camera, and Ghost moves 0.25 a frame along z, from in front of the camera to behind it. It checks:
 
 - a trace chart's panels, and their numbers: Ball's position, its rate (240 pixels a second at 60 ticks a second) and the rate of that (0); true and false drawn as steps with no rates; text left out with a note; `gdh measure chart` from the CSV `--trace-out` wrote
 - an onion skin of Ball: about 8 frames, the box exactly Ball's body over the distance it moved plus the margin, the newest frame solid, the oldest faint, and the frames it saved deleted
 - `onion` with step's input, `--tint` and `--keep`; a node that isn't there, one that's hidden for the whole run, and `--every` longer than the run
 - `gdh measure onion` over frames `gdh live record` saved, and the note when the background moves
+- a trail of Ball: a dot every 5 frames, 20 pixels apart, the first and last where Ball was, the line and dots drawn in the first trail's color; with the camera following Ball, the path through the world ending at the screen's centre; the text output, a UI node's trail, and `--trail-out` without a trail
+- 3D trails on `motion3d.tscn`: Cube's last point where the camera's own `unproject_position` puts it, and Ghost's points behind the camera missing, with the note

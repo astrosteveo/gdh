@@ -730,11 +730,14 @@ def cmd_step(args):
     n = step_length(args, session)
     step_args = {"frames": n, "events": step_input_events(args, n), "shot_every": args.shot_every}
     step_args.update(watch_args(args))
+    if args.trail:
+        step_args["track"] = args.trail
     if args.monitors:
         step_args["monitors"] = 0  # Godot's Performance monitors before the first frame and after the last (perf.py)
     # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
     reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
-    result = report(reply, args.json)
+    # With --trail, the JSON waits for the trails, which go in it.
+    result = report(reply, args.json, echo=not args.trail)
     if not args.json:
         for prefix, r in each(reply, result):
             print(f"{prefix}stepped {r['frames']} frames")
@@ -751,6 +754,8 @@ def cmd_step(args):
                 from gdh import perf
                 print(perf.describe_run(r["monitors"], prefix))
     unmet = watched(reply, result, args)
+    if args.trail:
+        trails(session, args, reply, result)
     if args.shot:
         shot(session, ["normal"], "after-step", False, args.json, args.instance)
     if unmet:
@@ -767,8 +772,13 @@ TRACE_ROWS = 40
 def step_length(args, session):
     """The frames a step runs: its count (1 if none), or with --until the most it runs: --max, else the count, else
     UNTIL_MAX."""
-    if args.every is not None and not (args.until or args.trace):
-        raise LiveError("--every sets how often --until and --trace check (--shot-every saves frames).")
+    if args.every is not None and not (args.until or args.trace or args.trail):
+        raise LiveError("--every sets how often --until and --trace check, and --trail's dots (--shot-every saves "
+                        "frames).")
+    if args.trail_out and not args.trail:
+        raise LiveError("--trail-out is where --trail's image goes: give a --trail.")
+    if args.trail and len(pick(session, args.instance)) > 1:
+        raise LiveError("--trail draws one instance's frame: give --instance K.")
     if args.trace_out and not args.trace:
         raise LiveError("--trace-out writes the values of --trace.")
     if args.trace_chart and not args.trace:
@@ -831,6 +841,45 @@ def watched(reply, result, args):
         if chart:
             print(f"{prefix}chart: {chart}")
     return unmet
+
+
+# The most dots' spacings printed for a trail (--json has them all).
+TRAIL_SPACINGS = 24
+
+
+def trails(session, args, reply, result):
+    """Draw a step's --trail over a shot of its last frame, and print where it went (or put it in the JSON)."""
+    from gdh import motion
+    if isinstance(result, list):
+        result = result[pick(session, args.instance)[0]]
+    shots = call(session, "shot", {"views": ["normal"], "label": "trail"}, instance=args.instance)
+    frame = report(shots, False)["shots"]["normal"]
+    out = Path(args.trail_out) if args.trail_out else Path(frame).with_name(Path(frame).name.replace("-normal", ""))
+    every = args.every or 1
+    drawn = motion.draw_trails(frame, [{"node": node, "points": result["track"][node]["points"]} for node in args.trail],
+                               every, out)
+    if not args.trail_out:
+        Path(frame).unlink(missing_ok=True)
+    if args.json:
+        reply["trails"] = {"image": str(out), "every": every, "trails": drawn}
+        print(json.dumps(reply, indent=2))
+        return
+    print(f"trail: {out}")
+    for t in drawn:
+        known = [d for d in t["dots"] if d[1] is not None]
+        spacing = t["spacing"]
+        shown = ", ".join("-" if v is None else f"{v:g}" for v in spacing[:TRAIL_SPACINGS])
+        more = f" ... {len(spacing) - TRAIL_SPACINGS} more (--json has them all)" if len(spacing) > TRAIL_SPACINGS else ""
+        where = (f"from {known[0][1]:g},{known[0][2]:g} at frame {known[0][0]} to {known[-1][1]:g},{known[-1][2]:g} at "
+                 f"frame {known[-1][0]}") if known else "never on screen"
+        print(f"  {t['node']}: {where}; px between dots every {every} frames: {shown or 'none'}{more}")
+        sys.stdout.flush()
+        if t["off_screen"]:
+            print(f"note: trail {t['node']}: {t['off_screen']} of its points were off screen, so its line leaves the "
+                  f"frame there", file=sys.stderr)
+        if t["missing"]:
+            print(f"note: trail {t['node']}: {t['missing']} of its points have no place on screen (behind the camera, "
+                  f"or the node gone), so its line breaks there", file=sys.stderr)
 
 
 def chart_trace(trace, path, rates, ticks, prefix=""):
@@ -1545,6 +1594,11 @@ def add_parsers(sub):
                    help="With --trace-chart: add each expression's rate of change per second and the rate of that "
                         "(velocity and acceleration for a position)")
 
+    p.add_argument("--trail", action="append", default=[], metavar="PATH",
+                   help="Draw where this node went over the step on a shot of its last frame, seen through that "
+                        "frame's view, with a dot every --every frames; repeatable")
+    p.add_argument("--trail-out", metavar="FILE.png",
+                   help="Where --trail's image goes (default: the session's shots, as NNNN-trail.png)")
     p.add_argument("--monitors", action="store_true",
                    help="Godot's Performance monitors (objects, nodes, orphan nodes, draw calls, video memory...) "
                         "before and after the step, and their change")

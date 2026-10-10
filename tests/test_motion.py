@@ -1,8 +1,11 @@
-"""The motion tools against testbed/motion/motion.tscn: trace charts and onion skins.
+"""The motion tools against testbed/motion/motion.tscn: trace charts, onion skins and trails; 3D trails against
+motion3d.tscn.
 
 Ball moves right 4 px a physics frame while `moving`, Spinner turns 6 degrees a frame in place, Blinker changes color
-every 10 frames, and with `follow` the camera keeps Ball at the screen's centre.
+every 10 frames, and with `follow` the camera keeps Ball at the screen's centre. In motion3d.tscn Cube moves along x
+0.05 a frame in front of the camera, and Ghost moves 0.25 a frame along z, from in front of the camera to behind it.
 """
+import json
 import os
 from pathlib import Path
 
@@ -182,3 +185,84 @@ def test_union_box_grows_points_and_clips_to_the_image():
     assert motion.union_box([[50, 50]], 4, (100, 100)) == (18, 18, 82, 82)
     assert motion.union_box([[90, 90, 30, 30]], 0, (100, 100)) == (90, 90, 100, 100)
     assert motion.union_box([None], 4, (100, 100)) is None
+
+
+# --- Trails -----------------------------------------------------------------------------------------------------------
+
+
+YELLOW = np.array([255, 220, 40])  # the first trail's color
+
+
+def test_trail_draws_the_path_with_a_dot_every_k_frames(game, tmp_path):
+    reset()
+    out = tmp_path / "trail.png"
+    reply = live("step", "30", "--trail", "Ball", "--every", "5", "--trail-out", out)
+    trails = reply["trails"]
+    assert trails["image"] == str(out) and trails["every"] == 5
+    ball = trails["trails"][0]
+    start = reply["result"]["status"]["frame"] - 30
+    # A dot every 5 frames from where it started, 20 px apart (4 px a frame), and the points in the reply's track.
+    assert [d[0] - start for d in ball["dots"]] == [0, 5, 10, 15, 20, 25, 30]
+    assert ball["dots"][0][1:] == [200, 360] and ball["dots"][-1][1:] == [320, 360]
+    assert ball["spacing"] == [20.0] * 6 and ball["missing"] == 0 and ball["off_screen"] == 0
+    points = reply["result"]["track"]["Ball"]["points"]
+    assert len(points) == 31 and points[1][1:] == [204, 360]
+    with Image.open(out) as img:
+        a = np.asarray(img.convert("RGB"), dtype=np.int32)
+        assert img.size == (1280, 720)
+    assert np.abs(a[360, 250] - YELLOW).max() <= 10  # the line, between the dots at 240 and 260
+    assert np.abs(a[360, 260] - YELLOW).max() <= 10  # a dot
+
+
+def test_trail_shows_the_path_through_the_world_when_the_camera_follows(game, tmp_path):
+    reset()
+    live("eval", "set('follow', true)")
+    try:
+        reply = live("step", "30", "--trail", "Ball", "--every", "10", "--trail-out", tmp_path / "trail.png")
+    finally:
+        reset()
+    ball = reply["trails"]["trails"][0]
+    # Ball ends at the screen's centre, the camera on it; seen through that last view, it came from 120 px left.
+    assert ball["dots"][-1][1:] == [640, 360] and ball["dots"][0][1:] == [520, 360]
+    assert ball["spacing"] == [40.0] * 3
+
+
+def test_trail_prints_the_spacing_and_is_refused_without_a_trail(game, tmp_path):
+    reset()
+    proc = run("step", "10", "--trail", "Ball", "--trail", "UI/Score", "--every", "5")
+    assert "trail: " in proc.stdout
+    assert "  Ball: from 200,360 at frame" in proc.stdout and "px between dots every 5 frames: 20, 20" in proc.stdout
+    assert "  UI/Score: from 120,35" in proc.stdout
+    image = proc.stdout.split("trail: ")[1].split()[0]
+    assert Path(image).name.endswith("-trail.png") and Path(image).exists()
+    proc = run("step", "5", "--trail-out", tmp_path / "x.png", check=False)
+    assert proc.returncode == 1 and "--trail-out is where --trail's image goes" in proc.stderr
+    proc = run("step", "5", "--trail", "Nope", check=False)
+    assert proc.returncode == 1 and "No node at Nope." in proc.stderr
+
+
+SESSION_3D = f"{SESSION}-3d"
+
+
+@pytest.fixture(scope="module")
+def game3d(tmp_path_factory, display):
+    out = tmp_path_factory.mktemp("motion3d")
+    gdh("live", "start", "--project", TESTBED, "--scene", "res://motion/motion3d.tscn", "--session", SESSION_3D,
+        "--out", out)
+    yield out
+    gdh("live", "stop", "--session", SESSION_3D)
+
+
+def test_trail_in_3d_projects_through_the_camera(game3d, tmp_path):
+    proc = gdh("live", "step", "30", "--trail", "Cube", "--trail", "Ghost", "--every", "5", "--trail-out",
+               tmp_path / "trail.png", "--session", SESSION_3D, "--json")
+    reply = json.loads(proc.stdout)
+    cube, ghost = reply["trails"]["trails"]
+    expected = gdh_json("live", "eval", "get_viewport().get_camera_3d().unproject_position("
+                                        "get_node('Cube').global_position)", "--session", SESSION_3D)
+    assert cube["dots"][-1][1:] == pytest.approx(expected["result"]["value"], abs=0.1)
+    assert cube["missing"] == 0 and len(set(cube["spacing"])) <= 2
+    # Ghost goes behind the camera: those points have no place, and the rest leave the frame on the way.
+    assert 0 < ghost["missing"] < 31 and ghost["off_screen"] > 0
+    proc = gdh("live", "step", "30", "--trail", "Ghost", "--session", SESSION_3D)
+    assert "points have no place on screen (behind the camera" in proc.stderr

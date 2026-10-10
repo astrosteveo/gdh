@@ -1,4 +1,5 @@
-"""Motion in one image: onion skins and filmstrips of a part of the screen over many frames.
+"""Motion in one image: onion skins and filmstrips of a part of the screen over many frames, and trails of where
+nodes went drawn over a frame.
 
 Each takes frames as [(label, PNG path)] in time order and a box (x0, y0, x1, y1 in image pixels, the far edges
 excluded) that stays the same for every frame, so motion inside it shows as motion.
@@ -238,3 +239,72 @@ def filmstrip(frames, box, out, zoom=0, title=None):
     sheet.save(out)
     return {"out": str(out), "box": list(box), "zoom": zoom, "frames": [label for label, _ in frames],
             "columns": columns}
+
+
+# --- Trails ------------------------------------------------------------------------------------------------------------
+
+# Each trail's color, bright on most scenes, each drawn over a dark outline so it shows on light ones too.
+TRAIL_COLORS = [(255, 220, 40), (40, 230, 255), (255, 80, 220), (120, 255, 80), (255, 150, 40), (180, 140, 255)]
+OUTLINE = (0, 0, 0)
+DOT_RADIUS = 4
+
+
+def trail(points, every):
+    """A node's trail from its tracked points ([[frame, x, y] or [frame, None, None]], oldest first): {"dots": the
+    points every `every` frames from the first, and the last; "spacing": the pixels between consecutive dots (None
+    when one is missing); "missing": the points with no place (behind the camera, or the node gone)}."""
+    known = [p for p in points if p[1] is not None]
+    first = points[0][0] if points else 0
+    dots = [p for p in points if (p[0] - first) % every == 0 or p is points[-1]]
+    spacing = []
+    for a, b in zip(dots, dots[1:]):
+        spacing.append(None if a[1] is None or b[1] is None else
+                       round(((b[1] - a[1]) ** 2 + (b[2] - a[2]) ** 2) ** 0.5, 1))
+    return {"dots": dots, "spacing": spacing, "missing": len(points) - len(known)}
+
+
+def draw_trails(image, trails, every, out):
+    """Draw each trail ({"node", "points"}) over the frame `image` and save it at out. Each trail is a line through its
+    points (broken where one is missing), a dot every `every` frames, and its first and last frame numbered. Returns
+    [{"node", "dots", "spacing", "missing", "off_screen"}], off_screen counting the points outside the frame."""
+    from PIL import ImageDraw
+    with Image.open(image) as img:
+        picture = img.convert("RGB")
+    w, h = picture.size
+    d = ImageDraw.Draw(picture)
+    f = font(12)
+    results = []
+    for k, entry in enumerate(trails):
+        color = TRAIL_COLORS[k % len(TRAIL_COLORS)]
+        points = entry["points"]
+        info = trail(points, every)
+        info["off_screen"] = sum(1 for p in points if p[1] is not None and not (0 <= p[1] < w and 0 <= p[2] < h))
+        runs, run = [], []
+        for p in points:
+            if p[1] is None:
+                runs.append(run)
+                run = []
+            else:
+                run.append((p[1], p[2]))
+        runs.append(run)
+        for width, ink in ((5, OUTLINE), (3, color)):
+            for r in runs:
+                if len(r) > 1:
+                    d.line(r, fill=ink, width=width, joint="curve")
+        for p in info["dots"]:
+            if p[1] is not None:
+                x, y = p[1], p[2]
+                d.ellipse((x - DOT_RADIUS, y - DOT_RADIUS, x + DOT_RADIUS, y + DOT_RADIUS), fill=color,
+                          outline=OUTLINE, width=1)
+        known = [p for p in points if p[1] is not None]
+        if known:
+            ends = [known[0], known[-1]] if len(known) > 1 else [known[0]]
+            for p in ends:
+                text = f"{entry['node']} {p[0]}" if p is known[-1] else str(p[0])
+                tx = min(max(p[1] + 7, 2), w - d.textlength(text, font=f) - 2)
+                ty = min(max(p[2] - 18, 2), h - 16)
+                d.text((tx, ty), text, fill=color, font=f, stroke_width=2, stroke_fill=OUTLINE)
+        results.append({"node": entry["node"], **info})
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    picture.save(out)
+    return results

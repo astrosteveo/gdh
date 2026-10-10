@@ -21,6 +21,7 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live step 2 --click-text TEXT --session S              or --click-node PATH; fails if covered
   gdh live shot --session S [--node PATH --zoom 2] [--out F.png] [--max-width 1280]
   gdh live onion 40 --node PATH --hold ui_right --session S  a movement in one image, oldest faintest
+  gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
   gdh live batch --session S < lines.txt                     many CLI lines, one process
   gdh live reload --session S                                GDScript edited: new code, same state
   gdh live restart --replay --session S                      anything else: rebuilt, back to the frame

@@ -65,6 +65,8 @@ var _game_frames := 0
 var _vsync_noted := false
 var _size_noted := false
 var _next_frame_us := 0
+## What `set` changed: {key: [object, property, the value before]}, for `restore`.
+var _changed := {}
 
 
 func _ready() -> void:
@@ -249,6 +251,10 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_annotate(args)
 		"pick":
 			result = _cmd_pick(args)
+		"set":
+			result = _cmd_set(args)
+		"restore":
+			result = _cmd_restore()
 		"camera":
 			result = Camera.command(get_tree(), args)
 		"frames":
@@ -515,6 +521,59 @@ func _cmd_annotate(args: Dictionary) -> Dictionary:
 	Screen.show_layers(get_tree(), hidden)
 	found.image_size = Common.image_size(get_tree())
 	return found
+
+
+## args: object (an expression, as eval takes; "" for the current scene), property (a name, or a path with ":" as
+## set_indexed takes it), value (an expression). Sets it, keeping the value it had the first time it's set, for
+## restore. Returns {"was", "now"}.
+func _cmd_set(args: Dictionary) -> Dictionary:
+	var target: Variant = get_tree().current_scene
+	var object_text := str(args.get("object", ""))
+	if not object_text.is_empty():
+		var found := _evaluate(object_text)
+		if found.has("error"):
+			return {"error": "%s: %s" % [object_text, found.error]}
+		target = found.value
+	if not target is Object or target == null:
+		return {"error": "%s isn't an object, so it has no property to set." % (object_text if object_text else "scene")}
+	var property := NodePath(str(args.get("property", "")))
+	var base := str(property.get_name(0)) if property.get_name_count() > 0 else str(property)
+	if not base in target:
+		return {"error": "%s has no property %s." % [object_text if object_text else "The scene", base]}
+	var value := _evaluate(str(args.get("value", "")))
+	if value.has("error"):
+		return {"error": "%s: %s" % [args.get("value", ""), value.error]}
+	var before: Variant = (target as Object).get_indexed(property)
+	var key := "%s|%s" % [object_text, property]
+	if not _changed.has(key):
+		_changed[key] = [target, property, before]
+	(target as Object).set_indexed(property, value.value)
+	var now: Variant = (target as Object).get_indexed(property)
+	return {"was": _to_json(before), "now": _to_json(now)}
+
+
+## Puts back every value `set` changed, as it was before the first set. Returns {"restored": n}.
+func _cmd_restore() -> Dictionary:
+	var count := 0
+	for key in _changed:
+		var entry: Array = _changed[key]
+		if is_instance_valid(entry[0]):
+			(entry[0] as Object).set_indexed(entry[1], entry[2])
+			count += 1
+	_changed.clear()
+	return {"restored": count}
+
+
+## An expression evaluated as eval does: {"value"} or {"error"}.
+func _evaluate(text: String) -> Dictionary:
+	var expression := Expression.new()
+	var inputs := _eval_inputs()
+	if expression.parse(text, inputs[0]) != OK:
+		return {"error": expression.get_error_text()}
+	var value: Variant = expression.execute(inputs[1], get_tree().current_scene, false)
+	if expression.has_execute_failed():
+		return {"error": expression.get_error_text()}
+	return {"value": value}
 
 
 ## args: points ([[x, y], ...] in screenshot pixels). What's drawn at each, topmost first (pick.gd).

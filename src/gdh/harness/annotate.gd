@@ -17,7 +17,6 @@ extends RefCounted
 
 const Common := preload("common.gd")
 const Screen := preload("screen.gd")
-const Track := preload("track.gd")
 
 const LAYERS := ["names", "collisions", "nav", "velocity"]
 ## The most nodes boxed, and the most line points one shape or navigation region gives.
@@ -115,7 +114,7 @@ static func _names(tree: SceneTree, nodes: Array[Node], filters: Dictionary) -> 
 			continue
 		var box: Variant = null
 		if chosen:
-			box = Track.extent(tree, node)
+			box = Screen.extent(tree, node)
 			if box != null:
 				box = (box as Rect2).intersection(Rect2(0, 0, size[0], size[1]))
 				if not (box as Rect2).has_area():

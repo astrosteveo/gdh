@@ -1785,6 +1785,8 @@ def add_parsers(sub):
     measure_cli.add_live_parsers(commands, command)
     motion_cli.add_live_parsers(commands, command)
     feel.add_live_parsers(commands, command)
+    from gdh import compare
+    compare.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

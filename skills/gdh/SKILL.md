@@ -1,6 +1,6 @@
 ---
 name: gdh
-description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, wait for conditions, find and click UI by its text, keep playthroughs as replayable scenarios, run exported builds off-screen, see what the Godot editor itself shows a scene as (tool scripts included), and measure what it draws (flicker, shimmer, line width, NaN and crushed pixels, frame time and budgets, per-pass GPU cost, leaks, audio levels). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
+description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, wait for conditions, find and click UI by its text, keep playthroughs as replayable scenarios, run exported builds off-screen, see what the Godot editor itself shows a scene as (tool scripts included), see motion in one image (trace charts, onion skins, trails, filmstrips, change maps), and measure what it draws (flicker, shimmer, line width, NaN and crushed pixels, frame time and budgets, per-pass GPU cost, leaks, audio levels). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
 ---
 
 # gdh: seeing and driving a Godot game
@@ -53,6 +53,8 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | Did a change alter only what it should? | `gdh capture --baseline`, or `gdh measure diff A B` |
 | Movement, input, animation, physics, timers, scene changes, UI interaction | `gdh live` |
 | A bug that shows up after doing something | `gdh live`: reproduce it step by step, then save it as a scenario |
+| How something moves: its path, timing, easing, overshoot; a pose, flash or transition frame by frame | `gdh live onion`, `step --trail`, `gdh live filmstrip`, `step --trace-chart` ([below](#seeing-motion)) |
+| What moves in a scene that should be still, or what's frozen that should move | `gdh live record`, then its `<dir>-changes.png`, or `gdh measure changes --still` |
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
 | A thin effect's width, a point's size, a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
 | Frame time against a budget, or which render pass costs what | `gdh live bench`; `gdh live start --gpu-passes`, then `gdh live frames` |
@@ -126,11 +128,30 @@ gdh live bench 600 --budget-p99 8.3 --session <name>   # time 600 frames; exit 1
 - **Leaks and sound.** `gdh live monitors --leak` exits 1 when nodes, orphan nodes, objects, resources or video memory grow steadily; `step N --monitors` shows a step's change. `gdh live audio` after a step gives each bus's peak and what played; mixing runs in real time, so step a few hundred frames first.
 - **`black` and `crush` have blind spots:** a black object on purpose in front of something lit reads as a NaN's hole, and which regions should hold detail is yours to choose (`--box`, `--mask`).
 
+## Seeing motion
+
+You see one still frame at a time, so a movement read off a few shots is a guess. Turn it into one image, and numbers:
+
+```sh
+gdh live step 90 --hold ui_accept --trace "get_node('Player').position" --trace-chart jump.png --trace-rates --session <name>
+gdh live onion 40 --node Player --hold ui_right --session <name>        # the frames over each other, oldest faintest
+gdh live step 60 --hold ui_right --trail Player --every 5 --session <name>   # its path; px between dots printed
+gdh live filmstrip 24 --node Player/Sprite --press attack --session <name>  # the same box from each frame
+gdh measure changes <dir>/frames --out changes.png --still              # where a run changed, and how often
+```
+
+- **Spacing is timing.** In an onion skin or a trail, frames at even intervals sit evenly apart for constant speed, bunch where it slows (easing out, a landing) and spread where it speeds up. A trail prints the pixels between its dots, and `--trace-rates` charts velocity and acceleration: report those numbers, not an impression.
+- **Hold the camera still for an onion skin.** A following camera keeps the node in place on screen; an onion skin then shows it standing still, and a note says when the background moves. A trail doesn't need it: it shows the path through the world, seen through the last frame's view.
+- **A filmstrip for what overlaps:** an attack's poses, a one-frame hit flash, a fade. Its cells are scaled up by whole factors, so read it as it is.
+- **A change map for a scene that should be still:** each region is something moving (an animation left running, a flickering light); with `--still`, green on something that should animate means it's frozen.
+
+See `${CLAUDE_PLUGIN_ROOT}/docs/motion.md`.
+
 ## Looking at images
 
 Read PNGs with the Read tool. This is where you catch what logs miss, so don't skip it.
 
-- **Keep each image at about 1280 px wide or less** (`shot --max-width 1280`). Compare frames one at a time or as the same crop of each, never tiled into one image: scaling creates streaks and blotches that aren't in the frame.
+- **Keep each image at about 1280 px wide or less** (`shot --max-width 1280`). Compare frames one at a time or as the same crop of each, never tiled into one image yourself: scaling creates streaks and blotches that aren't in the frame. gdh's filmstrips and onion skins scale only up, by whole factors, so they don't.
 - **Contact sheets are for what's on screen, not for pixels.** `sheet.png` (`gdh movie`), `<dir>-sheet.png` (`live record`, `live measure`) and `gdh measure sheet` show which screen was up when (a dialog left open, a loading screen, black); open single frames for anything finer.
 - **Zoom in for small things.** A floating object, a blurry sprite or a misaligned icon is obvious at 2–4×: the crops in `crops/`, `--tiles`, or `shot --node PATH --zoom 3` / `--crop X,Y,W,H --zoom 3`. `--no-ui` leaves the HUD out, and `gdh live camera --view X,Y,Z:X,Y,Z` looks from anywhere in 3D (`--release` gives the game its camera back).
 - **Debug views affect 3D only.** In a 2D or UI scene all six images are identical: use `find`, `tree` boxes and zoomed shots.

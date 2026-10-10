@@ -161,6 +161,9 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `shot [--view V]... [--label L] [--tiles]` | PNGs of the current frame, in any capture view; `--out`, `--crop`, `--node`, `--zoom`, `--max-width` and `--no-ui` frame them (above) |
 | `step N --shot-every K` | A frame every K frames during the step, to catch flicker, popping and jitter |
 | `step N --shot` | A frame after the step |
+| `step N --trail PATH` | Where a node went over the step, drawn on its last frame with a dot every `--every K` frames, and the pixels between the dots ([motion.md](motion.md#trails)) |
+| `filmstrip N --node PATH` | The same box round a node from each of N frames side by side, labeled with its game frame ([motion.md](motion.md#filmstrips)) |
+| `onion N --node PATH` | A node's movement over N frames as an onion skin: the frames laid over each other, the oldest faintest ([motion.md](motion.md#onion-skins)) |
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N] [--visible-only]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
@@ -185,12 +188,14 @@ A step can run until something holds, and record values as it goes, so waiting f
 gdh live step --until "scene.name == 'Hangar'"                       # check after every frame, stop when it holds
 gdh live step --until "get_node('Ship').landed" --every 10 --max 1200 --hold ui_down
 gdh live step 120 --trace "get_node('Ship').position.y" --trace "GameState.fuel" --every 5 --trace-out fuel.csv
+gdh live step 90 --hold ui_accept --trace "get_node('Player').position" --trace-chart jump.png --trace-rates
 ```
 
 - **`--until EXPR`** runs until EXPR is truthy, checked after every `--every K` frames (default 1). EXPR is a Godot Expression with the same inputs as `eval`. The step stops at the first check that holds, and the reply has the frames run and the value (`"until": {"expr", "met", "value", "frame", "checks"}`). The frame count, or `--max N`, is the most it runs, 3600 frames if neither is given. If EXPR never holds, the step ends there and gdh exits 1, saying what EXPR was at the last check. A check whose evaluation fails (a node that isn't there yet, a scene changing) counts as not yet, and the reply says why (`"error"`).
 - **Input** works as in any step. When `--until` ends the step early, the inputs due at the step's end (a `--hold`'s release) go to the game then, so nothing is left held that the step would have let go. Inputs due later (the rest of a `--type`) don't.
 - **`--trace EXPR`** (repeatable) records each EXPR's value at every check: `"trace": {"exprs", "every", "rows": [[frame, value, ...], ...]}`, where `frame` is the game frame. As text, a row that repeats the one before is left out, and at most 40 rows are shown; `--json` and `--trace-out FILE.csv` have every row. In the CSV a string is as it is, anything else is JSON, and a value whose evaluation failed is empty (`null` in JSON, with the reason in `"failed"` and a note).
-- With several instances, `--until` is refused, since the instances step together and each would stop on its own. `--trace` records every instance's values.
+- **`--trace-chart FILE.png`** draws the trace as a line chart, about 1200 px wide: a panel for each expression with its own vertical scale, all sharing the game-frame axis. A number is one line, a vector a line for each component (x, y, z), and true and false are 1 and 0, drawn as steps. A value that failed leaves a gap. A value of another kind (text, a dictionary) can't be drawn: its panel says so, and so does a note on stderr. Each check gets a dot when the checks are far enough apart to tell apart, so the dots' spacing shows easing: even for constant speed, closer together where it slows. **`--trace-rates`** adds two panels under each expression's: its rate of change per second (velocity, for a position) and the rate of that (acceleration), from the differences between checks at the game's tick rate. A chart is easier to read than rows of numbers for smoothness, overshoot, a camera lagging its target or a value that jumps. `gdh measure chart FILE.csv --out FILE.png` draws a CSV that `--trace-out` wrote, with `--only EXPR` (repeatable) to chart some of its columns, `--rates`, `--ticks N` (the tick rate for the rates, 60 by default) and `--title`.
+- With several instances, `--until` is refused, since the instances step together and each would stop on its own. `--trace` records every instance's values, and `--trace-out` and `--trace-chart` write a file for each, `.0.csv`, `.1.csv` and so on.
 
 ## Problems and the game's output
 

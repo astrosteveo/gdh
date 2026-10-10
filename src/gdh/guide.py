@@ -14,11 +14,15 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live step 30 --hold ui_right --session S               exactly 30 frames, then held
   gdh live step --until "EXPR" --max 1200 --session S        wait for it; exit 1 with the last value
   gdh live step 120 --trace "EXPR" --every 10 --session S    a value, frame by frame
+    ... --trace-chart F.png [--trace-rates]                  as a line chart (with velocity, acceleration)
   gdh live eval "[EXPR, EXPR]" --session S                   several values in one call
   gdh live find TEXT --session S                             visible nodes showing TEXT, with boxes
   gdh live snapshot [PATH] --session S                       the UI on screen as text, with states
   gdh live step 2 --click-text TEXT --session S              or --click-node PATH; fails if covered
   gdh live shot --session S [--node PATH --zoom 2] [--out F.png] [--max-width 1280]
+  gdh live onion 40 --node PATH --hold ui_right --session S  a movement in one image, oldest faintest
+  gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
+  gdh live filmstrip 24 --node PATH --session S               the node's box from each frame, side by side
   gdh live batch --session S < lines.txt                     many CLI lines, one process
   gdh live reload --session S                                GDScript edited: new code, same state
   gdh live restart --replay --session S                      anything else: rebuilt, back to the frame
@@ -42,6 +46,7 @@ MEASURE
   gdh live monitors --leak --session S                       nodes, orphans, memory growing
   gdh live audio --session S                                 bus peaks, what played
   gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black D
+  gdh measure changes D --out map.png [--still]              where it changed, how often; record writes one
 
 BUILDS AND THE EDITOR
   gdh export --project P --preset Linux --smoke 10           build, run it off-screen, fail on errors

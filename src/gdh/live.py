@@ -684,9 +684,8 @@ def with_modifiers(events, mods, n):
     return out + [modifier(m, False, n, held[:i]) for i, m in enumerate(held)][::-1]
 
 
-def cmd_step(args):
-    session = load_session(args.session)
-    n = step_length(args, session)
+def step_input_events(args, n):
+    """The input events of a step of n frames from its input options (add_input_options), in time order."""
     events = []
     for point in args.move:
         x, y = (float(v) for v in point.split(","))
@@ -720,17 +719,25 @@ def cmd_step(args):
             events += [{"mouse_motion": [0, 0], "on": on, "at": 0},
                        {"mouse_button": 1, "on": on, "pressed": True, "at": 0},
                        {"mouse_button": 1, "on": on, "pressed": False, "at": 1}]
-
     events = with_modifiers(events + device_input(args, n), args.mod, n)
     # In time order, each frame's as given: the game follows the pointer, its buttons and the fingers event by event.
     events.sort(key=lambda e: e["at"])
-    step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
+    return events
+
+
+def cmd_step(args):
+    session = load_session(args.session)
+    n = step_length(args, session)
+    step_args = {"frames": n, "events": step_input_events(args, n), "shot_every": args.shot_every}
     step_args.update(watch_args(args))
+    if args.trail:
+        step_args["track"] = args.trail
     if args.monitors:
         step_args["monitors"] = 0  # Godot's Performance monitors before the first frame and after the last (perf.py)
     # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
     reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
-    result = report(reply, args.json)
+    # With --trail, the JSON waits for the trails, which go in it.
+    result = report(reply, args.json, echo=not args.trail)
     if not args.json:
         for prefix, r in each(reply, result):
             print(f"{prefix}stepped {r['frames']} frames")
@@ -747,6 +754,8 @@ def cmd_step(args):
                 from gdh import perf
                 print(perf.describe_run(r["monitors"], prefix))
     unmet = watched(reply, result, args)
+    if args.trail:
+        trails(session, args, reply, result)
     if args.shot:
         shot(session, ["normal"], "after-step", False, args.json, args.instance)
     if unmet:
@@ -763,10 +772,19 @@ TRACE_ROWS = 40
 def step_length(args, session):
     """The frames a step runs: its count (1 if none), or with --until the most it runs: --max, else the count, else
     UNTIL_MAX."""
-    if args.every is not None and not (args.until or args.trace):
-        raise LiveError("--every sets how often --until and --trace check (--shot-every saves frames).")
+    if args.every is not None and not (args.until or args.trace or args.trail):
+        raise LiveError("--every sets how often --until and --trace check, and --trail's dots (--shot-every saves "
+                        "frames).")
+    if args.trail_out and not args.trail:
+        raise LiveError("--trail-out is where --trail's image goes: give a --trail.")
+    if args.trail and len(pick(session, args.instance)) > 1:
+        raise LiveError("--trail draws one instance's frame: give --instance K.")
     if args.trace_out and not args.trace:
         raise LiveError("--trace-out writes the values of --trace.")
+    if args.trace_chart and not args.trace:
+        raise LiveError("--trace-chart draws the values of --trace.")
+    if args.trace_rates and not args.trace_chart:
+        raise LiveError("--trace-rates adds panels to the --trace-chart: give one.")
     if args.until is None:
         if args.max is not None:
             raise LiveError("--max bounds a step with --until.")
@@ -796,10 +814,13 @@ def watched(reply, result, args):
     parts = each(reply, result)
     for i, (prefix, r) in enumerate(parts):
         until, trace = r.get("until"), r.get("trace")
-        path = None
+        path = chart = None
         if trace and args.trace_out:
             path = Path(args.trace_out) if len(parts) == 1 else Path(args.trace_out).with_suffix(f".{i}.csv")
             write_trace(trace, path)
+        if trace and args.trace_chart:
+            chart = Path(args.trace_chart) if len(parts) == 1 else Path(args.trace_chart).with_suffix(f".{i}.png")
+            chart_trace(trace, chart, args.trace_rates, r["status"].get("ticks_per_second", 60), prefix)
         if trace:
             for expr, error in trace.get("failed", {}).items():
                 sys.stdout.flush()
@@ -817,7 +838,60 @@ def watched(reply, result, args):
             print_trace(trace, prefix)
         if path:
             print(f"{prefix}trace: {path}")
+        if chart:
+            print(f"{prefix}chart: {chart}")
     return unmet
+
+
+# The most dots' spacings printed for a trail (--json has them all).
+TRAIL_SPACINGS = 24
+
+
+def trails(session, args, reply, result):
+    """Draw a step's --trail over a shot of its last frame, and print where it went (or put it in the JSON)."""
+    from gdh import motion
+    if isinstance(result, list):
+        result = result[pick(session, args.instance)[0]]
+    shots = call(session, "shot", {"views": ["normal"], "label": "trail"}, instance=args.instance)
+    frame = report(shots, False)["shots"]["normal"]
+    out = Path(args.trail_out) if args.trail_out else Path(frame).with_name(Path(frame).name.replace("-normal", ""))
+    every = args.every or 1
+    drawn = motion.draw_trails(frame, [{"node": node, "points": result["track"][node]["points"]} for node in args.trail],
+                               every, out)
+    if not args.trail_out:
+        Path(frame).unlink(missing_ok=True)
+    if args.json:
+        reply["trails"] = {"image": str(out), "every": every, "trails": drawn}
+        print(json.dumps(reply, indent=2))
+        return
+    print(f"trail: {out}")
+    for t in drawn:
+        known = [d for d in t["dots"] if d[1] is not None]
+        spacing = t["spacing"]
+        shown = ", ".join("-" if v is None else f"{v:g}" for v in spacing[:TRAIL_SPACINGS])
+        more = f" ... {len(spacing) - TRAIL_SPACINGS} more (--json has them all)" if len(spacing) > TRAIL_SPACINGS else ""
+        where = (f"from {known[0][1]:g},{known[0][2]:g} at frame {known[0][0]} to {known[-1][1]:g},{known[-1][2]:g} at "
+                 f"frame {known[-1][0]}") if known else "never on screen"
+        print(f"  {t['node']}: {where}; px between dots every {every} frames: {shown or 'none'}{more}")
+        sys.stdout.flush()
+        if t["off_screen"]:
+            print(f"note: trail {t['node']}: {t['off_screen']} of its points were off screen, so its line leaves the "
+                  f"frame there", file=sys.stderr)
+        if t["missing"]:
+            print(f"note: trail {t['node']}: {t['missing']} of its points have no place on screen (behind the camera, "
+                  f"or the node gone), so its line breaks there", file=sys.stderr)
+
+
+def chart_trace(trace, path, rates, ticks, prefix=""):
+    """Draw a trace as a chart (chart.py), with a note on stderr for each expression it couldn't draw."""
+    from gdh import chart
+    try:
+        _, notes = chart.trace_chart(trace, path, rates, ticks)
+    except chart.ChartError as e:
+        raise LiveError(str(e)) from None
+    for note in notes:
+        sys.stdout.flush()
+        print(f"{prefix}note: chart: {note}", file=sys.stderr)
 
 
 def print_trace(trace, prefix=""):
@@ -1361,6 +1435,53 @@ def add_display_option(parser):
                              "(default: $GDH_DISPLAY, else auto)")
 
 
+def add_input_options(p):
+    """A step's input options: step's own, and the motion commands' that step (motion_cli.py)."""
+    p.add_argument("--move", action="append", default=[], metavar="X,Y",
+                   help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
+    p.add_argument("--press", action="append", default=[], metavar="INPUT",
+                   help="Press at the start and keep it pressed. INPUT is an action name, key:NAME (key:ctrl+s with "
+                        "its modifiers), mouse:left, mouse:right or mouse:middle (at the pointer), or a gamepad's "
+                        "joy:NAME (joy:a, joy:start, joy:dpad_up...)")
+    p.add_argument("--release", action="append", default=[], metavar="INPUT", help="Release at the start")
+    p.add_argument("--hold", action="append", default=[], metavar="INPUT",
+                   help="Press at the start, release at the end")
+    p.add_argument("--tap", action="append", default=[], metavar="INPUT", help="Press for one frame")
+    p.add_argument("--type", metavar="TEXT", help="Type TEXT into whatever has the keyboard's focus, a character a frame from the step's start")
+    p.add_argument("--click", action="append", default=[], metavar="X,Y", help="Left click at screenshot pixel X,Y")
+    p.add_argument("--right-click", action="append", default=[], metavar="X,Y", help="Right click at screenshot pixel X,Y")
+    p.add_argument("--left-hold", action="append", default=[], metavar="X,Y",
+                   help="Press the left button at screenshot pixel X,Y at the start, release it at the end")
+    p.add_argument("--right-hold", action="append", default=[], metavar="X,Y",
+                   help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
+    p.add_argument("--click-text", action="append", default=[], metavar="TEXT",
+                   help="Left click the node that shows TEXT (exactly, in any case; else the one whose text holds it), "
+                        "at the centre of what shows of it. None, or several, fails, naming them")
+    p.add_argument("--click-node", action="append", default=[], metavar="PATH",
+                   help="Left click a node (a path from the current scene, or /root/...) at the centre of what shows of it")
+
+    p.add_argument("--wheel", action="append", default=[], metavar="DIR[:N]",
+                   help="Turn the mouse wheel up, down, left or right N notches (default 1) where the pointer is, a "
+                        "notch a frame from the step's start")
+    p.add_argument("--wheel-at", metavar="X,Y",
+                   help="Move the pointer to screenshot pixel X,Y first, and turn the wheel there")
+    p.add_argument("--mod", action="append", default=[], metavar="MODS",
+                   help="Hold ctrl, shift, alt or meta (comma-separated) for the step: pressed at its start, released "
+                        "at its end, and carried by its keys, clicks, wheel and pointer moves")
+    p.add_argument("--axis", action="append", default=[], metavar="NAME=VALUE",
+                   help="Put a gamepad axis at VALUE (-1 to 1) at the start, where it stays until another --axis moves "
+                        "it: left_x, left_y, right_x, right_y, trigger_left or trigger_right")
+    p.add_argument("--touch", action="append", default=[], metavar="X,Y",
+                   help="Tap the touchscreen at screenshot pixel X,Y for one frame. Each --touch, then each "
+                        "--touch-drag, is a finger of its own, numbered from 0")
+    p.add_argument("--touch-drag", action="append", default=[], metavar="X,Y:X,Y",
+                   help="Put a finger down at the first point at the start, move it evenly to the second over the "
+                        "step, and lift it at the end")
+    p.add_argument("--look", action="append", default=[], metavar="DX,DY",
+                   help="Move the mouse by DX,DY screenshot pixels at the start: relative motion, for mouse-look (a "
+                        "captured mouse stays at the window's centre). A negative DX needs =: --look=-40,0")
+
+
 def add_parsers(sub):
     from gdh import blackbox
     live = sub.add_parser("live", help="Start a game off-screen and drive it step by step")
@@ -1455,49 +1576,7 @@ def add_parsers(sub):
                 instance="Which instance gets the input: a number, or all (default 0). Every instance steps")
     p.add_argument("frames", type=int, nargs="?", default=None,
                    help="How many frames (default 1); with --until, the most")
-    p.add_argument("--move", action="append", default=[], metavar="X,Y",
-                   help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
-    p.add_argument("--press", action="append", default=[], metavar="INPUT",
-                   help="Press at the start and keep it pressed. INPUT is an action name, key:NAME (key:ctrl+s with "
-                        "its modifiers), mouse:left, mouse:right or mouse:middle (at the pointer), or a gamepad's "
-                        "joy:NAME (joy:a, joy:start, joy:dpad_up...)")
-    p.add_argument("--release", action="append", default=[], metavar="INPUT", help="Release at the start")
-    p.add_argument("--hold", action="append", default=[], metavar="INPUT",
-                   help="Press at the start, release at the end")
-    p.add_argument("--tap", action="append", default=[], metavar="INPUT", help="Press for one frame")
-    p.add_argument("--type", metavar="TEXT", help="Type TEXT into whatever has the keyboard's focus, a character a frame from the step's start")
-    p.add_argument("--click", action="append", default=[], metavar="X,Y", help="Left click at screenshot pixel X,Y")
-    p.add_argument("--right-click", action="append", default=[], metavar="X,Y", help="Right click at screenshot pixel X,Y")
-    p.add_argument("--left-hold", action="append", default=[], metavar="X,Y",
-                   help="Press the left button at screenshot pixel X,Y at the start, release it at the end")
-    p.add_argument("--right-hold", action="append", default=[], metavar="X,Y",
-                   help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
-    p.add_argument("--click-text", action="append", default=[], metavar="TEXT",
-                   help="Left click the node that shows TEXT (exactly, in any case; else the one whose text holds it), "
-                        "at the centre of what shows of it. None, or several, fails, naming them")
-    p.add_argument("--click-node", action="append", default=[], metavar="PATH",
-                   help="Left click a node (a path from the current scene, or /root/...) at the centre of what shows of it")
-
-    p.add_argument("--wheel", action="append", default=[], metavar="DIR[:N]",
-                   help="Turn the mouse wheel up, down, left or right N notches (default 1) where the pointer is, a "
-                        "notch a frame from the step's start")
-    p.add_argument("--wheel-at", metavar="X,Y",
-                   help="Move the pointer to screenshot pixel X,Y first, and turn the wheel there")
-    p.add_argument("--mod", action="append", default=[], metavar="MODS",
-                   help="Hold ctrl, shift, alt or meta (comma-separated) for the step: pressed at its start, released "
-                        "at its end, and carried by its keys, clicks, wheel and pointer moves")
-    p.add_argument("--axis", action="append", default=[], metavar="NAME=VALUE",
-                   help="Put a gamepad axis at VALUE (-1 to 1) at the start, where it stays until another --axis moves "
-                        "it: left_x, left_y, right_x, right_y, trigger_left or trigger_right")
-    p.add_argument("--touch", action="append", default=[], metavar="X,Y",
-                   help="Tap the touchscreen at screenshot pixel X,Y for one frame. Each --touch, then each "
-                        "--touch-drag, is a finger of its own, numbered from 0")
-    p.add_argument("--touch-drag", action="append", default=[], metavar="X,Y:X,Y",
-                   help="Put a finger down at the first point at the start, move it evenly to the second over the "
-                        "step, and lift it at the end")
-    p.add_argument("--look", action="append", default=[], metavar="DX,DY",
-                   help="Move the mouse by DX,DY screenshot pixels at the start: relative motion, for mouse-look (a "
-                        "captured mouse stays at the window's centre). A negative DX needs =: --look=-40,0")
+    add_input_options(p)
     p.add_argument("--shot-every", type=int, default=0, metavar="K", help="Save a frame every K frames")
     p.add_argument("--shot", action="store_true", help="Save a frame after stepping")
     p.add_argument("--until", metavar="EXPR",
@@ -1508,7 +1587,18 @@ def add_parsers(sub):
                    help="Record EXPR's value after every --every frames; repeatable")
     p.add_argument("--every", type=int, metavar="K", help="Check --until and --trace every K frames (default 1)")
     p.add_argument("--trace-out", metavar="FILE.csv", help="Also write the --trace values here as CSV")
+    p.add_argument("--trace-chart", metavar="FILE.png",
+                   help="Also draw the --trace values as a line chart: a panel for each expression, a line for each "
+                        "component of a vector, against game frames")
+    p.add_argument("--trace-rates", action="store_true",
+                   help="With --trace-chart: add each expression's rate of change per second and the rate of that "
+                        "(velocity and acceleration for a position)")
 
+    p.add_argument("--trail", action="append", default=[], metavar="PATH",
+                   help="Draw where this node went over the step on a shot of its last frame, seen through that "
+                        "frame's view, with a dot every --every frames; repeatable")
+    p.add_argument("--trail-out", metavar="FILE.png",
+                   help="Where --trail's image goes (default: the session's shots, as NNNN-trail.png)")
     p.add_argument("--monitors", action="store_true",
                    help="Godot's Performance monitors (objects, nodes, orphan nodes, draw calls, video memory...) "
                         "before and after the step, and their change")
@@ -1586,8 +1676,9 @@ def add_parsers(sub):
     p.add_argument("--stop-on-error", action="store_true", help="Stop at the first command that fails")
     command("list", cmd_list, "List every live session: project, scene, pids, displays, age")
 
-    from gdh import measure_cli
+    from gdh import measure_cli, motion_cli
     measure_cli.add_live_parsers(commands, command)
+    motion_cli.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

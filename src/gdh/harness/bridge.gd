@@ -22,6 +22,7 @@ const ErrorCollector := preload("errors.gd")
 const Probes := preload("probes.gd")
 const Reload := preload("reload.gd")
 const Screen := preload("screen.gd")
+const Track := preload("track.gd")
 
 const Monitors := preload("monitors.gd")
 
@@ -284,7 +285,8 @@ func _set_held(held: bool) -> void:
 ## args: frames, events [{at, ...event}], shot_every, views, cover_every (sample the panels over the screen's centre
 ## every K frames: covered.gd), until, trace and every (_watch_start), warmup (seconds of held frames drawn back to
 ## back first, so the GPU has clocked up), clear_record (start the frame record over just before the first frame),
-## monitors (-1: none; 0: the Performance monitors before the first frame and after the last; K: every K frames too).
+## monitors (-1: none; 0: the Performance monitors before the first frame and after the last; K: every K frames too),
+## track ([node path, ...]: where each is before the first frame and after every frame, track.gd).
 ## Events with "at": k are injected before frame k+1 of the step (0 = before
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
@@ -309,6 +311,12 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	var watch := _watch_start(args)
 	if watch.has("error"):
 		return {"error": watch.error}
+	var track: Track = null
+	if args.get("track") is Array and not args.track.is_empty():
+		track = Track.new(get_tree(), args.track)
+		if not track.error.is_empty():
+			return {"error": track.error}
+		track.sample(_game_frames)
 
 	# gdh live bench: no gap for the GPU to idle and clock down between the warm-up, the record's start and the step.
 	var warm_until := Time.get_ticks_msec() + int(float(args.get("warmup", 0.0)) * 1000.0)
@@ -324,6 +332,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	var start_frame := _game_frames
 	_set_held(false)
 	var shots := []
+	var shot_frames := []
 	for i in frames + 1:
 		_warp_pointer(timeline.get(i, []))
 		for event in timeline.get(i, []):
@@ -334,9 +343,12 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			Input.flush_buffered_events()
 			break
 		await _frame_done
+		if track != null:
+			track.sample(_game_frames)
 		if shot_every > 0 and (i + 1) % shot_every == 0:
 			await RenderingServer.frame_post_draw
 			shots.append(_save_image("step-f%d" % (i + 1)))
+			shot_frames.append(_game_frames)
 		if cover_every > 0 and (i + 1) % cover_every == 0:
 			cover_samples.append(Covered.sample(get_tree()))
 		if not watch.is_empty() and _watch_check(watch, i + 1):
@@ -355,6 +367,10 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	_set_held(was_held)
 	Common.wait_saves()  # every frame written before the reply names it
 	var result := {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
+	if not shots.is_empty():
+		result.shot_frames = shot_frames
+	if track != null:
+		result.track = track.result()
 	if cover_every > 0:
 		result.cover_samples = cover_samples
 	if not watch.is_empty():

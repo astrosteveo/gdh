@@ -20,6 +20,7 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live snapshot [PATH] --session S                       the UI on screen as text, with states
   gdh live step 2 --click-text TEXT --session S              or --click-node PATH; fails if covered
   gdh live shot --session S [--node PATH --zoom 2] [--out F.png] [--max-width 1280]
+    ... --annotate [names,collisions,nav,velocity|all] [--filter class:X]   which node drew what, numbered
   gdh live onion 40 --node PATH --hold ui_right --session S  a movement in one image, oldest faintest
   gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
   gdh live filmstrip 24 --node PATH --session S               the node's box from each frame, side by side

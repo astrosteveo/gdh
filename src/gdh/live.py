@@ -921,9 +921,9 @@ def write_trace(trace, path):
             out.writerow([row[0], *("" if v is None else v if isinstance(v, str) else json.dumps(v) for v in row[1:])])
 
 
-def shot(session, views, label, tiles, as_json, instance=0, framing=None):
+def shot(session, views, label, tiles, as_json, instance=0, framing=None, echo=True):
     reply = call(session, "shot", {"views": views, "label": label, **(framing or {})}, instance=instance)
-    result = report(reply, as_json)
+    result = report(reply, as_json, echo)
     for prefix, r in each(reply, result):
         for view, path in r["shots"].items():
             if not as_json:
@@ -958,8 +958,60 @@ def cmd_shot(args):
         framing["max_width"] = args.max_width
     if args.no_ui:
         framing["no_ui"] = True
-    shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance, framing)
+    if args.filter and args.annotate is None:
+        raise LiveError("--filter picks what --annotate labels: give --annotate.")
+    if args.annotate is None:
+        shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance, framing)
+        return 0
+    from gdh import annotate
+    try:
+        layers, filters = annotate.parse_layers(args.annotate), annotate.parse_filters(args.filter)
+    except annotate.AnnotateError as e:
+        raise LiveError(str(e)) from None
+    if len(pick(session, args.instance)) > 1:
+        raise LiveError("--annotate labels one instance's shot: give --instance K.")
+    result = shot(session, args.view or ["normal"], args.label, args.tiles, args.json, args.instance, framing,
+                  echo=False)
+    reply = call(session, "annotate", {"layers": layers, "filter": filters, "no_ui": args.no_ui},
+                 instance=args.instance)
+    found = report(reply, args.json, echo=False)
+    if result.get("crop"):  # only what's in a framed shot
+        x, y, w, h = result["crop"]
+        found["nodes"] = [n for n in found.get("nodes", []) if n["box"][0] < x + w and n["box"][0] + n["box"][2] > x
+                          and n["box"][1] < y + h and n["box"][1] + n["box"][3] > y]
+    for n, node in enumerate(found.get("nodes", []), 1):
+        node["n"] = n
+    frame = annotate.Frame(found["image_size"], result.get("crop"), result.get("size"))
+    images = {}
+    for view, path in result["shots"].items():
+        images[view] = str(Path(path).with_name(Path(path).stem + "-annotated.png"))
+        drawn = annotate.draw(path, found, frame, images[view])
+    if args.json:
+        print(json.dumps({**result, "annotated": images, "annotations": found, **drawn}, indent=2))
+        return 0
+    print_annotations(images, found, drawn)
     return 0
+
+
+def print_annotations(images, found, drawn):
+    """An annotated shot's files, and each numbered node with its box, as text."""
+    for view, path in images.items():
+        print(f"{view} annotated: {path}")
+    for node in found.get("nodes", []):
+        print(f"  {node['n']}: {node['path']} ({node['class']}) box={node['box']}")
+    if found.get("more"):
+        print(f"  ... {found['more']} more not boxed (at most {len(found['nodes'])}): narrow it with --filter")
+    for node in found.get("backdrops", []):
+        print(f"  backdrop, not boxed: {node['path']} ({node['class']}) box={node['box']}")
+    for shape in found.get("shapes", []):
+        print(f"  collision {shape['kind']}: {shape['path']}")
+    for region in found.get("nav", []):
+        print(f"  navigation: {region['path']}, {len(region['polygons'])} polygons")
+    for v in found.get("velocity", []):
+        print(f"  velocity: {v['path']} {v['speed']:g} {v['unit']}")
+    if drawn["numbered"]:
+        many = drawn["numbered"] > 1
+        print(f"  ({drawn['numbered']} label{'s' if many else ''} had no room: {'those nodes show their number' if many else 'that node shows its number'} only)")
 
 
 def numbers(text, count, option):
@@ -1618,6 +1670,12 @@ def add_parsers(sub):
                    help="Scale down to at most W pixels wide, for reading the image (never up)")
     p.add_argument("--no-ui", action="store_true",
                    help="Leave the UI out of this shot: hide every CanvasLayer over the game (layer 1 and up) for it")
+    p.add_argument("--annotate", nargs="?", const="names", metavar="LAYERS",
+                   help="Also save each view annotated (NAME-annotated.png): names (the default; each node that "
+                        "draws, boxed and numbered), collisions, nav, velocity, comma-separated, or all")
+    p.add_argument("--filter", action="append", default=[], metavar="WHAT",
+                   help="With --annotate: only what's under node PATH, or in group:NAME, or of class:NAME (a class "
+                        "name labels those nodes, drawn or not); repeat to narrow")
 
     command("probes", cmd_probes, "Run the probes on the current frame", instance=one)
 

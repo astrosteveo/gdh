@@ -15,6 +15,7 @@ extends Node
 ## while the client thinks. "step" runs an exact number of frames. With
 ## --fixed-fps set to the physics tick rate, each frame is one physics tick.
 
+const Annotate := preload("annotate.gd")
 const Camera := preload("camera.gd")
 const Common := preload("common.gd")
 const Covered := preload("covered.gd")
@@ -243,6 +244,8 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_find(args)
 		"snapshot":
 			result = _cmd_snapshot(args)
+		"annotate":
+			result = _cmd_annotate(args)
 		"camera":
 			result = Camera.command(get_tree(), args)
 		"frames":
@@ -494,6 +497,21 @@ func _cmd_snapshot(args: Dictionary) -> Dictionary:
 		if from == null:
 			return {"error": "No node at %s." % args.path}
 	return {"nodes": Screen.snapshot(get_tree(), from)}
+
+
+## args: layers (annotate.gd's LAYERS; default names), filter ({path, group, class}), no_ui (leave out the UI drawn
+## on CanvasLayers 1 and up, as a shot --no-ui does). What's on screen as geometry, for a shot's --annotate.
+func _cmd_annotate(args: Dictionary) -> Dictionary:
+	var layers: Array = args.get("layers", ["names"])
+	for layer in layers:
+		if not Annotate.LAYERS.has(layer):
+			return {"error": "Unknown layer %s. Layers: %s, or all" % [layer, ", ".join(Annotate.LAYERS)]}
+	var filters: Dictionary = args.get("filter", {})
+	var hidden := Screen.hide_ui(get_tree()) if args.get("no_ui", false) else []
+	var found := Annotate.collect(get_tree(), layers, filters)
+	Screen.show_layers(get_tree(), hidden)
+	found.image_size = Common.image_size(get_tree())
+	return found
 
 
 ## Events aimed at a node: "on": {"node": PATH} or {"text": TEXT} puts a mouse event at the centre of the part of it

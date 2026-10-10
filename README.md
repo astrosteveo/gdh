@@ -144,6 +144,7 @@ gdh live step 120 --trace "get_node('Ship').position.y"       # a value, frame b
 gdh live find Play                                             # what shows "Play", and where
 gdh live step 2 --click-text Play                              # click it, no coordinates
 gdh live shot --node UI/Inventory --zoom 2 --out inv.png       # that part of the frame, zoomed
+gdh live shot --annotate all --filter class:Enemy               # each node boxed and named, shapes, nav, velocities
 gdh live batch --session s < commands.txt                      # many commands, one process
 ```
 
@@ -350,6 +351,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/api.py`, `testing.py`, `export.py` | `gdh api`, `gdh test` and `gdh export` |
 | `src/gdh/harness/capture.gd` | Runs inside Godot. Saves the views, runs the probes and writes `report.json`. |
 | `src/gdh/harness/live.gd`, `bridge.gd` | Run inside Godot for `gdh live`. The bridge takes commands over a local socket. |
+| `src/gdh/annotate.py`, `src/gdh/harness/annotate.gd` | `gdh live shot --annotate`: the geometry the game reports, and the drawing and labels over the shot |
 | `src/gdh/harness/screen.gd`, `camera.gd` | Where nodes show on screen, for `find`, clicks by text or node and framed shots; and gdh's camera for `gdh live camera` |
 | `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
 | `src/gdh/harness/movie.gd` | The main loop for `gdh movie`: runs the scene for the frames asked for under Movie Maker |

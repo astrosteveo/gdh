@@ -27,6 +27,8 @@ static func box(tree: SceneTree, node: Node) -> Variant:
 			rect = Rect2(Vector2.ZERO, (node as Control).size)
 		elif node.has_method("get_rect") and node.get_rect() is Rect2:
 			rect = node.get_rect()
+		else:
+			rect = _drawn_rect(node)
 		return Common.to_shot(tree, (to_root as Transform2D) * (node as CanvasItem).get_global_transform_with_canvas() * rect)
 	var camera := node.get_viewport().get_camera_3d()
 	if camera == null:
@@ -47,6 +49,42 @@ static func box(tree: SceneTree, node: Node) -> Variant:
 	for p in seen:
 		rect = rect.expand(p)
 	return Common.to_shot(tree, (to_root as Transform2D) * rect)
+
+
+## What a 2D node with no get_rect draws, in its own coordinates: a Polygon2D's polygon, a Line2D's points and width,
+## an AnimatedSprite2D's frame, a TileMapLayer's used cells. A Rect2 of no size for anything else (a point).
+static func _drawn_rect(node: Node) -> Rect2:
+	var points := PackedVector2Array()
+	var grow := 0.0
+	if node is Polygon2D:
+		var polygon := node as Polygon2D
+		for p in polygon.polygon:
+			points.append(p + polygon.offset)
+	elif node is Line2D:
+		points = (node as Line2D).points
+		grow = (node as Line2D).width / 2
+	elif node is AnimatedSprite2D:
+		var sprite := node as AnimatedSprite2D
+		if sprite.sprite_frames != null and sprite.sprite_frames.has_animation(sprite.animation):
+			var texture := sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
+			if texture != null:
+				var size := texture.get_size()
+				var at := sprite.offset - (size / 2 if sprite.centered else Vector2.ZERO)
+				return Rect2(at, size)
+	elif node is TileMapLayer:
+		var layer := node as TileMapLayer
+		var used := layer.get_used_rect()
+		if used.has_area() and layer.tile_set != null:
+			var half := Vector2(layer.tile_set.tile_size) / 2
+			var a := layer.map_to_local(used.position) - half
+			var b := layer.map_to_local(used.end - Vector2i.ONE) + half
+			return Rect2(a, b - a)
+	if points.is_empty():
+		return Rect2()
+	var rect := Rect2(points[0], Vector2.ZERO)
+	for p in points:
+		rect = rect.expand(p)
+	return rect.grow(grow)
 
 
 ## From a viewport's coordinates to the root viewport's: through the windows embedded in it (a dialog) and the

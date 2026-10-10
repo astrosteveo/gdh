@@ -54,11 +54,14 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | Movement, input, animation, physics, timers, scene changes, UI interaction | `gdh live` |
 | A bug that shows up after doing something | `gdh live`: reproduce it step by step, then save it as a scenario |
 | How something moves: its path, timing, easing, overshoot; a pose, flash or transition frame by frame | `gdh live onion`, `step --trail`, `gdh live filmstrip`, `step --trace-chart` ([below](#seeing-motion)) |
+| Whether it holds up on other screens and settings: ultrawide, a phone, a Steam Deck, low quality | `gdh capture --matrix [16:9,21:9,phone] --quality low,high`: one grid, each cell a capture with its probe findings |
+| A choice of taste: which value of a setting looks best | `gdh live sweep "OBJ.PROP=V1,V2,V3"`: one grid of the options; then `gdh review --from SWEEP.json --out DIR --wait` for the user to pick, and their choice comes back (`${CLAUDE_PLUGIN_ROOT}/docs/compare.md`) |
 | Responsiveness and movement: input latency, speeds, jumps, coyote time, hit-stop, shake, camera lag | `gdh live latency`, `feel`, `hitstop`, `shake`, `follow` (`${CLAUDE_PLUGIN_ROOT}/docs/feel.md`) |
 | What moves in a scene that should be still, or what's frozen that should move | `gdh live record`, then its `<dir>-changes.png`, or `gdh measure changes --still` |
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
 | A thin effect's width, a point's size, a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
 | Frame time against a budget, or which render pass costs what | `gdh live bench`; `gdh live start --gpu-passes`, then `gdh live frames` |
+| Which script functions a slow frame spent its time in | `gdh live start --profiler`, then `gdh live profile N`: the game's functions by self and total time, overall and on the spike frames |
 | Leaks, sound | `gdh live monitors --leak`, `gdh live audio` |
 | An exported build, a launcher, anything where `OS.has_feature("editor")` matters | `gdh live start --binary PATH`; `gdh export --smoke` |
 | What the editor shows: tool scripts, `@tool` previews | `gdh editor` |

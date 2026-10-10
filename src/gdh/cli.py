@@ -18,7 +18,7 @@ import argparse
 import re
 import sys
 
-from gdh import api, editor, editor_bridge, export, guide, live, measure_cli, movie, scenario, testing
+from gdh import api, editor, editor_bridge, export, guide, live, measure_cli, movie, review, scenario, testing
 from gdh.capture import cmd_capture
 from gdh.display import default_choice
 from gdh.godot import GdhError
@@ -53,6 +53,15 @@ def build_parser():
                      help="With --baseline: the percent of a view's pixels that may change (0)")
     cap.add_argument("--threshold", type=float, default=2.0,
                      help="With --baseline: a pixel has changed when a channel differs by more than this (2, of 255)")
+    cap.add_argument("--matrix", nargs="?", const="", metavar="SCREENS",
+                     help="Capture at each screen, comma-separated: 16:9, 16:10, 21:9, 32:9, 4:3, deck, phone, "
+                          "phone-landscape, tablet, or WxH (default 16:9,21:9,4:3,deck,phone), by each --quality, "
+                          "into a directory each, and lay them out in matrix.png")
+    cap.add_argument("--quality", metavar="PRESETS",
+                     help="With --matrix: project (the project's own settings; the default), low, medium, high, "
+                          "comma-separated: rendering settings written into an override.cfg for each run")
+    cap.add_argument("--set", action="append", default=[], metavar="SECTION/KEY=VALUE",
+                     help="With --matrix: a project setting for every cell, on top of its quality; repeatable")
     cap.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     cap.add_argument("--no-import", action="store_true",
                      help="Don't import the project first when its import cache is missing or stale")
@@ -73,6 +82,7 @@ def build_parser():
     movie.add_parser(sub, live.add_display_option)
     measure_cli.add_parsers(sub)
     guide.add_parser(sub)
+    review.add_parser(sub)
     return parser
 
 

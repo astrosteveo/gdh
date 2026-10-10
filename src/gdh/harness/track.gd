@@ -6,7 +6,7 @@ extends RefCounted
 ##   track.result()                                              # {path: {class, rows, points}}
 ##
 ## Each sample keeps the node's extent on screen at that frame, in screenshot pixels: the box round it and its visible
-## descendants (Screen.box of each), since a Node2D or Node3D is often drawn by its children, or none while it's
+## descendants (Screen.extent), since a Node2D or Node3D is often drawn by its children, or none while it's
 ## hidden. It also keeps where the node is in its world: a Node2D's or Node3D's global position, or a Control's middle.
 ## At the end those positions are seen through the last view the node was seen through (its canvas transform, or its
 ## viewport's 3D camera), so a trail drawn on the last frame shows the path through the world even when the camera
@@ -14,9 +14,6 @@ extends RefCounted
 
 const Common := preload("common.gd")
 const Screen := preload("screen.gd")
-
-## The most nodes under a tracked node whose boxes make up its extent.
-const EXTENT_NODES := 256
 
 var error := ""
 var _tree: SceneTree
@@ -43,7 +40,7 @@ func sample(frame: int) -> void:
 		if not is_instance_valid(node) or not node.is_inside_tree():
 			entry.rows.append([frame, null, null])
 			continue
-		var found: Variant = extent(_tree, node) if Screen.hidden_by(node).is_empty() else null
+		var found: Variant = Screen.extent(_tree, node) if Screen.hidden_by(node).is_empty() else null
 		var box: Variant = Screen.to_array(found) if found != null else null
 		var world: Variant = null
 		if node is CanvasItem:
@@ -56,25 +53,6 @@ func sample(frame: int) -> void:
 			world = (node as Node3D).global_position
 			entry.view = _view_3d(node as Node3D)
 		entry.rows.append([frame, box, world])
-
-
-## The box round a node and its visible descendants on screen (at most EXTENT_NODES of them), or null when none of
-## them has a place there. A node that is a point (a Node2D with nothing drawn under it) gives a box of no size.
-static func extent(tree: SceneTree, node: Node) -> Variant:
-	var out: Variant = null
-	var queue: Array[Node] = [node]
-	var seen := 0
-	while not queue.is_empty() and seen < EXTENT_NODES:
-		var at: Node = queue.pop_front()
-		seen += 1
-		if at != node and ((at is CanvasItem and not (at as CanvasItem).visible) or (at is Node3D and not (at as Node3D).visible)
-				or at is CanvasLayer or at is Viewport):
-			continue  # hidden, or drawn in a space of its own
-		var found: Variant = Screen.box(tree, at)
-		if found != null:
-			out = found if out == null else (out as Rect2).merge(found)
-		queue.append_array(at.get_children())
-	return out
 
 
 ## The view a CanvasItem was last seen through: from its canvas's coordinates to screenshot pixels (through its

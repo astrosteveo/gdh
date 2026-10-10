@@ -8,13 +8,13 @@ LOOK
   gdh capture --project P --scene res://s.tscn --out D     6 views, errors, probe findings, crops/
   gdh capture ... --baseline B [--update-baseline]           exit 1 naming each view that changed
   gdh measure diff a.png b.png --out D                       share changed, its box, crop.png
+  gdh capture ... --matrix [16:9,21:9,phone] [--quality low,high]   each screen and quality, one grid
 
 PLAY (one session per task, a name of your own; always stop it)
   gdh live start --project P --session S [--scene res://...] [--recipe F] [--seed N] [--timeline] [-- game args]
   gdh live step 30 --hold ui_right --session S               exactly 30 frames, then held
   gdh live step --until "EXPR" --max 1200 --session S        wait for it; exit 1 with the last value
-  gdh live step 120 --trace "EXPR" --every 10 --session S    a value, frame by frame
-    ... --trace-chart F.png [--trace-rates]                  as a line chart (with velocity, acceleration)
+  gdh live step 120 --trace "EXPR" --trace-chart F.png --session S   a value per frame, and charted
   gdh live eval "[EXPR, EXPR]" --session S                   several values in one call
   gdh live find TEXT --session S                             visible nodes showing TEXT, with boxes
   gdh live pick X,Y [X,Y...] --session S                     what's drawn at a pixel: node, texture, surface
@@ -22,9 +22,6 @@ PLAY (one session per task, a name of your own; always stop it)
   gdh live step 2 --click-text TEXT --session S              or --click-node PATH; fails if covered
   gdh live shot --session S [--node PATH --zoom 2] [--out F.png] [--max-width 1280]
     ... --annotate [names,collisions,nav,velocity|all] [--filter class:X]   which node drew what, numbered
-  gdh live onion 40 --node PATH --hold ui_right --session S  a movement in one image, oldest faintest
-  gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
-  gdh live filmstrip 24 --node PATH --session S               the node's box from each frame, side by side
   gdh live batch --session S < lines.txt                     many CLI lines, one process
   gdh live reload --session S                                GDScript edited: new code, same state
   gdh live restart --replay --session S                      anything else: rebuilt, back to the frame
@@ -38,10 +35,14 @@ INPUT (step options)
   --axis left_x=0.5  --touch X,Y  --touch-drag X,Y:X,Y  --look DX,DY
   Positions are screenshot pixels. A frame is one physics tick.
 
+SEE MOTION, CHOOSE
+  gdh live onion 40 --node PATH --hold ui_right --session S  frames over each other (filmstrip: side by side)
+  gdh live step 60 --trail PATH --every 5 --session S         its path on the last frame; px between dots
+  gdh live sweep "OBJ.PROP=V1,V2,V3" --session S              a grid of options; gdh review --from it --wait
+
 KEEP IT
   gdh live save-scenario --session S test/x.scenario.json    then add "expect" checks
-  gdh scenario run test/x.scenario.json                      replays frame-exactly; gdh test runs it too
-  Python: from gdh.client import Session
+  gdh scenario run test/x.scenario.json                      replays frame-exactly; gdh test too; gdh.client
 
 FEEL
   gdh live latency --press ui_accept --watch EXPR --node PATH --session S   frames to the state, to the pixels
@@ -50,10 +51,10 @@ FEEL
 
 MEASURE
   gdh live bench 600 --budget-p99 8.3 --session S            frame times; exit 1 over budget
+  gdh live profile 600 --session S                           (start --profiler) which script functions took it
   gdh live monitors --leak --session S                       nodes, orphans, memory growing
   gdh live audio --session S                                 bus peaks, what played
-  gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black D
-  gdh measure changes D --out map.png [--still]              where it changed, how often; record writes one
+  gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black|changes D
 
 BUILDS AND THE EDITOR
   gdh export --project P --preset Linux --smoke 10           build, run it off-screen, fail on errors

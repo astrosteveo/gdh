@@ -8,6 +8,8 @@ const Common := preload("common.gd")
 ## At most this many matches in a reply, and this many of the hidden ones.
 const MAX_MATCHES := 50
 const MAX_HIDDEN := 10
+## The most nodes under a node whose boxes make up its extent.
+const EXTENT_NODES := 256
 
 
 # --- Boxes ----------------------------------------------------------------------
@@ -85,6 +87,25 @@ static func _drawn_rect(node: Node) -> Rect2:
 	for p in points:
 		rect = rect.expand(p)
 	return rect.grow(grow)
+
+
+## The box round a node and its visible descendants on screen (at most EXTENT_NODES of them), or null when none of
+## them has a place there. A node that is a point (a Node2D with nothing drawn under it) gives a box of no size.
+static func extent(tree: SceneTree, node: Node) -> Variant:
+	var out: Variant = null
+	var queue: Array[Node] = [node]
+	var seen := 0
+	while not queue.is_empty() and seen < EXTENT_NODES:
+		var at: Node = queue.pop_front()
+		seen += 1
+		if at != node and ((at is CanvasItem and not (at as CanvasItem).visible) or (at is Node3D and not (at as Node3D).visible)
+				or at is CanvasLayer or at is Viewport):
+			continue  # hidden, or drawn in a space of its own
+		var found: Variant = box(tree, at)
+		if found != null:
+			out = found if out == null else (out as Rect2).merge(found)
+		queue.append_array(at.get_children())
+	return out
 
 
 ## From a viewport's coordinates to the root viewport's: through the windows embedded in it (a dialog) and the
@@ -529,7 +550,13 @@ static func framing(tree: SceneTree, args: Dictionary) -> Dictionary:
 		var where := seen(tree, node)
 		if not where.has("box"):
 			return {"error": "%s (%s) doesn't show: it's %s." % [args.node, node.get_class(), where.why]}
-		var rect: Rect2 = (where.box as Rect2).grow(float(args.get("margin", 0)))
+		var own: Rect2 = where.box
+		if not own.has_area():
+			# A point (a body, a Node2D holding its sprite): what it and its visible children draw, on screen.
+			var drawn: Variant = extent(tree, node)
+			if drawn != null and (drawn as Rect2).has_area():
+				own = (drawn as Rect2).intersection(Rect2(0, 0, size[0], size[1]))
+		var rect: Rect2 = own.grow(float(args.get("margin", 0)))
 		if not rect.has_area():
 			return {"error": "%s is a point on screen: give it a margin." % args.node}
 		region = _pixels(rect)

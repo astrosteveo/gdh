@@ -23,7 +23,13 @@ class OverrideError(GdhError):
     pass
 
 
+class Raw(str):
+    """A value written into override.cfg as it is: a Godot value such as Color(1, 0, 0, 1)."""
+
+
 def format_value(value):
+    if isinstance(value, Raw):
+        return str(value)
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (int, float)):

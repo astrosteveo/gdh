@@ -122,7 +122,7 @@ $ gdh live snapshot
 |---|---|
 | `--out FILE.png` | Write this file (relative to where gdh runs) instead of a numbered one in `shots/`. With several `--view`s, the view's name is added: `--out a.png` writes `a-normal.png` and `a-wireframe.png` |
 | `--crop X,Y,W,H` | Keep only this part of the screen, in screenshot pixels |
-| `--node PATH [--margin PX]` | Keep only the box `find` gives a node, grown by PX on each side. A node that's a point needs a margin |
+| `--node PATH [--margin PX]` | Keep only the box `find` gives a node, grown by PX on each side. For a node that's a point (a body, or a `Node2D` holding its sprite), the box round what it and its visible children draw; one that draws nothing needs a margin |
 | `--zoom K` | Scale up K times (1 to 16), nearest neighbour, so each pixel stays a sharp square |
 | `--max-width W` | Scale down to at most W pixels wide, after any zoom, for reading the whole frame; never up |
 | `--no-ui` | Leave the UI out of this shot: every CanvasLayer drawn over the game (layer 1 and up, not following the viewport) is hidden for the shot and shown again after |
@@ -229,6 +229,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `onion N --node PATH` | A node's movement over N frames as an onion skin: the frames laid over each other, the oldest faintest ([motion.md](motion.md#onion-skins)) |
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N] [--visible-only]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
+| `sweep "TARGET=V1,V2"...` | The same frame with each value of a property, in a labeled grid; two make rows and columns ([compare.md](compare.md#sweeps)) |
 | `pick X,Y...` | What's drawn at each point, topmost first: 2D and UI nodes in draw order, then 3D meshes by distance, with textures, surfaces and materials (above) |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
 | `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |
@@ -237,6 +238,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `record N [--out DIR]` | N frames stepped and each saved as `DIR/frame-0000.png` on, for `gdh measure` |
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
 | `frames [--clear] [--reset] [--save FILE]` | Each game frame's GPU and CPU time since the record started over, and each render pass's with `start --gpu-passes`: the median, 99th percentile and worst |
+| `profile N` | With `start --profiler`: which script functions the frames spent their time in, overall and on the spike frames ([measure.md](measure.md#script-time-gdh-live-profile)) |
 | `bench N [--budget-median MS] [--budget-p99 MS]` | N frames stepped and timed in one call, after a second of held frames drawn back to back; exits 1 over a budget ([measure.md](measure.md#a-budget-gdh-live-bench)) |
 | `monitors [--frames N] [--every K] [--leak]` | Godot's Performance monitors: objects, resources, nodes, orphan nodes, draw calls, video memory. `--leak` flags a count that grows steadily ([below](#performance-monitors)) |
 | `step N --monitors` | The monitors before and after the step, and their change |
@@ -557,10 +559,11 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `annotate`, `pick`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `reload`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `annotate`, `pick`, `set`, `restore`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `reload`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
 
 - `shot` takes `{"views": [...], "label": "shot", "out": FILE, "crop": [x, y, w, h], "node": PATH, "margin": PX, "zoom": K, "max_width": W, "no_ui": bool}`, all but `views` optional; a relative `out` is under the session's output directory. It returns `{"shots": {view: path}, "image_size": [w, h]}`, with `"crop"` and `"size"` when the shot is cropped or scaled.
 - `annotate` takes `{"layers": [...], "filter": {"path", "group", "class"}, "no_ui": bool}` and returns the geometry `--annotate` draws, in screenshot pixels: `{"layers", "nodes": [{"path", "class", "box", "kind"}], "backdrops", "more", "shapes": [{"path", "kind", "lines": [{"points", "closed"}]}], "nav": [{"path", "polygons"}], "velocity": [{"path", "from", "to", "speed", "unit"}], "image_size"}`, each layer's key only when asked for.
+- `set` takes `{"object": EXPR, "property": NAME, "value": EXPR}` (an empty object is the current scene; NAME may go on with `:`, as `set_indexed` takes it), keeps the value it had before the first set, and returns `{"was", "now"}`. `restore` puts back every value `set` changed and returns `{"restored": n}`. They're what `sweep` sends, and the input log doesn't keep them.
 - `pick` takes `{"points": [[x, y], ...]}` and returns `{"points": [{"at", "hits": [{"path", "class", "kind", ...}], "more", "takes_click"?}], "image_size"}`.
 - `tree` takes `{"path", "depth", "visible_only": bool}`.
 - `find` takes `{"text", "name", "class"}`, at least one, and returns `{"matches": [{"path", "class", "text"?, "screen", "disabled"?}], "hidden": [{..., "why"}], "more": n}`.

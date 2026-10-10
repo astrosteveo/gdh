@@ -158,6 +158,10 @@ def cmd_capture(args):
     baseline_root = Path(args.baseline).resolve() if args.baseline else None
     if args.update_baseline and not baseline_root:
         raise GdhError("--update-baseline needs --baseline DIR: where the baseline goes.")
+    if getattr(args, "matrix", None) is not None and baseline_root:
+        raise GdhError("--matrix and --baseline don't go together: compare one screen and quality with a baseline.")
+    if (args.quality or args.set) and args.matrix is None:
+        raise GdhError("--quality and --set go with --matrix.")
     if baseline_root and not args.update_baseline and not baseline_root.is_dir():
         raise GdhError(f"No baseline at {baseline_root}: capture with --update-baseline to write one.")
     if not args.no_build:
@@ -171,5 +175,9 @@ def cmd_capture(args):
             baseline = baseline_root
             if baseline and len(args.scene) > 1:
                 baseline = baseline_root / scene_out_name(scene)
+            if args.matrix is not None:
+                from gdh.compare import capture_matrix
+                ok &= capture_matrix(project, scene, out_dir, args, shims)
+                continue
             ok &= capture_one(project, scene, out_dir, args, shims, baseline)
     return 0 if ok else 1

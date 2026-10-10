@@ -109,13 +109,13 @@ def test_filters_narrow_what_is_labeled(scene, tmp_path):
 
 def test_annotations_follow_a_framed_shot(scene, tmp_path):
     reply = shot("--node", "Player", "--margin", "40", "--zoom", "2", "--annotate", "--out", tmp_path / "framed.png")
-    # Player itself is a point (its origin), so the frame is 40 px round it.
-    assert reply["crop"] == [160, 320, 80, 80] and reply["size"] == [160, 160]
-    # Only what's in the frame, drawn where the zoomed shot shows it: Body's left edge at (184 - 160) * 2.
+    # Player itself is a point, so the frame is what it draws (its 32 px Body) and 40 px round it.
+    assert reply["crop"] == [144, 304, 112, 112] and reply["size"] == [224, 224]
+    # Only what's in the frame, drawn where the zoomed shot shows it: Body's left edge at (184 - 144) * 2.
     assert [n["path"] for n in reply["annotations"]["nodes"]] == ["Player/Body"]
     with Image.open(reply["annotated"]["normal"]) as img:
-        assert img.size == (160, 160)
-        assert img.getpixel((48, 80)) == KIND_COLORS["2d"]
+        assert img.size == (224, 224)
+        assert img.getpixel((80, 112)) == KIND_COLORS["2d"]
 
 
 def test_annotate_refuses_what_it_cant_do(scene, tmp_path):

@@ -6,6 +6,7 @@ run/main_scene="res://smoke/smoke.tscn"
 
 [autoload]
 
+GdhEvents="*res://addons/gdh_events/gdh_events.gd"
 GameState="*res://live/game_state.gd"
 
 [rendering]

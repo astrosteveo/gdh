@@ -34,6 +34,7 @@ gdh live stop --session <name>
 - **One session per task**, with a name of your own (another agent may be using `default`), and always `gdh live stop` it: a running game keeps the GPU busy. `gdh live list` shows every session, left-over ones included.
 - **View every image you report or publish.** Saying a capture shows something you haven't opened is a guess.
 - **Keep what you verified.** A saved scenario replays frame-exactly with `gdh scenario run` (and under `gdh test` in `res://test`): add `expect` checks to it. From Python, `from gdh.client import Session` drives a game over one pipe. See `${CLAUDE_PLUGIN_ROOT}/docs/scenarios.md`.
+- **Let the game tell you what happened:** `gdh events install --project <dir>` adds `GdhEvents`; a call to `GdhEvents.emit("died", data)` where something happens comes back with its frame on stderr during any step, and `gdh live events` lists and counts them. It does nothing outside gdh, so the calls can stay in.
 - **Give a big game a debug autoload:** a node whose methods return what you check as dictionaries (`Debug.state()`), and jump to a state (`Debug.goto("hangar")`). `eval` and `--until` call it, recipes and scenarios start from it, and it's the only way `eval` sees C# objects.
 
 ## Setup
@@ -69,6 +70,7 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | What the editor shows: tool scripts, `@tool` previews | `gdh editor` |
 | Footage: a clip, a trailer shot, a video of a bug | `gdh movie` |
 | Logic with no picture to check: rules, save data, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
+| Where the game breaks over a long run: stuck spots, soft locks, holes, leaving the level | `gdh live explore N --node PATH` (at random, or `--goal X,Y`): each problem a replayable scenario, and a heat map (`${CLAUDE_PLUGIN_ROOT}/docs/explore.md`) |
 | A long play-through against a goal, kept out of the main conversation | the `playtester` agent |
 
 ## Capture

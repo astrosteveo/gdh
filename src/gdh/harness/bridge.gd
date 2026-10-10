@@ -68,6 +68,11 @@ var _size_noted := false
 var _next_frame_us := 0
 ## What `set` changed: {key: [object, property, the value before]}, for `restore`.
 var _changed := {}
+## The game's events ({frame, name, data}): all of them (the latest MAX_EVENTS) for `events`, and the ones since the
+## last reply, which go with it.
+var _events := []
+var _new_events := []
+const MAX_EVENTS := 20000
 
 
 func _ready() -> void:
@@ -75,6 +80,8 @@ func _ready() -> void:
 	process_priority = 1 << 30  # Run after every game node each frame.
 	get_tree().paused = true
 	_last_request_ms = Time.get_ticks_msec()
+	# The game's own events (GdhEvents.emit, from gdh events install) come here; outside gdh nothing takes them.
+	Engine.set_meta("gdh_event", _on_game_event)
 	_start.call_deferred()
 
 
@@ -208,6 +215,9 @@ func _reply(conn: Dictionary, id: Variant, ok: bool, payload: Variant) -> void:
 	if not _notes.is_empty():
 		reply.notes = _notes
 		_notes = []
+	if not _new_events.is_empty():
+		reply.events = _new_events
+		_new_events = []
 	var printed := errors.drain_output()
 	if not printed.output.is_empty():
 		reply.output = printed.output
@@ -252,6 +262,8 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_annotate(args)
 		"pick":
 			result = _cmd_pick(args)
+		"events":
+			result = _cmd_events(args)
 		"set":
 			result = _cmd_set(args)
 		"restore":
@@ -532,6 +544,24 @@ func _cmd_annotate(args: Dictionary) -> Dictionary:
 	Screen.show_layers(get_tree(), hidden)
 	found.image_size = Common.image_size(get_tree())
 	return found
+
+
+func _on_game_event(event: Variant, data: Variant = null) -> void:
+	var entry := {"frame": _game_frames, "name": str(event), "data": _to_json(data)}
+	_events.append(entry)
+	if _events.size() > MAX_EVENTS:
+		_events.pop_front()
+	_new_events.append(entry)
+
+
+## args: name (only events of that name), clear (forget them after). The game's events: {"events", "dropped"}.
+func _cmd_events(args: Dictionary) -> Dictionary:
+	var wanted := str(args.get("name", ""))
+	var found := _events if wanted.is_empty() else _events.filter(func(e: Dictionary) -> bool: return e.name == wanted)
+	var result := {"events": found.duplicate(), "kept": MAX_EVENTS}
+	if args.get("clear", false):
+		_events.clear()
+	return result
 
 
 ## args: object (an expression, as eval takes; "" for the current scene), property (a name, or a path with ":" as

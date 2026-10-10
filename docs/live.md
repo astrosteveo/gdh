@@ -167,6 +167,31 @@ A node covering 90% of the screen or more (a background, a fade) is a backdrop: 
 
 The collision, navigation and velocity layers take a shape, region or body when it, or for a shape its parent, matches. The annotations follow the shot's framing: with `--crop`, `--node` or `--zoom` they're drawn where the framed image shows them, and only the nodes in the frame are listed. With `--no-ui` the UI is left out of the annotations too. A session of several instances annotates one: give `--instance K`. With `--json` the reply has `"annotated"` ({view: path}), `"annotations"` (the game's geometry: `"nodes"`, each with `"n"`, `"path"`, `"class"`, `"box"` and `"kind"`; `"backdrops"`; `"shapes"`, `"nav"` and `"velocity"` for their layers), and `"labels"`, each label's text and rect in the image.
 
+## What's drawn at a pixel: `gdh live pick`
+
+```sh
+gdh live pick 640,360 --session s                 # what's drawn there, topmost first
+gdh live pick 120,80 900,410 1040,415 --session s  # several points in one call
+```
+
+`pick X,Y...` lists, for each point in screenshot pixels, every node whose drawing covers it, topmost first, so a pixel in a shot leads to the node that drew it, and to what's under it:
+
+```
+at 880,200:
+  1. Marker (Sprite2D, 2d): texture res://annotate/marker.png at texel 3,8
+  2. Backdrop (ColorRect, 2d)
+  a click there goes to UI/Root (Control, mouse_filter Stop)
+at 604,181:
+  1. Sign (MeshInstance3D, 3d): surface 0, material StandardMaterial3D Left; mesh ArrayMesh; at -0.504,2.304,0, 7.053 from the camera
+  2. Back (MeshInstance3D, 3d): surface 0, material none; mesh res://annotate/annotate3d.tscn::wall; at -0.713,2.015,-2.9, 9.974 from the camera
+```
+
+- **2D and UI first**, since the canvas draws over the 3D world: by `CanvasLayer` (the highest first; the world's own canvas is layer 0), then by z (`z_index`, added up through parents while `z_as_relative`), then the later in the tree. Y-sorting isn't followed, so among y-sorted siblings the order is the tree's. A node covers the point when the point falls inside what it draws, in its own coordinates, so rotation and scale count: a `Control`'s rect (with its text, and its texture for a `TextureRect`), a `Sprite2D`'s opaque texels only (with the texture and the texel under the point, through its region, frames and flips), a `Polygon2D`'s polygon, a `Line2D`'s width, and any other's rect. Each hit has `"local"`, the point in the node's own coordinates. Nodes that only hold or lay out others (a plain `Control`, a container, a body) aren't hits, as for `--annotate`.
+- **Then 3D, nearest first**: a ray from the camera through the point, met against each visible mesh's triangles. A hit has the surface it met and that surface's material (`get_active_material`, so an override counts), the mesh, the point in the world (`"world"`), the triangle's `"normal"`, and its `"distance"` from the camera. A skinned mesh is tested in its rest pose, which a note says; a `GeometryInstance3D` with no mesh to test (particles, a `Label3D`, CSG) counts by its bounds (`"by": "bounds"`).
+- **The click**: where a control would take a click at the point, `"takes_click"` names it, as `--click` reports it ([above](#finding-and-clicking-nodes)), which may not be the topmost thing drawn: a `Label` lets clicks through.
+
+At most 8 hits are listed at a point (`"more"` counts the rest). Only what's drawn in the root viewport, and in the windows and `SubViewportContainer`s in it, is picked. Nothing drawn at a point means the background: the clear color, or a sky.
+
 ## gdh's camera
 
 `camera` looks through a camera of gdh's own, so a scene can be seen from anywhere without game code, as `gdh editor --view` does in the editor:
@@ -204,6 +229,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `onion N --node PATH` | A node's movement over N frames as an onion skin: the frames laid over each other, the oldest faintest ([motion.md](motion.md#onion-skins)) |
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N] [--visible-only]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |
+| `pick X,Y...` | What's drawn at each point, topmost first: 2D and UI nodes in draw order, then 3D meshes by distance, with textures, surfaces and materials (above) |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
 | `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |
 | `eval EXPR` | Any Godot expression. The base is the current scene. `scene`, `tree`, `root`, each autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) are also available. |
@@ -528,10 +554,11 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `annotate`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `reload`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `annotate`, `pick`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `reload`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
 
 - `shot` takes `{"views": [...], "label": "shot", "out": FILE, "crop": [x, y, w, h], "node": PATH, "margin": PX, "zoom": K, "max_width": W, "no_ui": bool}`, all but `views` optional; a relative `out` is under the session's output directory. It returns `{"shots": {view: path}, "image_size": [w, h]}`, with `"crop"` and `"size"` when the shot is cropped or scaled.
 - `annotate` takes `{"layers": [...], "filter": {"path", "group", "class"}, "no_ui": bool}` and returns the geometry `--annotate` draws, in screenshot pixels: `{"layers", "nodes": [{"path", "class", "box", "kind"}], "backdrops", "more", "shapes": [{"path", "kind", "lines": [{"points", "closed"}]}], "nav": [{"path", "polygons"}], "velocity": [{"path", "from", "to", "speed", "unit"}], "image_size"}`, each layer's key only when asked for.
+- `pick` takes `{"points": [[x, y], ...]}` and returns `{"points": [{"at", "hits": [{"path", "class", "kind", ...}], "more", "takes_click"?}], "image_size"}`.
 - `tree` takes `{"path", "depth", "visible_only": bool}`.
 - `find` takes `{"text", "name", "class"}`, at least one, and returns `{"matches": [{"path", "class", "text"?, "screen", "disabled"?}], "hidden": [{..., "why"}], "more": n}`.
 - `snapshot` takes `{"path"}` (optional) and returns `{"nodes": [{"name", "class", "path", "children", "text"?, "placeholder"?, "states"?, "value"?, "box"?}]}`, the outline `gdh live snapshot` prints.
@@ -567,6 +594,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - `--click-text` and `--click-node` clicking the Go button (and over `pipe`), a dialog's OK button, a button in a SubViewport shown at 2x, and failing, without stepping, on a missing text, a hidden node, a missing path and an ambiguous text, with the candidates named
 - `tree --visible-only`
 - `shot --annotate` on `testbed/annotate/annotate.tscn` (`tests/test_annotate.py`): the nodes that draw boxed and numbered, a `Polygon2D` by its polygon, UI and world told apart, the backdrop listed, no label over another label or another node's box; a body's box shape, an area's circle and a disabled capsule, an unbaked navigation region's outline and a body's velocity arrow, each at its exact pixels; `--filter` by path, class, group and with `--no-ui`; a framed shot's annotations where the zoomed image shows them; the errors; and on `annotate3d.tscn` the meshes, a box shape's 12 edges inside its mesh's box, a navigation mesh's quad and a velocity in m/s
+- `pick` on the same scenes: a body, a polygon (inside it), a button with its text and the click going to it, a sprite where its texture is opaque (with the texture and the texel) and not where it's clear, the backdrop, and off everything; z_index reordering two hits; on `annotate3d.tscn`, a mesh's two surfaces with their own materials, the world point and normal, and a crate before the wall behind it, by distance
 - `shot --out` with one view and with several, `--crop` and `--zoom`, `--node` and `--margin` (in both stretch modes, and on a 3D object), `--max-width`, the two together, and bad framings, each image compared with the full frame pixel for pixel
 - `shot --no-ui` leaving the UI out of that shot and the game in, and the next shot the same as the one before
 - `camera` in 2D and 3D (`testbed/smoke/smoke.tscn`): the view moved, the boxes moved with it, and after `--release` the game's camera back and the frame the same as before, pixel for pixel

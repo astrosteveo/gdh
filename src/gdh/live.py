@@ -1067,6 +1067,48 @@ def cmd_find(args):
     return 0
 
 
+def cmd_pick(args):
+    session = load_session(args.session)
+    points = [xy(p, "pick") for p in args.points]
+    reply = call(session, "pick", {"points": points}, instance=args.instance)
+    result = report(reply, args.json)
+    if args.json:
+        return 0
+    for prefix, r in each(reply, result):
+        for point in r["points"]:
+            print(f"{prefix}at {point['at'][0]:g},{point['at'][1]:g}:")
+            if not point["hits"]:
+                print(f"{prefix}  nothing drawn there (the background, or the clear color)")
+            for i, hit in enumerate(point["hits"], 1):
+                print(f"{prefix}  {i}. {describe_hit(hit)}")
+            if point["more"]:
+                print(f"{prefix}  ... {point['more']} more under those")
+            if point.get("takes_click"):
+                print(f"{prefix}  a click there goes to {describe_took(point['takes_click'])}")
+    return 0
+
+
+def describe_hit(hit):
+    """One thing pick found at a point, as a line: path (class, kind) and what it drew there."""
+    extras = []
+    if "text" in hit:
+        extras.append(f"text={json.dumps(hit['text'])}")
+    if hit.get("texture"):
+        texel = f" at texel {hit['texel'][0]},{hit['texel'][1]}" if "texel" in hit else ""
+        extras.append(f"texture {hit['texture']}{texel}")
+    if hit["kind"] == "3d":
+        if hit.get("surface") is not None and hit.get("surface", -1) >= 0:
+            extras.append(f"surface {hit['surface']}, material {hit.get('material') or 'none'}")
+        if hit.get("mesh"):
+            extras.append(f"mesh {hit['mesh']}")
+        extras.append(f"at {','.join(f'{v:g}' for v in hit['world'])}, {hit['distance']:g} from the camera")
+        if hit.get("by") == "bounds":
+            extras.append("by its bounds")
+        if hit.get("note"):
+            extras.append(hit["note"])
+    return f"{hit['path']} ({hit['class']}, {hit['kind']}){': ' + '; '.join(extras) if extras else ''}"
+
+
 def cmd_snapshot(args):
     from gdh import snapshot
     session = load_session(args.session)
@@ -1690,6 +1732,11 @@ def add_parsers(sub):
     p.add_argument("--name", metavar="PATTERN", help="The node's name; * and ? match anything (any case)")
     p.add_argument("--class", dest="class_name", metavar="CLASS",
                    help="The node's class, built in or a script's class_name, or one it extends")
+
+    p = command("pick", cmd_pick, "What's drawn at points on screen, topmost first: the UI and 2D nodes in draw order "
+                                  "(a sprite's texture and texel), then the 3D meshes by distance (the surface, its "
+                                  "material, where the ray met it)", instance=one)
+    p.add_argument("points", nargs="+", metavar="X,Y", help="Points in screenshot pixels")
 
     p = command("snapshot", cmd_snapshot, "The UI on screen as a text outline: what shows a text or can be used, "
                                           "with its state; compare it with a baseline file", instance=one)

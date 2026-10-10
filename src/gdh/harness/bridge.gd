@@ -26,6 +26,7 @@ const Screen := preload("screen.gd")
 const Track := preload("track.gd")
 
 const Monitors := preload("monitors.gd")
+const Pick := preload("pick.gd")
 
 # Frame rate caps. Held: rendering continues, so cap it to spare the GPU.
 # Running: about real time. Stepping, or answering a command: uncapped.
@@ -246,6 +247,8 @@ func _handle(item: Dictionary) -> void:
 			result = _cmd_snapshot(args)
 		"annotate":
 			result = _cmd_annotate(args)
+		"pick":
+			result = _cmd_pick(args)
 		"camera":
 			result = Camera.command(get_tree(), args)
 		"frames":
@@ -512,6 +515,17 @@ func _cmd_annotate(args: Dictionary) -> Dictionary:
 	Screen.show_layers(get_tree(), hidden)
 	found.image_size = Common.image_size(get_tree())
 	return found
+
+
+## args: points ([[x, y], ...] in screenshot pixels). What's drawn at each, topmost first (pick.gd).
+func _cmd_pick(args: Dictionary) -> Dictionary:
+	var points: Variant = args.get("points")
+	if not points is Array or (points as Array).is_empty():
+		return {"error": "pick takes points: [[x, y], ...]."}
+	for p in points:
+		if not (p is Array and p.size() == 2):
+			return {"error": "A point is [x, y], not %s." % JSON.stringify(p)}
+	return {"points": Pick.at(get_tree(), points), "image_size": Common.image_size(get_tree())}
 
 
 ## Events aimed at a node: "on": {"node": PATH} or {"text": TEXT} puts a mouse event at the centre of the part of it

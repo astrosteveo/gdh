@@ -1,4 +1,6 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Texture2D" path="res://annotate/marker.png" id="marker"]
 
 [ext_resource type="Script" path="res://annotate/annotate.gd" id="1"]
 
@@ -88,6 +90,11 @@ offset_top = 14.0
 offset_right = 24.0
 offset_bottom = 24.0
 color = Color(0.6, 0.6, 0.6, 1)
+
+[node name="Marker" type="Sprite2D" parent="."]
+position = Vector2(900, 200)
+scale = Vector2(4, 4)
+texture = ExtResource("marker")
 
 [node name="UI" type="CanvasLayer" parent="."]
 

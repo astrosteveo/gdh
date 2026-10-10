@@ -4,8 +4,10 @@ annotate.tscn: Player, a CharacterBody2D at 200,360 moving right at 120 px/s, dr
 collision shape; Coin, an Area2D at 400,300 in the group pickups, drawn by a Polygon2D diamond 24 px across, with a
 circle of radius 12; Wall, a StaticBody2D whose capsule shape is disabled; Nav, a navigation region of one square
 (700,450 to 1000,650, not baked); five 10 px Pebbles packed together from 300,520; a Backdrop over the whole screen;
-and Score and Pause on a CanvasLayer. annotate3d.tscn: Crate (a StaticBody3D with a box mesh and box shape), Runner
-(a CharacterBody3D moving at 2 m/s along x), and Floor, a navigation region of one quad.
+Marker, a Sprite2D at 900,200 scaled 4x whose 16 px texture is opaque on its left half only; and Score and Pause on a
+CanvasLayer. annotate3d.tscn: Crate (a StaticBody3D with a box mesh and box shape), Runner (a CharacterBody3D moving
+at 2 m/s along x), Floor (a navigation region of one quad), Sign (a mesh of two quads, surface 0 on the left with the
+material Left, 1 on the right with Right) and Back, a wall behind them all.
 """
 import os
 
@@ -51,8 +53,8 @@ def test_names_boxes_each_node_that_draws(scene, tmp_path):
     nodes = by_path(reply["annotations"]["nodes"])
     # What draws, not what only holds or lays out others (Player, Coin, Pebbles, UI/Root); the backdrop is listed.
     assert set(nodes) == {"Player/Body", "Coin/Look", "Pebbles/P1", "Pebbles/P2", "Pebbles/P3", "Pebbles/P4",
-                          "Pebbles/P5", "UI/Root/Score", "UI/Root/Pause"}
-    assert [n["n"] for n in reply["annotations"]["nodes"]] == list(range(1, 10))
+                          "Pebbles/P5", "Marker", "UI/Root/Score", "UI/Root/Pause"}
+    assert [n["n"] for n in reply["annotations"]["nodes"]] == list(range(1, 11))
     assert [b["path"] for b in reply["annotations"]["backdrops"]] == ["Backdrop"]
     assert nodes["Player/Body"]["box"] == [184, 344, 32, 32] and nodes["Player/Body"]["kind"] == "2d"
     assert nodes["Coin/Look"]["box"] == [388, 288, 24, 24]  # a Polygon2D's own bounds
@@ -65,7 +67,7 @@ def test_names_boxes_each_node_that_draws(scene, tmp_path):
         assert img.getpixel((20, 33)) == KIND_COLORS["ui"]
     # No label covers another, nor another node's box.
     labels = reply["labels"]
-    assert len(labels) == 9 and reply["labeled"] + reply["numbered"] == 9
+    assert len(labels) == 10 and reply["labeled"] + reply["numbered"] == 10
     boxes = {n["n"]: n["box"] for n in reply["annotations"]["nodes"]}
     for a in labels:
         assert not any(overlaps(a["rect"], b["rect"]) for b in labels if b is not a)
@@ -143,7 +145,8 @@ def test_find_boxes_a_polygon(scene):
 def test_annotate_3d(scene3d, tmp_path):
     reply = shot("--annotate", "all", "--out", tmp_path / "3d.png", session=SESSION_3D)
     found = reply["annotations"]
-    assert [(n["path"], n["kind"]) for n in found["nodes"]] == [("Crate/Mesh", "3d"), ("Runner/Mesh", "3d")]
+    assert [(n["path"], n["kind"]) for n in found["nodes"]] == [("Crate/Mesh", "3d"), ("Runner/Mesh", "3d"),
+                                                                ("Sign", "3d"), ("Back", "3d")]
     crate = by_path(found["nodes"])["Crate/Mesh"]["box"]
     # The box shape's 12 edges, inside the mesh's box on screen (the shape and the mesh are the same unit cube).
     edges = by_path(found["shapes"])["Crate/Shape"]["lines"]
@@ -158,3 +161,59 @@ def test_annotate_3d(scene3d, tmp_path):
     reply = shot("--annotate", "--filter", "class:CharacterBody3D", "--out", tmp_path / "runner.png",
                  session=SESSION_3D)
     assert [n["path"] for n in reply["annotations"]["nodes"]] == ["Runner"]
+
+
+# --- Pick ------------------------------------------------------------------------------------------------------------
+
+
+def pick(*points, session=SESSION):
+    return gdh_json("live", "pick", *points, "--session", session)["result"]["points"]
+
+
+def test_pick_lists_what_is_drawn_at_each_point_top_first(scene):
+    body, coin, pause, marker, clear, nothing = pick("200,360", "400,300", "1200,40", "880,200", "920,200", "1300,10")
+    assert [(h["path"], h["kind"]) for h in body["hits"]] == [("Player/Body", "2d"), ("Backdrop", "2d")]
+    assert body["hits"][0]["local"] == [16, 16]
+    assert [h["path"] for h in coin["hits"]] == ["Coin/Look", "Backdrop"]  # inside the polygon
+    # The UI is above the world, with its text; and the click there goes to the button.
+    assert pause["hits"][0]["path"] == "UI/Root/Pause" and pause["hits"][0]["text"] == "Pause"
+    assert pause["takes_click"]["path"] == "UI/Root/Pause"
+    # A sprite counts where its texture is opaque, with the texture and the texel.
+    assert marker["hits"][0]["path"] == "Marker"
+    assert marker["hits"][0]["texture"] == "res://annotate/marker.png" and marker["hits"][0]["texel"] == [3, 8]
+    assert [h["path"] for h in clear["hits"]] == ["Backdrop"]
+    assert nothing["hits"] == []
+
+
+def test_pick_follows_z_index(scene):
+    gdh_json("live", "eval", "get_node('Pebbles/P1').set_z_index(-1)", "--session", SESSION)
+    try:
+        assert [h["path"] for h in pick("305,525")[0]["hits"]] == ["Backdrop", "Pebbles/P1"]
+    finally:
+        gdh_json("live", "eval", "get_node('Pebbles/P1').set_z_index(0)", "--session", SESSION)
+
+
+def test_pick_prints_each_point(scene):
+    proc = gdh("live", "pick", "880,200", "1300,10", "--session", SESSION)
+    assert "at 880,200:\n  1. Marker (Sprite2D, 2d): texture res://annotate/marker.png at texel 3,8" in proc.stdout
+    assert "at 1300,10:\n  nothing drawn there" in proc.stdout
+    proc = gdh("live", "pick", "12", "--session", SESSION, check=False)
+    assert proc.returncode == 1 and "pick takes X,Y" in proc.stderr
+
+
+def test_pick_in_3d_by_triangles_nearest_first(scene3d):
+    left, right = (gdh_json("live", "eval", f"get_viewport().get_camera_3d().unproject_position(Vector3({x}, 2.3, 0))",
+                            "--session", SESSION_3D)["result"]["value"] for x in (-0.5, 0.5))
+    crate = gdh_json("live", "eval", "get_viewport().get_camera_3d().unproject_position(Vector3(-1.5, 0.5, 0.5))",
+                     "--session", SESSION_3D)["result"]["value"]
+    hits = pick(*(f"{x},{y}" for x, y in (left, right, crate)), session=SESSION_3D)
+    # The sign's two surfaces, each with its own material, and the wall behind.
+    a, b = hits[0]["hits"][0], hits[1]["hits"][0]
+    assert (a["path"], a["surface"], a["material"]) == ("Sign", 0, "StandardMaterial3D Left")
+    assert (b["path"], b["surface"], b["material"]) == ("Sign", 1, "StandardMaterial3D Right")
+    assert a["world"] == pytest.approx([-0.5, 2.3, 0], abs=0.01) and a["normal"] == pytest.approx([0, 0, 1], abs=0.01)
+    assert [h["path"] for h in hits[0]["hits"]] == ["Sign", "Back"]
+    # Through the crate's front face: the crate, then the wall behind, by distance.
+    front = hits[2]["hits"]
+    assert [h["path"] for h in front] == ["Crate/Mesh", "Back"] and front[0]["distance"] < front[1]["distance"]
+    assert front[0]["world"] == pytest.approx([-1.5, 0.5, 0.5], abs=0.01) and front[0]["by"] == "triangles"

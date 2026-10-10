@@ -17,6 +17,7 @@ PLAY (one session per task, a name of your own; always stop it)
     ... --trace-chart F.png [--trace-rates]                  as a line chart (with velocity, acceleration)
   gdh live eval "[EXPR, EXPR]" --session S                   several values in one call
   gdh live find TEXT --session S                             visible nodes showing TEXT, with boxes
+  gdh live pick X,Y [X,Y...] --session S                     what's drawn at a pixel: node, texture, surface
   gdh live snapshot [PATH] --session S                       the UI on screen as text, with states
   gdh live step 2 --click-text TEXT --session S              or --click-node PATH; fails if covered
   gdh live shot --session S [--node PATH --zoom 2] [--out F.png] [--max-width 1280]

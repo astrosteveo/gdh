@@ -257,9 +257,10 @@ gdh live feel --node Player --session s           # top speed, stopping, jumps, 
 gdh live hitstop --do "get_node('Player').take_hit(10)" --hold ui_right --node Player --session s
 gdh live shake --press attack --session s
 gdh live follow --target Player --hold ui_right --session s
+gdh live soundsync 600 --hold ui_right --event footstep_contact --session s   # each footstep's sound, in frames
 ```
 
-Feel is mostly timing, and these put numbers on it: the frames from an input to the game's state and to the pixels, a character's top speed and the time to it, stopping, a jump's height and airtime, air control, the coyote time and jump buffer (found by pressing at each frame offset), how long a hit-stop freezes time, a camera shake's size, frequency and decay, and how far a camera lags. Each draws a chart. See [docs/feel.md](docs/feel.md).
+Feel is mostly timing, and these put numbers on it: the frames from an input to the game's state and to the pixels, a character's top speed and the time to it, stopping, a jump's height and airtime, air control, the coyote time and jump buffer (found by pressing at each frame offset), how long a hit-stop freezes time, a camera shake's size, frequency and decay, how far a camera lags, and how many frames each sound comes after what it belongs to. Each draws a chart. See [docs/feel.md](docs/feel.md).
 
 ## Check animation and art
 
@@ -398,7 +399,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |
 | `src/gdh/motion.py`, `motion_cli.py`, `chart.py` | Motion in one image: onion skins, filmstrips, trails and change maps, with `gdh live onion` and `filmstrip` and their `gdh measure` forms; and trace charts |
 | `src/gdh/profile.py`, `debugger.py`, `variant.py` | `gdh live profile`, the debugger `start --profiler` runs beside the game, and Godot's binary Variant format it speaks |
-| `src/gdh/feel.py` | `gdh live latency`, `feel`, `hitstop`, `shake` and `follow` |
+| `src/gdh/feel.py`, `soundsync.py` | `gdh live latency`, `feel`, `hitstop`, `shake`, `follow` and `soundsync` |
 | `src/gdh/anim.py`, `footslide.py`, `clipping.py`, `readability.py`, `src/gdh/harness/clip.gd` | `gdh live anim`, `footslide`, `clipping` and `contrast`, and `gdh measure popin` and `palette` |
 | `src/gdh/events.py`, `src/gdh/addon/gdh_events/` | `gdh events install` and `gdh live events`, and the `GdhEvents` autoload a game calls |
 | `src/gdh/explore.py` | `gdh live explore`: the bot, the problems it finds and the heat map |

@@ -9,6 +9,7 @@ Feel is mostly timing: how soon the game answers an input, how fast a character 
 | `gdh live hitstop --do EXPR --node PATH` | Frames where time slows or stops after a trigger, and a moving node freezes ([below](#hit-stop-shake-and-follow)) |
 | `gdh live shake --do EXPR` | A camera shake's amplitude, frequency, length and decay ([below](#hit-stop-shake-and-follow)) |
 | `gdh live follow --target PATH` | How far and how many frames a camera lags its target, its overshoot and settling ([below](#hit-stop-shake-and-follow)) |
+| `gdh live soundsync N --event NAME` | Frames between a sound starting and what it belongs to ([below](#sound-in-sync-soundsync)) |
 
 Frames are physics frames: gdh runs a game at one physics tick a frame, so at 60 ticks a second a frame is 16.7 ms. Each command prints its numbers; `--json` has every trial and sample. They step the game, so run them where the game is in the state to measure: on the floor, in a level, past the menus.
 
@@ -104,6 +105,31 @@ camera get_viewport().get_camera_2d() following Hero over 60 frames of input and
   overshoot: 0 px past where the target stopped, settled within 1 px 48 frames (800 ms) after the input ended
 ```
 
+## Sound in sync: `soundsync`
+
+```sh
+gdh live soundsync 600 --hold ui_right --event footstep_contact --session s
+gdh live soundsync 300 --when "get_node('Player').is_on_floor()" --player Player/LandSound --session s
+gdh live soundsync 200 --tap attack --event hit --max-offset 1 --fail --session s
+```
+
+A sound that comes a few frames after what it belongs to (a footstep after the foot lands, a hit after the impact) feels wrong long before anyone can say why. `soundsync N` steps N frames, with any of `step`'s input options, and pairs each time the visual event happens with the nearest sound starting within `--window` frames (15):
+
+- **A sound starts** on the frame the game calls `play()`: each `play()` makes a new playback, and the harness notes every player whose playback isn't the one it saw the frame before. That's game time, exact even under gdh's dummy audio driver, which mixes in real time (so under a step a short sound can still be playing when it's played again). The players are every `AudioStreamPlayer`, `AudioStreamPlayer2D` and `AudioStreamPlayer3D` in the game, those spawned during the run included, or `--player PATH` (repeatable).
+- **The visual event** is the frames an expression turns true (`--when EXPR`), or the game's own event (`--event NAME`, from `GdhEvents.emit(NAME)`, [live.md](live.md#the-games-events-gdhevents)).
+
+For each event it prints the sound paired with it and its offset, the sound's frame less the event's (late when positive, early when negative), in frames and milliseconds; events with no sound near them; and sound starts with no event near them. An offset over `--max-offset` frames (2, about 33 ms at 60 a second) is flagged; `--fail` exits 1 then, or when an event has no sound.
+
+On `testbed/audio/sync.tscn` with the thud put 6 frames after the landing:
+
+```
+sound against --when landed over 130 frames: 3 events, 3 sound starts
+  event at frame 160: Thud 6 frames (100 ms) late  <- out of sync
+  event at frame 200: Thud 6 frames (100 ms) late  <- out of sync
+  event at frame 240: Thud 6 frames (100 ms) late  <- out of sync
+warning: 3 of 3 sounds more than 2 frames off their event, 0 events with no sound
+```
+
 ## Tests
 
 `tests/test_feel.py` runs `testbed/feel/feel.tscn`. Hero is a platformer character with known numbers at 60 frames a second (it speeds up at 1200 px/s² to 240 px/s, 600 px/s² in the air, slows at 1800 px/s², jumps at 600 px/s under 1800 px/s² of gravity, with 6 frames of coyote time and a 5-frame jump buffer), on a floor that ends at x 800. Each press of `ui_accept` sets `Hero.pressed_at` at once and lights `UI/Lamp` 3 frames later. `hit()` stops time for 6 frames and shakes the camera 8 px along x at 10 Hz for 30 frames, decaying linearly; the camera follows Hero with position smoothing (speed 5). It checks:
@@ -112,4 +138,5 @@ camera get_viewport().get_camera_2d() following Hero over 60 frames of input and
 - hitstop: `hit()` reading under 1 for 5 frames and Hero standing still for 6, and the note when Hero isn't moving
 - shake: about 6.7 px at 10 Hz from the offset, lasting about 28 frames, half gone in about 14, nothing along y; and the numbers of a made-up sine
 - follow: position smoothing at speed 5 lagging a 240 px/s Hero by up to 48 px and about a fifth of a second, with no overshoot, and the note when the target doesn't move
+- soundsync (`tests/test_audio.py`, on `testbed/audio/sync.tscn`, a ball landing every 40 frames and a thud played as it lands): three landings, each with the thud on the same frame and none flagged, the hum that was already playing not counted; with the thud 6 frames late, each flagged and `--fail` exiting 1; `--player` listening to one player only; the errors; and the pairing rules on made-up frames
 - latency: the state after 1 frame and the lamp after 4 in every trial, a gap of 3; the text output; no response within `--max`; and the error without `--watch` or `--node`

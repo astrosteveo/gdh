@@ -59,7 +59,7 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | Animation bugs: frozen in its first pose, states flipping, feet sliding, limbs through walls | `gdh live anim`, `footslide`, `clipping` (`${CLAUDE_PLUGIN_ROOT}/docs/art.md`) |
 | Pop-in along a camera path; a character lost against the background; a shot drifting from the concept art | `gdh measure popin` on a recording; `gdh live contrast --node PATH`; `gdh measure palette SHOT --reference ART` |
 | A choice of taste: which value of a setting looks best | `gdh live sweep "OBJ.PROP=V1,V2,V3"`: one grid of the options; then `gdh review --from SWEEP.json --out DIR --wait` for the user to pick, and their choice comes back (`${CLAUDE_PLUGIN_ROOT}/docs/compare.md`) |
-| Responsiveness and movement: input latency, speeds, jumps, coyote time, hit-stop, shake, camera lag | `gdh live latency`, `feel`, `hitstop`, `shake`, `follow` (`${CLAUDE_PLUGIN_ROOT}/docs/feel.md`) |
+| Responsiveness and movement: input latency, speeds, jumps, coyote time, hit-stop, shake, camera lag, sounds in sync | `gdh live latency`, `feel`, `hitstop`, `shake`, `follow`, `soundsync` (`${CLAUDE_PLUGIN_ROOT}/docs/feel.md`) |
 | What moves in a scene that should be still, or what's frozen that should move | `gdh live record`, then its `<dir>-changes.png`, or `gdh measure changes --still` |
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
 | A thin effect's width, a point's size, a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |

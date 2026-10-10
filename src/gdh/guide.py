@@ -49,6 +49,7 @@ KEEP IT
 FEEL
   gdh live latency --press ui_accept --watch EXPR --node PATH --session S   frames to the state, to the pixels
   gdh live feel --node PATH --session S                      speeds, jumps, coyote, buffer; hitstop, shake, follow
+  gdh live soundsync 300 --event land --session S            frames from each event to its sound
 
 MEASURE
   gdh live bench 600 --budget-p99 8.3 --session S            frame times; exit 1 over budget

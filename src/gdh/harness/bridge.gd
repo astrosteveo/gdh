@@ -312,7 +312,8 @@ func _set_held(held: bool) -> void:
 ## back first, so the GPU has clocked up), clear_record (start the frame record over just before the first frame),
 ## monitors (-1: none; 0: the Performance monitors before the first frame and after the last; K: every K frames too),
 ## track ([node path, ...]: where each is before the first frame and after every frame, track.gd), clip ({node, mask}:
-## the node's points inside solid geometry after every frame, clip.gd).
+## the node's points inside solid geometry after every frame, clip.gd), sound_starts (true: the frames each audio
+## player started a sound, _sound_starts).
 ## Events with "at": k are injected before frame k+1 of the step (0 = before
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
@@ -343,6 +344,9 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		if not track.error.is_empty():
 			return {"error": track.error}
 		track.sample(_game_frames)
+	var sounds := {}  # audio player: the instance id of its playback before the step, for sound_starts
+	if args.get("sound_starts", false):
+		_sound_starts(sounds, -1, [])
 	var clip: Clip = null
 	if args.get("clip") is Dictionary:
 		clip = Clip.new(get_tree(), str(args.clip.get("node", "")), int(args.clip.get("mask", 0xFFFFFFFF)))
@@ -364,6 +368,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	_set_held(false)
 	var shots := []
 	var shot_frames := []
+	var started_sounds := []
 	for i in frames + 1:
 		_warp_pointer(timeline.get(i, []))
 		for event in timeline.get(i, []):
@@ -378,6 +383,8 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			track.sample(_game_frames)
 		if clip != null:
 			clip.sample(_game_frames)
+		if args.get("sound_starts", false):
+			_sound_starts(sounds, _game_frames, started_sounds)
 		if shot_every > 0 and (i + 1) % shot_every == 0:
 			await RenderingServer.frame_post_draw
 			shots.append(_save_image("step-f%d" % (i + 1)))
@@ -406,6 +413,8 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 		result.track = track.result()
 	if clip != null:
 		result.clip = clip.result()
+	if args.get("sound_starts", false):
+		result.sound_starts = started_sounds
 	if cover_every > 0:
 		result.cover_samples = cover_samples
 	if not watch.is_empty():
@@ -546,8 +555,27 @@ func _cmd_annotate(args: Dictionary) -> Dictionary:
 	return found
 
 
+## The audio players that started a sound since the last look: each play() makes a new playback, so a playback
+## that isn't the one seen before is a start, even while the last is still playing (gdh's dummy driver mixes in real
+## time, so under a step a short sound can still be playing when it's played again). frame -1 only notes them.
+func _sound_starts(seen: Dictionary, frame: int, out: Array) -> void:
+	for player in get_tree().root.find_children("*", "", true, false):
+		if not (player is AudioStreamPlayer or player is AudioStreamPlayer2D or player is AudioStreamPlayer3D):
+			continue
+		if not player.has_stream_playback():
+			continue
+		var id: int = player.get_stream_playback().get_instance_id()
+		var key: int = player.get_instance_id()
+		if seen.get(key, 0) != id:
+			seen[key] = id
+			if frame >= 0:
+				out.append([frame, str(player.get_path())])
+
+
 func _on_game_event(event: Variant, data: Variant = null) -> void:
-	var entry := {"frame": _game_frames, "name": str(event), "data": _to_json(data)}
+	# The frame it happened in: while the game runs, the one under way (the count goes up at its end); held, the last.
+	var frame := _game_frames if get_tree().paused else _game_frames + 1
+	var entry := {"frame": frame, "name": str(event), "data": _to_json(data)}
 	_events.append(entry)
 	if _events.size() > MAX_EVENTS:
 		_events.pop_front()

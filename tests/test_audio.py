@@ -10,6 +10,7 @@ import pytest
 
 from conftest import TESTBED, gdh, gdh_json
 from gdh.audio import analyse, read_samples
+from gdh.soundsync import pair, rising
 
 RATE = 44100
 
@@ -70,3 +71,56 @@ def test_a_movie_draws_its_sound(tmp_path):
     gdh("movie", "--project", TESTBED, "--scene", "res://audio/sync.tscn", "--out", tmp_path / "none", "--frames", "30",
         "--no-sheet")
     assert not (tmp_path / "none" / "audio.png").exists()
+
+
+# --- Sound in sync --------------------------------------------------------------------------------------------------
+
+SESSION = f"test-audio-{os.getpid()}"
+
+
+@pytest.fixture(scope="module")
+def sync(tmp_path_factory, display):
+    out = tmp_path_factory.mktemp("sync")
+    gdh("live", "start", "--project", TESTBED, "--scene", "res://audio/sync.tscn", "--session", SESSION, "--out", out)
+    yield out
+    gdh("live", "stop", "--session", SESSION)
+
+
+def test_soundsync_pairs_each_landing_with_its_thud(sync):
+    gdh_json("live", "eval", "set('delay', 0)", "--session", SESSION)
+    reply = gdh_json("live", "soundsync", "130", "--event", "land", "--session", SESSION)
+    pairs = reply["pairs"]
+    # The ball lands every 40 frames, and Thud plays on the frame it lands: offset 0, each time.
+    assert len(pairs) == 3 and [p["offset"] for p in pairs] == [0, 0, 0]
+    assert [b["event"] - a["event"] for a, b in zip(pairs, pairs[1:])] == [40, 40]
+    assert all(p["player"].endswith("/Thud") for p in pairs) and reply["out_of_sync"] == 0
+    # Hum was playing before the run: it didn't start in it.
+    assert reply["unpaired_sounds"] == []
+
+
+def test_soundsync_flags_a_late_sound(sync):
+    gdh_json("live", "eval", "set('delay', 6)", "--session", SESSION)
+    try:
+        reply = gdh_json("live", "soundsync", "130", "--when", "landed", "--session", SESSION)
+        proc = gdh("live", "soundsync", "90", "--when", "landed", "--fail", "--session", SESSION, check=False)
+    finally:
+        gdh_json("live", "eval", "set('delay', 0)", "--session", SESSION)
+    assert [p["offset"] for p in reply["pairs"] if p["offset"] is not None][:2] == [6, 6]
+    assert reply["out_of_sync"] >= 2
+    assert proc.returncode == 1 and "Thud 6 frames (100 ms) late  <- out of sync" in proc.stdout
+
+
+def test_soundsync_listens_to_the_players_asked_for(sync):
+    reply = gdh_json("live", "soundsync", "45", "--event", "land", "--player", "Hum", "--session", SESSION)
+    assert reply["no_sound"] == 1 and reply["pairs"][0]["sound"] is None
+    for args, said in (([], "give one"), (["--event", "land", "--when", "landed"], "give one"),
+                       (["--event", "land", "--player", "Nope"], "No node at Nope.")):
+        proc = gdh("live", "soundsync", "5", *args, "--session", SESSION, check=False)
+        assert proc.returncode == 1 and said in proc.stderr, (args, proc.stderr)
+
+
+def test_pairing_rules():
+    assert rising([1, 2, 3, 4, 5], [False, True, True, False, True]) == [2, 5]
+    pairs, left = pair([10, 50], [(12, "a"), (9, "b"), (90, "c")], 5)
+    assert [(p["event"], p["sound"], p["offset"]) for p in pairs] == [(10, 9, -1), (50, None, None)]
+    assert left == [(12, "a"), (90, "c")]

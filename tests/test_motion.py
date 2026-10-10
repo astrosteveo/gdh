@@ -1,5 +1,5 @@
-"""The motion tools against testbed/motion/motion.tscn: trace charts, onion skins and trails; 3D trails against
-motion3d.tscn.
+"""The motion tools against testbed/motion/motion.tscn: trace charts, onion skins, trails and filmstrips; 3D trails
+against motion3d.tscn.
 
 Ball moves right 4 px a physics frame while `moving`, Spinner turns 6 degrees a frame in place, Blinker changes color
 every 10 frames, and with `follow` the camera keeps Ball at the screen's centre. In motion3d.tscn Cube moves along x
@@ -266,3 +266,57 @@ def test_trail_in_3d_projects_through_the_camera(game3d, tmp_path):
     assert 0 < ghost["missing"] < 31 and ghost["off_screen"] > 0
     proc = gdh("live", "step", "30", "--trail", "Ghost", "--session", SESSION_3D)
     assert "points have no place on screen (behind the camera" in proc.stderr
+
+
+# --- Filmstrips -------------------------------------------------------------------------------------------------------
+
+
+def cells(path, reply, count):
+    """Each filmstrip cell's pixels, from where motion.filmstrip puts them."""
+    x0, y0, x1, y1 = reply["box"]
+    zoom, columns = reply["zoom"], reply["columns"]
+    cw, ch = (x1 - x0) * zoom, (y1 - y0) * zoom
+    with Image.open(path) as img:
+        a = np.asarray(img.convert("RGB"), dtype=np.int32)
+    out = []
+    for i in range(count):
+        x = 4 + (i % columns) * (cw + 4)
+        y = motion.HEADER + 4 + (i // columns) * (ch + 16 + 4) + 16
+        out.append(a[y:y + ch, x:x + cw])
+    return out
+
+
+def test_filmstrip_labels_each_frame_and_keeps_the_box_fixed(game, tmp_path):
+    out = tmp_path / "strip.png"
+    reply = live("filmstrip", "36", "--node", "Spinner", "--out", out)
+    # About 12 frames over the run, each labeled with its game frame, 3 apart.
+    assert reply["every"] == 3 and len(reply["frames"]) == 12
+    numbers = [int(f.split()[1]) for f in reply["frames"]]
+    assert [b - a for a, b in zip(numbers, numbers[1:])] == [3] * 11
+    assert numbers[-1] == reply["status"]["frame"]
+    with Image.open(out) as img:
+        assert img.width <= 1280 and img.height <= 1280
+    # The box is the same for every cell, so the arm turning inside it shows: no two cells alike.
+    strip = cells(out, reply, 12)
+    assert all(c.shape == strip[0].shape for c in strip)
+    assert all(np.abs(a - b).max() > 100 for a, b in zip(strip, strip[1:]))
+
+
+def test_filmstrip_shows_a_flash_frame_by_frame(game, tmp_path):
+    out = tmp_path / "blink.png"
+    # Blinker changes color every 10 frames: cells 10 frames apart alternate.
+    live("step", "--until", "ticks % 10 == 5")
+    reply = live("filmstrip", "40", "--node", "Blinker", "--every", "10", "--margin", "0", "--out", out)
+    middles = [c[c.shape[0] // 2, c.shape[1] // 2] for c in cells(out, reply, 4)]
+    yellow = [bool(m[0] > 200 and m[2] < 100) for m in middles]
+    assert yellow in ([True, False, True, False], [False, True, False, True])
+
+
+def test_measure_filmstrip_and_its_limits(game, tmp_path):
+    frames = tmp_path / "frames"
+    run("record", "12", "--out", frames, "--no-sheet")
+    reply = gdh_json("measure", "filmstrip", frames, "--every", "3", "--box", "560,120,720,280", "--out",
+                     tmp_path / "strip.png")
+    assert reply["frames"] == ["frame 0", "frame 3", "frame 6", "frame 9"] and reply["columns"] == 4
+    proc = run("filmstrip", "60", "--node", "Spinner", "--every", "1", check=False)
+    assert proc.returncode == 1 and "60 frames is too many for one filmstrip (at most 48)" in proc.stderr

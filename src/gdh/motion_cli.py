@@ -1,4 +1,5 @@
-"""gdh live onion and gdh measure onion: motion in one image (motion.py) from a live session's frames, or saved ones.
+"""gdh live onion and filmstrip, and gdh measure onion and filmstrip: motion in one image (motion.py) from a live
+session's frames, or saved ones.
 
 A live command steps the frames with the step's own input options, saves every Kth frame, and tracks where the node
 is on each (harness/track.gd), so the box framed is the one the node moved through.
@@ -13,8 +14,9 @@ from PIL import Image
 from gdh import motion
 from gdh.godot import GdhError
 
-# Without --every, an onion skin takes about this many frames of the run.
+# Without --every, an onion skin takes about this many frames of the run, and a filmstrip this many.
 ONION_GHOSTS = 8
+FILMSTRIP_CELLS = 12
 
 
 class MotionCliError(GdhError):
@@ -114,7 +116,28 @@ def cmd_live_onion(args):
     return 0
 
 
-# --- gdh measure onion ---------------------------------------------------------------------------------------------
+# --- gdh live filmstrip --------------------------------------------------------------------------------------------
+
+
+def cmd_live_filmstrip(args):
+    from gdh.live import load_session
+    session = load_session(args.session)
+    every = every_for(args.frames, args.every, FILMSTRIP_CELLS)
+    frames, boxes, size, result = tracked_run(session, args, args.frames, every)
+    try:
+        box = framed(args, boxes, size, len(frames))
+        out = Path(args.out) if args.out else default_out(session, "filmstrip", frames)
+        info = motion.filmstrip(frames, box, out, args.zoom)
+    except motion.MotionError as e:
+        raise MotionCliError(str(e)) from None
+    finally:
+        finish(frames, args.keep)
+    report_image("filmstrip", info, args.json, {"node": args.node, "every": every, "status": result["status"],
+                                                **({"kept": [p for _, p in frames]} if args.keep else {})})
+    return 0
+
+
+# --- gdh measure onion and filmstrip -------------------------------------------------------------------------------
 
 
 def saved_frames(sources, every):
@@ -144,6 +167,16 @@ def cmd_measure_onion(args):
     return 0
 
 
+def cmd_measure_filmstrip(args):
+    try:
+        frames, size = saved_frames(args.frames, args.every or 1)
+        info = motion.filmstrip(frames, motion.parse_box(args.box, size), args.out, args.zoom)
+    except motion.MotionError as e:
+        raise MotionCliError(str(e)) from None
+    report_image("filmstrip", info, args.json)
+    return 0
+
+
 # --- Parsers ---------------------------------------------------------------------------------------------------------
 
 
@@ -158,26 +191,43 @@ def onion_options(p):
 
 
 def add_live_parsers(commands, command):
-    """gdh live onion. `command` is live.py's maker of a subcommand."""
+    """gdh live onion and filmstrip. `command` is live.py's maker of a subcommand."""
     from gdh.live import add_input_options
-    p = command("onion", cmd_live_onion, "Step and lay the frames of a node's movement over each other in one image: "
-                                         "an onion skin, the oldest faintest",
-                instance="Which instance's frames, and who gets the input (default 0). Every instance steps")
-    p.add_argument("frames", type=int, help="How many frames to step")
-    p.add_argument("--node", required=True, metavar="PATH",
-                   help="The node to frame (a path from the current scene, or /root/...): the image covers where it "
-                        "and what it draws went over the run")
-    p.add_argument("--every", type=int, metavar="K",
-                   help=f"Take every Kth frame (default: about {ONION_GHOSTS} frames over the run)")
-    p.add_argument("--margin", type=float, default=12, metavar="PX", help="Grow the box by PX on each side (default 12)")
-    p.add_argument("--out", metavar="FILE.png", help="Where it goes (default <session out>/motion/onion-A-B.png)")
-    p.add_argument("--keep", action="store_true", help="Keep the frames it saved (by default they're deleted)")
+
+    def tracked(name, func, help, wanted):
+        p = command(name, func, help,
+                    instance="Which instance's frames, and who gets the input (default 0). Every instance steps")
+        p.add_argument("frames", type=int, help="How many frames to step")
+        p.add_argument("--node", required=True, metavar="PATH",
+                       help="The node to frame (a path from the current scene, or /root/...): the image covers where "
+                            "it and what it draws went over the run")
+        p.add_argument("--every", type=int, metavar="K",
+                       help=f"Take every Kth frame (default: about {wanted} frames over the run)")
+        p.add_argument("--margin", type=float, default=12, metavar="PX",
+                       help="Grow the box by PX on each side (default 12)")
+        p.add_argument("--out", metavar="FILE.png",
+                       help=f"Where it goes (default <session out>/motion/{name}-FIRST-LAST.png)")
+        p.add_argument("--keep", action="store_true", help="Keep the frames it saved (by default they're deleted)")
+        return p
+
+    p = tracked("onion", cmd_live_onion, "Step and lay the frames of a node's movement over each other in one image: "
+                                         "an onion skin, the oldest faintest", ONION_GHOSTS)
     onion_options(p)
+    add_input_options(p)
+    p = tracked("filmstrip", cmd_live_filmstrip, "Step and put the same box round a node from each frame side by "
+                                                 "side, labeled with its game frame", FILMSTRIP_CELLS)
+    filmstrip_options(p)
     add_input_options(p)
 
 
+def filmstrip_options(p):
+    p.add_argument("--zoom", type=int, default=0, metavar="Z",
+                   help="Scale each frame's box up Z times (nearest neighbour); default about 640 px on its long side, "
+                        "less to fit at least 4 across in 1280 px")
+
+
 def add_measure_parsers(kinds):
-    """gdh measure onion. `kinds` is gdh measure's subparsers."""
+    """gdh measure onion and filmstrip. `kinds` is gdh measure's subparsers."""
     k = kinds.add_parser("onion", help="Lay saved frames over each other in one image: an onion skin, the oldest "
                                        "faintest, for a movement's path, spacing and shape")
     k.add_argument("frames", nargs="+", help="PNG files, or directories of them (taken in name order)")
@@ -187,3 +237,12 @@ def add_measure_parsers(kinds):
     k.add_argument("--json", action="store_true", help="Print the whole result")
     onion_options(k)
     k.set_defaults(func=cmd_measure_onion)
+    k = kinds.add_parser("filmstrip", help="Put the same box from each saved frame side by side, labeled, for a pose, "
+                                           "a flash or a transition frame by frame")
+    k.add_argument("frames", nargs="+", help="PNG files, or directories of them (taken in name order)")
+    k.add_argument("--out", required=True, metavar="PNG", help="Where it goes")
+    k.add_argument("--box", metavar="X0,Y0,X1,Y1", help="Only this part of the frames (default all of it)")
+    k.add_argument("--every", type=int, metavar="K", help="Take every Kth frame (default every one)")
+    k.add_argument("--json", action="store_true", help="Print the whole result")
+    filmstrip_options(k)
+    k.set_defaults(func=cmd_measure_filmstrip)

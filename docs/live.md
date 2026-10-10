@@ -162,6 +162,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `step N --shot-every K` | A frame every K frames during the step, to catch flicker, popping and jitter |
 | `step N --shot` | A frame after the step |
 | `step N --trail PATH` | Where a node went over the step, drawn on its last frame with a dot every `--every K` frames, and the pixels between the dots ([motion.md](motion.md#trails)) |
+| `filmstrip N --node PATH` | The same box round a node from each of N frames side by side, labeled with its game frame ([motion.md](motion.md#filmstrips)) |
 | `onion N --node PATH` | A node's movement over N frames as an onion skin: the frames laid over each other, the oldest faintest ([motion.md](motion.md#onion-skins)) |
 | `probes` | Probe findings on the current frame, with crops |
 | `tree [PATH] [--depth N] [--visible-only]` | Nodes with class, script, world position, screen position (`[x, y]`, or `[x, y, w, h]` for a Control), text, value, velocity and animation |

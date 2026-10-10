@@ -6,6 +6,7 @@ An image reader sees one still frame at a time, and a contact sheet of 16 frames
 |---|---|
 | `gdh live step N --trace EXPR --trace-chart F.png` | Values over time as a line chart, with velocity and acceleration (`--trace-rates`) ([live.md](live.md#waiting-and-tracing)) |
 | `gdh live onion N --node PATH` | A node's movement as an onion skin: its frames laid over each other, the oldest faintest ([below](#onion-skins)) |
+| `gdh live filmstrip N --node PATH` | The same box round a node from each frame side by side, labeled with its game frame ([below](#filmstrips)) |
 | `gdh live step N --trail PATH` | Where nodes went, drawn on the last frame with a dot every K frames, and the pixels between the dots ([below](#trails)) |
 
 Each live command steps the game with the same input options as `step` (`--hold`, `--press`, `--click`, `--axis` and the rest), so the movement can be one the player makes. A recording of frames saved earlier (`gdh live record`, or any game's PNGs) works with the `gdh measure` forms.
@@ -33,6 +34,18 @@ So one image shows a whole movement:
 **The camera has to hold still.** A camera that follows the node keeps it in one place on screen while the world moves past it, so the onion skin shows the node standing still. A camera that moves makes the whole background differ from frame to frame; when most of the box differs in most frames, a note on stderr says so. Hold the camera still with `gdh live camera --view ...` for the run, or turn off the game's camera follow.
 
 `gdh measure onion FRAMES... --out FILE.png` does the same from saved PNG frames (files, or directories taken in name order), every `--every K` of them (default every one), in `--box X0,Y0,X1,Y1` (default the whole frame). Its frames are numbered from 0 in the order given. An onion skin takes at most 24 frames, since more can't be told apart.
+
+## Filmstrips
+
+```sh
+gdh live filmstrip 24 --node Player --hold ui_right --session s           # a walk cycle, about 12 frames of it
+gdh live filmstrip 12 --node Enemy --every 1 --press attack --session s   # a hit flash, frame by frame
+gdh measure filmstrip frames/door --every 2 --box 400,180,880,540 --out door.png
+```
+
+`gdh live filmstrip N --node PATH` steps N frames, saves every Kth (`--every K`; by default about 12 spread over the run), and puts the same box from each side by side in rows, left to right, each cell labeled with its game frame. The box is the one round where the node went over the whole run, as for an onion skin, and it's the same for every cell, so the node moving inside it shows as movement from cell to cell, and a node that stays put shows its pose, color or shape changing. Use it for what an onion skin can't separate: a walk or attack cycle's poses, a hit flash or a blink one frame long, a fade or a transition, or what a sprite sheet's frames look like in play.
+
+Each cell is scaled up a whole number of times (nearest neighbour), by `--zoom Z` or, by default, to about 640 pixels on its long side, less to fit at least 4 cells across and to keep the whole image within about 1280 by 1280 pixels. A filmstrip takes at most 48 frames. The options `--margin`, `--out` (default `<session out>/motion/filmstrip-FIRST-LAST.png`), `--keep`, `--json` and the step's input options work as for `onion`. `gdh measure filmstrip FRAMES... --out FILE.png` does the same from saved PNG frames, with `--every`, `--box` and `--zoom`.
 
 ## Trails
 
@@ -63,4 +76,5 @@ With `--json` the reply gets `"trails": {"image", "every", "trails": [{"node", "
 - `onion` with step's input, `--tint` and `--keep`; a node that isn't there, one that's hidden for the whole run, and `--every` longer than the run
 - `gdh measure onion` over frames `gdh live record` saved, and the note when the background moves
 - a trail of Ball: a dot every 5 frames, 20 pixels apart, the first and last where Ball was, the line and dots drawn in the first trail's color; with the camera following Ball, the path through the world ending at the screen's centre; the text output, a UI node's trail, and `--trail-out` without a trail
+- a filmstrip of Spinner: about 12 frames 3 apart, labeled with their game frames, within 1280 by 1280 pixels, every cell the same size and no two alike; one of Blinker 10 frames apart, its color alternating; `gdh measure filmstrip`, and too many frames
 - 3D trails on `motion3d.tscn`: Cube's last point where the camera's own `unproject_position` puts it, and Ghost's points behind the camera missing, with the note

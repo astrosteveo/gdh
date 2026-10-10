@@ -220,11 +220,21 @@ def filmstrip(frames, box, out, zoom=0, title=None):
     gap, label_h = 4, 16
     # Big enough to see, and at least 4 across when the frames are many.
     fit = MAX_WIDTH - 2 * gap if len(frames) == 1 else (MAX_WIDTH - gap) // min(len(frames), 4) - gap
+    given = zoom
     zoom = pick_zoom(w, h, zoom, fit)
+
+    def grid(z):
+        cw = min(w * z, fit)
+        ch = round(h * cw / w)
+        columns = max(1, min(len(frames), (MAX_WIDTH - gap) // (cw + gap)))
+        return columns, -(-len(frames) // columns), ch
+
+    # Without a zoom given, smaller cells while the grid would be taller than MAX_WIDTH: one image to read whole.
+    while not given and zoom > 1 and grid(zoom)[1] * (grid(zoom)[2] + label_h + gap) > MAX_WIDTH:
+        zoom -= 1
+    columns, rows, _ = grid(zoom)
     cells = [scaled(Image.fromarray(c.astype(np.uint8)), zoom, fit) for c in crops(frames, box)]
     cw, ch = cells[0].size
-    columns = max(1, min(len(cells), (MAX_WIDTH - gap) // (cw + gap)))
-    rows = -(-len(cells) // columns)
     sheet = Image.new("RGB", (columns * (cw + gap) + gap, rows * (ch + label_h + gap) + gap), BACKGROUND)
     d = ImageDraw.Draw(sheet)
     f = font(12)

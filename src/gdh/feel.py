@@ -531,6 +531,236 @@ def feel_lines(result, args, body, ticks):
     return lines
 
 
+# --- Effects: hitstop, shake, follow -----------------------------------------------------------------------------------
+
+
+def triggered(game, args, frames, trace, every=1):
+    """Run the trigger (--do, then the step's input over the first `frames`) and step, tracing `trace`. Returns the
+    step's result, with the frame before the trigger's values first in its rows when `before` holds them."""
+    from gdh.live import step_input_events
+    before = game.step(1, trace=trace)
+    if args.do:
+        game.eval(args.do)
+    result = game.step(frames, step_input_events(args, frames), trace=trace, every=every)
+    result["trace"]["rows"] = before["trace"]["rows"] + result["trace"]["rows"]
+    return result
+
+
+def runs(flags):
+    """The runs of true in a list: [(first index, length)]."""
+    out, start = [], None
+    for i, flag in enumerate(flags + [False]):
+        if flag and start is None:
+            start = i
+        elif not flag and start is not None:
+            out.append((start, i - start))
+            start = None
+    return out
+
+
+def node_ref(path):
+    return f"get_node({json.dumps(path)})"
+
+
+def camera_ref(args):
+    if args.camera:
+        return node_ref(args.camera)
+    return None
+
+
+def cmd_hitstop(args):
+    game = Driver(args)
+    trace = ["Engine.time_scale"] + ([f"{node_ref(args.node)}.global_position"] if args.node else [])
+    result = triggered(game, args, args.frames, trace)
+    rows = result["trace"]["rows"]
+    start = rows[0][0]
+    out = {"frames": args.frames, "ticks_per_second": game.ticks}
+    scales = [row[1] for row in rows[1:]]
+    slow = [s is not None and s < 1 for s in scales]
+    found = runs(slow)
+    if found:
+        first, length = found[0]
+        out["time_scale"] = {"first_frame": first + 1, "frames": length, "lowest": min(s for s in scales if s is not None),
+                             "slow_frames": sum(slow)}
+    if args.node:
+        points = [row[2] for row in rows]
+        moves = [None if a is None or b is None else math.dist(a, b) for a, b in zip(points, points[1:])]
+        still = [m is not None and m < 1e-3 for m in moves]
+        out["moving"] = [round(m, 3) if m is not None else None for m in moves]
+        if not any(m and m >= 1e-3 for m in moves):
+            out["note"] = f"{args.node} didn't move over the {args.frames} frames, so a freeze can't be told from " \
+                          f"standing still: keep it moving (--hold, or --do)."
+        else:
+            freezes = [(f, n) for f, n in runs(still) if f + n < len(still) or f == 0]  # it moves again after
+            if freezes:
+                first, length = freezes[0]
+                out["freeze"] = {"first_frame": first + 1, "frames": length}
+    panels = [{"title": "Engine.time_scale", "frames": list(range(0, len(rows))), "lines": [("time_scale", [r[1] for r in rows])]}]
+    if args.node:
+        speed = [None] + [None if m is None else m * game.ticks for m in moves]
+        panels.append({"title": f"{args.node}: speed (per second)", "frames": list(range(0, len(rows))),
+                       "lines": [("speed", speed)]})
+    out["chart"] = str(chart.draw(panels, Path(args.chart) if args.chart else game.out_dir("hitstop") / "hitstop.png",
+                                  "hit-stop", "frames after the trigger"))
+    lines = [f"hit-stop over {args.frames} frames after the trigger, at {game.ticks:g} frames a second:"]
+    ts = out.get("time_scale")
+    lines.append(f"  Engine.time_scale: under 1 from frame {ts['first_frame']} for {seconds(ts['frames'], game.ticks)}, "
+                 f"at least {ts['lowest']:g}" if ts else "  Engine.time_scale: 1 throughout")
+    if args.node:
+        fr = out.get("freeze")
+        if fr:
+            lines.append(f"  {args.node}: stood still from frame {fr['first_frame']} for {seconds(fr['frames'], game.ticks)}, "
+                         f"then moved again")
+        elif "note" not in out:
+            lines.append(f"  {args.node}: never stood still")
+        if out.get("note"):
+            lines.append(f"  note: {out['note']}")
+    lines.append(f"chart: {out['chart']}")
+    emit(out, args.json, lines)
+    return 0
+
+
+def shake_signal(rows, window):
+    """The shake in a series of positions: each axis less its centred moving average over `window` frames."""
+    points = np.array([row for row in rows], dtype=float)
+    half = window // 2
+    padded = np.pad(points, ((half, half), (0, 0)), mode="edge")
+    kernel = np.ones(window) / window
+    trend = np.stack([np.convolve(padded[:, k], kernel, mode="valid") for k in range(points.shape[1])], axis=1)
+    return points - trend
+
+
+def describe_shake(values, ticks):
+    """Amplitude, RMS, frequency and decay of one axis's shake."""
+    v = np.asarray(values, dtype=float)
+    peak = float(np.abs(v).max()) if len(v) else 0.0
+    if peak < 1e-3:
+        return None
+    active = np.nonzero(np.abs(v) > 0.05 * peak)[0]
+    first, last = int(active[0]), int(active[-1])
+    part = v[first:last + 1]
+    # The frequency from the frames between sign changes (each half a cycle), ignoring the samples near zero.
+    kept = np.nonzero(np.abs(part) > 0.05 * peak)[0]
+    signs = np.sign(part[kept])
+    flips = np.nonzero(np.diff(signs) != 0)[0]
+    middles = (kept[flips] + kept[flips + 1]) / 2
+    frequency = ticks / (2 * float(np.diff(middles).mean())) if len(middles) > 1 else 0.0
+    period = max(int(round(ticks / frequency)) if frequency > 0 else 1, 1)
+    envelope = np.array([np.abs(v[i:i + period]).max() for i in range(len(v))])
+    at_peak = int(np.argmax(np.abs(v)))
+    half = next((i - at_peak for i in range(at_peak, len(v)) if envelope[i] < 0.5 * peak), None)
+    tenth = next((i - at_peak for i in range(at_peak, len(v)) if envelope[i] < 0.1 * peak), None)
+    return {"amplitude": round(peak, 3), "rms": round(float(np.sqrt((part ** 2).mean())), 3),
+            "frequency_hz": round(frequency, 2), "first_frame": first, "frames": last - first + 1,
+            "peak_frame": at_peak, "frames_to_half": half, "frames_to_tenth": tenth}
+
+
+def camera_exprs(game, args):
+    """What a shake or follow reads of the camera: [(name, expression)], and whether it's 2D."""
+    ref = camera_ref(args)
+    if ref is None:
+        two = game.eval("get_viewport().get_camera_2d() != null")
+        ref = "get_viewport().get_camera_2d()" if two else "get_viewport().get_camera_3d()"
+        if not two and not game.eval("get_viewport().get_camera_3d() != null"):
+            raise FeelError("The viewport has no current camera: give --camera PATH.")
+    else:
+        two = bool(game.eval(f"{ref}.is_class('Camera2D')"))
+    return ref, two
+
+
+def cmd_shake(args):
+    game = Driver(args)
+    ref, two = camera_exprs(game, args)
+    if two:
+        trace = [f"{ref}.get_screen_center_position()", f"{ref}.offset"]
+    else:
+        trace = [f"{ref}.global_position", f"Vector2({ref}.h_offset, {ref}.v_offset)"]
+    result = triggered(game, args, args.frames, trace)
+    rows = result["trace"]["rows"]
+    offsets = [row[2] for row in rows]
+    unit = "px" if two else "m"
+    if any(o and any(abs(c) > 1e-6 for c in o) for o in offsets):
+        source, signal = ("offset" if two else "h_offset, v_offset"), np.array(offsets, dtype=float)
+    else:
+        source = "screen centre, less its moving average" if two else "position, less its moving average"
+        signal = shake_signal([row[1] for row in rows], args.window)
+    axes = "xy" if signal.shape[1] == 2 else "xyz"
+    found = {axis: describe_shake(signal[:, k], game.ticks) for k, axis in enumerate(axes)}
+    out = {"camera": ref, "source": source, "frames": args.frames, "ticks_per_second": game.ticks,
+           "axes": {k: v for k, v in found.items() if v}, "signal": signal.round(3).tolist()}
+    out["chart"] = str(chart.draw([{"title": f"camera shake ({unit}), from its {source}",
+                                    "frames": list(range(len(rows))),
+                                    "lines": [(axis, signal[:, k].tolist()) for k, axis in enumerate(axes)]}],
+                                  Path(args.chart) if args.chart else game.out_dir("shake") / "shake.png",
+                                  "screen shake", "frames after the trigger"))
+    lines = [f"shake of {ref} over {args.frames} frames after the trigger, from its {source}:"]
+    if not out["axes"]:
+        lines.append("  no shake")
+    for axis, d in out["axes"].items():
+        decay = ""
+        if d["frames_to_half"] is not None:
+            decay = f", down to half in {seconds(d['frames_to_half'], game.ticks)}"
+            if d["frames_to_tenth"] is not None:
+                decay += f" and a tenth in {d['frames_to_tenth']}"
+        lines.append(f"  {axis}: {d['amplitude']:g} {unit} at most (RMS {d['rms']:g}), {d['frequency_hz']:g} Hz, "
+                     f"for {seconds(d['frames'], game.ticks)} from frame {d['first_frame']}{decay}")
+    lines.append(f"chart: {out['chart']}")
+    emit(out, args.json, lines)
+    return 0
+
+
+def cmd_follow(args):
+    game = Driver(args)
+    ref, two = camera_exprs(game, args)
+    camera = f"{ref}.get_screen_center_position()" if two else f"{ref}.global_position"
+    target = f"{node_ref(args.target)}.global_position"
+    result = triggered(game, args, args.frames, [camera, target])
+    after = game.step(args.after, trace=[camera, target])
+    rows = result["trace"]["rows"] + after["trace"]["rows"]
+    cam = np.array([r[1] for r in rows], dtype=float)
+    tgt = np.array([r[2] for r in rows], dtype=float)
+    cam = cam - (cam[0] - tgt[0])  # where the camera sits from the target at rest counts as no lag
+    gap = np.linalg.norm(cam - tgt, axis=1)
+    unit = "px" if two else "m"
+    out = {"camera": ref, "target": args.target, "ticks_per_second": game.ticks, "frames": args.frames,
+           "after": args.after, "max_lag": round(float(gap.max()), 3), "mean_lag": round(float(gap.mean()), 3)}
+    # Lag in frames: the delay that best lines the camera's path up with the target's.
+    best, best_err = 0, float("inf")
+    for shift in range(0, min(60, len(rows) // 2)):
+        err = float(((cam[shift:] - tgt[:len(tgt) - shift]) ** 2).sum(axis=1).mean())
+        if err < best_err - 1e-9:
+            best, best_err = shift, err
+    out["lag_frames"] = best
+    stop = args.frames  # the target's input ends here: index args.frames is the frame it ended on
+    moved = tgt[stop] - tgt[0]
+    if np.linalg.norm(moved) > 1e-6:
+        direction = moved / np.linalg.norm(moved)
+        beyond = (cam[stop:] - tgt[-1]) @ direction
+        out["overshoot"] = round(max(float(beyond.max()), 0.0), 3)
+        settled = next((i for i in range(stop, len(gap)) if all(gap[j] < args.settled for j in range(i, len(gap)))), None)
+        out["frames_to_settle"] = None if settled is None else settled - stop
+    axes = "xy" if two else "xyz"
+    panels = [{"title": f"{axis} ({unit}): camera and target", "frames": list(range(len(rows))),
+               "lines": [("target", tgt[:, k].tolist()), ("camera", cam[:, k].tolist())]}
+              for k, axis in enumerate(axes) if np.ptp(tgt[:, k]) > 1e-6 or np.ptp(cam[:, k]) > 1e-6]
+    panels.append({"title": f"lag ({unit})", "frames": list(range(len(rows))), "lines": [("lag", gap.tolist())]})
+    out["chart"] = str(chart.draw(panels, Path(args.chart) if args.chart else game.out_dir("follow") / "follow.png",
+                                  f"camera following {args.target}", "frames from the start"))
+    lines = [f"camera {ref} following {args.target} over {args.frames} frames of input and {args.after} after:",
+             f"  lag: {out['max_lag']:g} {unit} at most, {out['mean_lag']:g} on average; the camera's path is "
+             f"{seconds(best, game.ticks)} behind the target's"]
+    if "overshoot" in out:
+        settle = (f", settled within {args.settled:g} {unit} {seconds(out['frames_to_settle'], game.ticks)} after the "
+                  f"input ended" if out["frames_to_settle"] is not None else
+                  f", not settled within {args.settled:g} {unit} {args.after} frames after the input ended")
+        lines.append(f"  overshoot: {out['overshoot']:g} {unit} past where the target stopped{settle}")
+    else:
+        lines.append(f"  note: {args.target} didn't move, so there's no lag to see: move it (--hold ...)")
+    lines.append(f"chart: {out['chart']}")
+    emit(out, args.json, lines)
+    return 0
+
+
 # --- Parsers ---------------------------------------------------------------------------------------------------------
 
 
@@ -572,3 +802,32 @@ def add_live_parsers(commands, command):
     p.add_argument("--max-window", type=int, default=15, metavar="N",
                    help="The most frames tried for the coyote time and the jump buffer (default 15)")
     p.add_argument("--chart", metavar="FILE.png", help="Where the chart goes (default <session out>/feel/feel/feel.png)")
+
+    from gdh.live import add_input_options
+
+    def effect(name, func, help, frames):
+        p = command(name, func, help, instance=one)
+        p.add_argument("--do", metavar="EXPR", help="An expression that triggers it (as eval takes), run just before")
+        p.add_argument("--frames", type=int, default=frames, metavar="N",
+                       help=f"Frames to watch after the trigger, with the input (default {frames})")
+        p.add_argument("--chart", metavar="FILE.png", help=f"Where the chart goes (default <session out>/feel/{name}/)")
+        add_input_options(p)
+        return p
+
+    p = effect("hitstop", cmd_hitstop, "Frames where time slows or stops after a trigger (Engine.time_scale), and a "
+                                       "moving node standing still", 30)
+    p.add_argument("--node", metavar="PATH", help="A node that's moving when it's triggered, to see it freeze")
+    p = effect("shake", cmd_shake, "A camera's shake after a trigger: amplitude, frequency, how long, how fast it "
+                                   "decays", 60)
+    p.add_argument("--camera", metavar="PATH", help="The camera (default the viewport's current one)")
+    p.add_argument("--window", type=int, default=9, metavar="N",
+                   help="With no offset to read, the shake is the camera's position less its moving average over N "
+                        "frames (default 9)")
+    p = effect("follow", cmd_follow, "How a camera follows a node: its lag in distance and frames, its overshoot "
+                                     "and how long it takes to settle", 60)
+    p.add_argument("--target", required=True, metavar="PATH", help="The node the camera follows")
+    p.add_argument("--camera", metavar="PATH", help="The camera (default the viewport's current one)")
+    p.add_argument("--after", type=int, default=60, metavar="N",
+                   help="Frames to watch after the input ends, for the overshoot and settling (default 60)")
+    p.add_argument("--settled", type=float, default=1.0, metavar="D",
+                   help="Settled once within D of the target, px or m (default 1)")

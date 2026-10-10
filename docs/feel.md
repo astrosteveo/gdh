@@ -6,6 +6,9 @@ Feel is mostly timing: how soon the game answers an input, how fast a character 
 |---|---|
 | `gdh live latency --press INPUT --watch EXPR --node PATH` | Frames from an input to the first change in a value and in a node's pixels ([below](#latency)) |
 | `gdh live feel --node PATH` | A character's movement: top speed and the time to it, stopping, a jump's apex and airtime, air control, coyote time and the jump buffer ([below](#movement-feel)) |
+| `gdh live hitstop --do EXPR --node PATH` | Frames where time slows or stops after a trigger, and a moving node freezes ([below](#hit-stop-shake-and-follow)) |
+| `gdh live shake --do EXPR` | A camera shake's amplitude, frequency, length and decay ([below](#hit-stop-shake-and-follow)) |
+| `gdh live follow --target PATH` | How far and how many frames a camera lags its target, its overshoot and settling ([below](#hit-stop-shake-and-follow)) |
 
 Frames are physics frames: gdh runs a game at one physics tick a frame, so at 60 ticks a second a frame is 16.7 ms. Each command prints its numbers; `--json` has every trial and sample. They step the game, so run them where the game is in the state to measure: on the floor, in a level, past the menus.
 
@@ -68,9 +71,45 @@ Both windows are tried up to `--max-window` frames (15). They need `is_on_floor(
 
 In 3D, up is +y and the ground is the x-z plane; in 2D, up is -y. Distances are in pixels in 2D and metres in 3D. `--json` has every number and each run's speeds and heights frame by frame.
 
+## Hit-stop, shake and follow
+
+```sh
+gdh live hitstop --do "get_node('Player').take_hit(10)" --hold ui_right --node Player --session s
+gdh live shake --press attack --session s
+gdh live follow --target Player --hold ui_right --frames 90 --session s
+```
+
+Each triggers an effect, watches it frame by frame and draws a chart (`--chart FILE.png`, default under `<session out>/feel/`). The trigger is `--do EXPR`, an expression run just before the first frame (as `eval` takes it, such as a method that deals a hit), and any of `step`'s input options over the first `--frames`: `--press`, `--hold`, `--tap`, `--click` and the rest. Set the scene up first: a character running, a camera at rest.
+
+**`hitstop`** watches `Engine.time_scale` for `--frames` (30) frames after the trigger: the first frame it reads under 1 after, for how many frames, and the lowest value. With `--node PATH`, a node that's moving when it's hit, it also finds the frames the node stood still and then moved again: a hit-stop done by pausing nodes rather than the time scale shows there. Keep the node moving through it (`--hold ui_right`), or the freeze can't be told from standing still, which a note says. The two counts can differ by a frame: a game that puts the time scale back during a frame's `_process` reads 1 after that frame, though its physics didn't move in it.
+
+```
+hit-stop over 30 frames after the trigger, at 60 frames a second:
+  Engine.time_scale: under 1 from frame 1 for 5 frames (83 ms), at least 0
+  Hero: stood still from frame 1 for 6 frames (100 ms), then moved again
+```
+
+**`shake`** reads the camera (`--camera PATH`, default the viewport's current one) for `--frames` (60) frames: a `Camera2D`'s `offset`, or a `Camera3D`'s `h_offset` and `v_offset`, where the game shakes it that way, else its position on screen (`get_screen_center_position()` in 2D, its global position in 3D) less its moving average over `--window` (9) frames, which takes out the camera following something. For each axis that shakes: the most it moves, its RMS, its frequency (from the frames between its swings), how long it lasts, and how fast it decays: the frames from its biggest swing until the swings are under half of it and under a tenth.
+
+```
+shake of get_viewport().get_camera_2d() over 60 frames after the trigger, from its offset:
+  x: 6.697 px at most (RMS 3.378), 10 Hz, for 28 frames (467 ms) from frame 2, down to half in 14 frames (233 ms) and a tenth in 26
+```
+
+**`follow --target PATH`** steps `--frames` (60) frames with the input that moves the target, then `--after` (60) with none, and compares the camera's position (its centre on screen in 2D) with the target's, with the gap between them at the start counted as none. It gives the lag in distance, at most and on average; the lag in frames, the delay that best lines the camera's path up with the target's; the overshoot, the furthest the camera goes past where the target stopped, along the way it moved; and the frames after the input ends until the camera stays within `--settled` (1 px or 1 m) of the target.
+
+```
+camera get_viewport().get_camera_2d() following Hero over 60 frames of input and 60 after:
+  lag: 43.598 px at most, 21.061 on average; the camera's path is 10 frames (167 ms) behind the target's
+  overshoot: 0 px past where the target stopped, settled within 1 px 48 frames (800 ms) after the input ended
+```
+
 ## Tests
 
-`tests/test_feel.py` runs `testbed/feel/feel.tscn`. Hero is a platformer character with known numbers at 60 frames a second (it speeds up at 1200 px/s² to 240 px/s, 600 px/s² in the air, slows at 1800 px/s², jumps at 600 px/s under 1800 px/s² of gravity, with 6 frames of coyote time and a 5-frame jump buffer), on a floor that ends at x 800. Each press of `ui_accept` sets `Hero.pressed_at` at once and lights `UI/Lamp` 3 frames later. It checks:
+`tests/test_feel.py` runs `testbed/feel/feel.tscn`. Hero is a platformer character with known numbers at 60 frames a second (it speeds up at 1200 px/s² to 240 px/s, 600 px/s² in the air, slows at 1800 px/s², jumps at 600 px/s under 1800 px/s² of gravity, with 6 frames of coyote time and a 5-frame jump buffer), on a floor that ends at x 800. Each press of `ui_accept` sets `Hero.pressed_at` at once and lights `UI/Lamp` 3 frames later. `hit()` stops time for 6 frames and shakes the camera 8 px along x at 10 Hz for 30 frames, decaying linearly; the camera follows Hero with position smoothing (speed 5). It checks:
 
 - feel: 12 frames and 1200 px/s² to 240 px/s, 8 frames and 14 px to stop, the apex 20 frames up and about 105 px high, the same for a tapped jump, 600 px/s² in the air, a coyote time of 6 frames and a buffer of 5, all as Hero's constants give them; the text output and `--skip`; a node that doesn't move and has no `is_on_floor()`
+- hitstop: `hit()` reading under 1 for 5 frames and Hero standing still for 6, and the note when Hero isn't moving
+- shake: about 6.7 px at 10 Hz from the offset, lasting about 28 frames, half gone in about 14, nothing along y; and the numbers of a made-up sine
+- follow: position smoothing at speed 5 lagging a 240 px/s Hero by up to 48 px and about a fifth of a second, with no overshoot, and the note when the target doesn't move
 - latency: the state after 1 frame and the lamp after 4 in every trial, a gap of 3; the text output; no response within `--max`; and the error without `--watch` or `--node`

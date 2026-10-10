@@ -8,9 +8,11 @@ camera for 30 frames, 8 px along x at 10 Hz, decaying linearly; the camera follo
 """
 import os
 
+import numpy as np
 import pytest
 
 from conftest import TESTBED, gdh, gdh_json
+from gdh.feel import describe_shake, runs
 
 SESSION = f"test-feel-{os.getpid()}"
 HERO_START = "get_node('Hero').set_global_position(Vector2(200, 376))"
@@ -97,3 +99,53 @@ def test_feel_prints_and_skips(feel, tmp_path):
     assert "coyote time: Floor has no is_on_floor()" in proc.stdout
     proc = run("feel", "--node", "Hero", "--skip", "walk", check=False)
     assert proc.returncode == 1 and "--skip takes run, jump, air, coyote, buffer" in proc.stderr
+
+
+# --- Hit-stop, shake and follow -------------------------------------------------------------------------------------
+
+
+def test_hitstop_finds_time_stopping_and_the_body_freezing(feel):
+    settle()
+    live("step", "30", "--hold", "ui_right")
+    reply = live("hitstop", "--do", "hit()", "--hold", "ui_right", "--node", "Hero")
+    # hit() sets time_scale to 0 and the game puts it back during the 6th frame: 5 frames read under 1 after each
+    # frame, and Hero stands still for all 6.
+    assert reply["time_scale"] == {"first_frame": 1, "frames": 5, "lowest": 0, "slow_frames": 5}
+    assert reply["freeze"] == {"first_frame": 1, "frames": 6}
+    assert reply["chart"].endswith("hitstop.png")
+    settle()
+    reply = live("hitstop", "--do", "hit()", "--node", "Hero", "--frames", "10")
+    assert "didn't move over the 10 frames" in reply["note"]
+
+
+def test_shake_measures_amplitude_frequency_and_decay(feel):
+    live("step", "40")
+    reply = live("shake", "--do", "hit()")
+    assert reply["source"] == "offset"
+    x = reply["axes"]["x"]
+    # 8 px at 10 Hz decaying linearly over 30 frames: its biggest sample is 8 * 28/30 * sin(120°), about 6.7 px.
+    assert x["amplitude"] == pytest.approx(6.7, abs=0.05) and x["frequency_hz"] == pytest.approx(10, abs=0.2)
+    assert 26 <= x["frames"] <= 30 and 12 <= x["frames_to_half"] <= 16 and x["frames_to_tenth"] <= 30
+    assert set(reply["axes"]) == {"x"}  # nothing along y
+
+
+def test_follow_measures_the_cameras_lag(feel):
+    settle()
+    live("step", "60")
+    reply = live("follow", "--target", "Hero", "--hold", "ui_right")
+    # Position smoothing at speed 5 trails a 240 px/s target by up to 240 / 5 = 48 px, a fifth of a second behind;
+    # it eases in, so it never overshoots.
+    assert 35 < reply["max_lag"] < 48 and 8 <= reply["lag_frames"] <= 13
+    assert reply["overshoot"] == 0 and reply["frames_to_settle"] is not None
+    proc = run("follow", "--target", "Hero", "--frames", "10", "--after", "10")
+    assert "didn't move, so there's no lag to see" in proc.stdout
+
+
+def test_shake_numbers_on_a_made_up_signal():
+    ticks = 60
+    t = np.arange(60) / ticks
+    signal = np.where(t < 0.5, 5 * np.sin(2 * np.pi * 6 * t), 0.0)
+    d = describe_shake(signal, ticks)
+    assert d["amplitude"] == pytest.approx(5 * np.sin(np.radians(72)), abs=0.01) and d["frequency_hz"] == pytest.approx(6, abs=0.1)
+    assert describe_shake(np.zeros(10), ticks) is None
+    assert runs([False, True, True, False, True]) == [(1, 2), (4, 1)]

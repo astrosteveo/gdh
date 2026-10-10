@@ -243,6 +243,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `audio` | Each audio bus's peak level over the last step, and the players that played what ([below](#audio)) |
 | `latency --press INPUT --watch EXPR --node PATH` | Frames from an input to the first change in a value and in a node's pixels ([feel.md](feel.md#latency)) |
 | `feel --node PATH` | A character's movement in numbers: top speed, stopping, jumps, air control, coyote time and jump buffer ([feel.md](feel.md#movement-feel)) |
+| `hitstop`, `shake`, `follow` | A hit-stop's frames, a camera shake's size, frequency and decay, and a camera's lag and overshoot ([feel.md](feel.md#hit-stop-shake-and-follow)) |
 
 Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Their names start with a number that goes on from the highest already in the folder, so a session started again with the same `--out` never writes over earlier shots. An array in a reply (from `eval`, say) keeps its first 100 items and ends with a string saying how many more there were: `"... 150 more (250 in all)"`. Add `--json` to any command for the raw reply.
 

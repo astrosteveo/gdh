@@ -7,7 +7,7 @@ description: See and drive a Godot 4 game on Linux. Render scenes off-screen on 
 
 `gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. `gdh capture` renders a scene once: six views, the engine errors and the probe findings. `gdh live` starts the game held at frame 0 and steps it an exact number of frames with input, so you can look between steps. `gdh movie` records a video, and `gdh editor` saves what the Godot editor shows. `gdh guide` prints a one-page cheat sheet.
 
-Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges game feel (controls, pacing, fun). You cover whether the game renders correctly, runs without errors and behaves as specified.
+Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges whether the game feels good (controls, pacing, fun). You cover whether it renders correctly, runs without errors and behaves as specified, and you measure what feel is made of: latency, speeds, jumps, hit-stop, shake.
 
 The rest of this plugin: the `godot-editor` skill (changing files with the editor open, `gdh bridge`, UIDs), `godot-gdscript`, `godot-project`, `godot-export` (builds), and the `playtester` agent, which plays a scene against a goal, reports back and keeps what passed as a scenario.
 
@@ -54,6 +54,7 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | Movement, input, animation, physics, timers, scene changes, UI interaction | `gdh live` |
 | A bug that shows up after doing something | `gdh live`: reproduce it step by step, then save it as a scenario |
 | How something moves: its path, timing, easing, overshoot; a pose, flash or transition frame by frame | `gdh live onion`, `step --trail`, `gdh live filmstrip`, `step --trace-chart` ([below](#seeing-motion)) |
+| Responsiveness and movement: input latency, speeds, jumps, coyote time, hit-stop, shake, camera lag | `gdh live latency`, `feel`, `hitstop`, `shake`, `follow` (`${CLAUDE_PLUGIN_ROOT}/docs/feel.md`) |
 | What moves in a scene that should be still, or what's frozen that should move | `gdh live record`, then its `<dir>-changes.png`, or `gdh measure changes --still` |
 | Flicker, popping or jitter over time | `gdh live step N --shot-every K` to look; `gdh live measure flicker` or `shimmer` for a number |
 | A thin effect's width, a point's size, a NaN, crushed blacks, a dissolve | `gdh measure line`, `spots`, `black`, `crush`, `dissolve` |
@@ -185,7 +186,7 @@ The installed Godot may be newer than your training data, and Godot 3 names (`Ki
 
 - **Verified and unverified:** say what you verified and how ("stepped 30 frames holding right; the player moved 60 px, which matches 120 px/s"), and what you didn't check.
 - **Evidence:** the paths of the screenshots or crops that show a problem or a fix, and the scenario that replays it. If a file-sending tool is available, send the key image.
-- **Game feel:** leave it to the user. Say which parts need a human playtest: feel, pacing, input latency, sound.
+- **Game feel:** give the numbers you can measure (`gdh live latency`, `feel`, `hitstop`, `shake`, `follow`: frames, speeds, heights, windows) against the target the user gave, and leave the judgment of whether it feels good to them. Say which parts need a human playtest: pacing, fun, sound.
 
 ## References
 

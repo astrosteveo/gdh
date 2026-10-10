@@ -46,6 +46,7 @@ KEEP IT
 FEEL
   gdh live latency --press ui_accept --watch EXPR --node PATH --session S   frames to the state, to the pixels
   gdh live feel --node PATH --session S                      speeds, stopping, jumps, coyote time, jump buffer
+  gdh live hitstop --do EXPR --hold ui_right --node PATH     a hit-stop's frames; also shake, follow --target
 
 MEASURE
   gdh live bench 600 --budget-p99 8.3 --session S            frame times; exit 1 over budget

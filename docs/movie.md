@@ -13,6 +13,7 @@ The output directory gets:
 |---|---|
 | `movie.mp4` | H.264 (yuv420p, `+faststart`) with AAC audio, at `--resolution` and `--fps` |
 | `sheet.png` | A contact sheet: 16 frames spread evenly over the movie, each labeled with its frame and time ([below](#the-contact-sheet)) |
+| `audio.png` | The sound's waveform and spectrogram, its time axis in seconds and frames, clipping in red and silences shaded, when the movie has sound ([below](#the-sound)) |
 | `report.json` | Frames, fps, size, the window's size, the audio (codec, rate, channels, peak, whether it's silent), timings, engine errors, resources that failed to load, `findings` (panels that covered the screen) and `problems` |
 | `crops/` | A crop for each finding, from the movie's middle frame |
 | `godot.log`, `display.log` | The engine's and the display's output |
@@ -62,6 +63,10 @@ Two runs each, with 60 frames a second of game time. Godot's start is a 1-frame 
 
 `gdh live record` and `gdh live measure` write one too, beside the frames' directory (`<dir>-sheet.png`), and `gdh measure sheet FRAMES... --out sheet.png` makes one from any PNG frames or from a video.
 
+## The sound
+
+When the game made a sound, `audio.png` shows it: the waveform (each column's lowest and highest sample, red where it reaches full scale), and under it the spectrogram (frequency on a log scale from 40 Hz up, brighter louder), on one time axis marked in seconds and in the movie's frames. Movie Maker records the audio frame for frame with the video, so a mark at frame 120 is frame 120 of the movie. Stretches of silence (under -60 dBFS for half a second or more) are shaded. `report.json` has the numbers under `"sound"`: the peak and RMS in dBFS, each run of clipped samples and each silence with its seconds and frame. `gdh measure audio FILE` makes the same image from any movie, video or WAV ([measure.md](measure.md#sound-gdh-measure-audio)).
+
 ## Panels that cover the screen
 
 A recording can be spoiled by a panel no one meant to leave up, such as a modal dialog over the middle of the screen. `gdh movie`, `gdh live record` and `gdh live measure` check for one. Every few frames (about 48 times a run) the harness lists the UI panels drawn over the screen's centre (`harness/covered.gd`), and a panel that's there in at least half of those samples is a `covered` warning, with the share of the screen it covered, the share of the run, and a crop:
@@ -89,7 +94,7 @@ Its blind spots: a panel drawn without any of these nodes (`_draw` on a plain `C
 | `--quality` | `1.0` | Movie Maker's MJPEG quality (0 to 1), which the H.264 encode starts from |
 | `--crf` | `18` | The H.264 encode's quality: lower is better and larger |
 | `--keep-avi` | off | Keep Movie Maker's AVI as `movie.avi` |
-| `--no-sheet` | off | Don't make `sheet.png` |
+| `--no-sheet` | off | Don't make `sheet.png` or `audio.png` |
 | `--timeout` | 120 s plus 1 s a frame | Time allowed for the recording |
 | `--display`, `--no-build`, `--no-import` | | As for `capture` |
 

@@ -49,12 +49,13 @@ KEEP IT
 FEEL
   gdh live latency --press ui_accept --watch EXPR --node PATH --session S   frames to the state, to the pixels
   gdh live feel --node PATH --session S                      speeds, jumps, coyote, buffer; hitstop, shake, follow
+  gdh live soundsync 300 --event land --session S            frames from each event to its sound
 
 MEASURE
   gdh live bench 600 --budget-p99 8.3 --session S            frame times; exit 1 over budget
   gdh live profile 600 --session S                           (start --profiler) which script functions took it
   gdh live monitors --leak --session S                       nodes, orphans, memory growing
-  gdh live audio --session S                                 bus peaks, what played
+  gdh live audio --session S                                 bus peaks, what played; measure audio: waveform
   gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black|changes|popin D
 
 BUILDS AND THE EDITOR

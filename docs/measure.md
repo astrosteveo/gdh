@@ -73,6 +73,7 @@ Some views make steadier baselines than others. `unshaded` (the albedo alone) an
 | `gdh live frames [--clear] [--reset] [--save FILE]` | The frame times recorded since the record last started over. `--clear` starts it over now (before a run), `--reset` after reading. |
 | `gdh live bench N [--budget-median MS] [--budget-p99 MS]` | Starts the record over, steps N frames (600 by default) and prints their times; exits 1 over a budget ([below](#a-budget-gdh-live-bench)). |
 | `gdh measure chart FILE.csv --out PNG` | A line chart of a trace that `gdh live step --trace-out` wrote: a panel for each column, a line for each component of a vector. `--rates` adds rates of change ([live.md](live.md#waiting-and-tracing)). |
+| `gdh measure audio FILE` | A recording's waveform and spectrogram, marked in seconds and frames, with clipping and silences ([below](#sound-gdh-measure-audio)). |
 | `gdh measure palette SHOT --reference IMAGE` | A shot's lightness, contrast, black and white points, saturation and dominant colors against a reference or a mood board ([art.md](art.md#matching-a-look)). |
 | `gdh measure popin FRAMES...` | Pop-in: blocks that change all at once, beyond what any movement explains, while the rest moves smoothly ([art.md](art.md#pop-in)). |
 | `gdh measure changes FRAMES... --out PNG` | Where a run of frames changed and how often: each pixel by how many frame-to-frame steps it changed in, with the regions boxed and cropped ([motion.md](motion.md#change-maps)). |
@@ -113,6 +114,23 @@ The summary warns of two things that make its times read high:
 ## A budget: `gdh live bench`
 
 `gdh live bench N` times N frames (600 by default) in one call. In one request to the game it draws held frames back to back for a second (`--warmup SECONDS`), so the GPU has clocked up and no game time passes; starts the frame record over; and steps N frames, all with no gap for the GPU to idle. Then it prints the summary, with its warnings, and checks the GPU's times against `--budget-median MS` and `--budget-p99 MS`: it prints each, and exits 1 if one is over, or if no frame was measured to check it against. `--save FILE.json` keeps the record. `--hold`, `--press`, `--release` and `--move` go in as `step`'s do, to time the game while it's played. Every instance steps; `--instance` picks whose times (and who gets the input). `--json` adds `"budgets"` (`[{"stat", "gpu_ms", "budget_ms", "over"}]`) and `"over_budget"` to the summary.
+
+## Sound: `gdh measure audio`
+
+```sh
+gdh measure audio captures/clip/movie.mp4                 # beside it: movie-audio.png
+gdh measure audio sfx/explosion.wav --fps 60 --fail       # exit 1 if it clips
+```
+
+`measure audio FILE` reads a recording's sound (a WAV as it is; a movie, a video or any audio file through ffmpeg, mixed to mono) and draws it in one image (`--out PNG`, default `FILE-audio.png` beside it): the waveform, red where it reaches full scale, over the spectrogram, frequency on a log scale from 40 Hz, on one time axis marked in seconds and in game frames (`--fps`, default the movie's `report.json` beside it, else 60). It prints the peak and RMS in dBFS, the clipping (samples at full scale, in runs, the first with its time and frame), and each silence: quieter than `--silence-db` (-60 dBFS, in 20 ms windows) for `--silence` seconds (0.5) or more, shaded on the image.
+
+```
+2.6 s at 44100 Hz: peak 0 dBFS, RMS -7.09 dBFS
+  clipping: 15096 samples at full scale, in 264 runs, the first at 1.4 s (frame 84)
+  silent from 0.6 s to 1.4 s (frames 36 to 84)
+```
+
+A movie gdh recorded lines its sound up with its frames exactly, so the frame marks match the video's frames. A live session's sound doesn't: gdh runs games on Godot's dummy audio driver, which mixes in real time while a step runs faster than that. Record a movie for the sound, and use `gdh live soundsync` ([feel.md](feel.md#sound-in-sync-soundsync)) for when sounds start, which is game time. `--fail` exits 1 when it clips.
 
 ## Script time: `gdh live profile`
 

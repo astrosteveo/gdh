@@ -417,6 +417,8 @@ def add_parsers(sub):
     clipping.add_measure_parsers(kinds)
     from gdh import readability
     readability.add_measure_parsers(kinds)
+    from gdh import audio
+    audio.add_measure_parsers(kinds)
     k = kinds.add_parser("times", help="Summarize a frame-time record (gdh live frames --save)")
     k.add_argument("record")
     k.add_argument("--json", action="store_true")

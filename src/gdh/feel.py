@@ -40,9 +40,9 @@ class Driver:
         self.index = chosen[0]
         self.ticks = None
 
-    def step(self, frames, events=(), trace=(), every=1, shot_every=0, track=None, until=None):
+    def step(self, frames, events=(), trace=(), every=1, shot_every=0, track=None, until=None, **extra):
         from gdh.live import call, report
-        request = {"frames": max(frames, 1), "events": list(events), "shot_every": shot_every}
+        request = {"frames": max(frames, 1), "events": list(events), "shot_every": shot_every, **extra}
         if trace or until:
             request["every"] = every
         if trace:
@@ -55,6 +55,8 @@ class Driver:
         result = report(reply, self.args.json, echo=False)
         if isinstance(result, list):
             result = result[self.index]
+        parts = reply.get("instances", [reply])
+        result["game_events"] = parts[min(self.index, len(parts) - 1)].get("events", [])  # GdhEvents during the step
         self.ticks = result["status"].get("ticks_per_second", 60)
         return result
 

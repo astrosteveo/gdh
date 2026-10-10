@@ -43,6 +43,9 @@ KEEP IT
   gdh scenario run test/x.scenario.json                      replays frame-exactly; gdh test runs it too
   Python: from gdh.client import Session
 
+FEEL
+  gdh live latency --press ui_accept --watch EXPR --node PATH --session S   frames to the state, to the pixels
+
 MEASURE
   gdh live bench 600 --budget-p99 8.3 --session S            frame times; exit 1 over budget
   gdh live monitors --leak --session S                       nodes, orphans, memory growing

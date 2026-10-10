@@ -241,6 +241,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `monitors [--frames N] [--every K] [--leak]` | Godot's Performance monitors: objects, resources, nodes, orphan nodes, draw calls, video memory. `--leak` flags a count that grows steadily ([below](#performance-monitors)) |
 | `step N --monitors` | The monitors before and after the step, and their change |
 | `audio` | Each audio bus's peak level over the last step, and the players that played what ([below](#audio)) |
+| `latency --press INPUT --watch EXPR --node PATH` | Frames from an input to the first change in a value and in a node's pixels ([feel.md](feel.md#latency)) |
 
 Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Their names start with a number that goes on from the highest already in the folder, so a session started again with the same `--out` never writes over earlier shots. An array in a reply (from `eval`, say) keeps its first 100 items and ends with a string saying how many more there were: `"... 150 more (250 in all)"`. Add `--json` to any command for the raw reply.
 

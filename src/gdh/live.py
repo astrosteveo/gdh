@@ -684,9 +684,8 @@ def with_modifiers(events, mods, n):
     return out + [modifier(m, False, n, held[:i]) for i, m in enumerate(held)][::-1]
 
 
-def cmd_step(args):
-    session = load_session(args.session)
-    n = step_length(args, session)
+def step_input_events(args, n):
+    """The input events of a step of n frames from its input options (add_input_options), in time order."""
     events = []
     for point in args.move:
         x, y = (float(v) for v in point.split(","))
@@ -720,11 +719,16 @@ def cmd_step(args):
             events += [{"mouse_motion": [0, 0], "on": on, "at": 0},
                        {"mouse_button": 1, "on": on, "pressed": True, "at": 0},
                        {"mouse_button": 1, "on": on, "pressed": False, "at": 1}]
-
     events = with_modifiers(events + device_input(args, n), args.mod, n)
     # In time order, each frame's as given: the game follows the pointer, its buttons and the fingers event by event.
     events.sort(key=lambda e: e["at"])
-    step_args = {"frames": n, "events": events, "shot_every": args.shot_every}
+    return events
+
+
+def cmd_step(args):
+    session = load_session(args.session)
+    n = step_length(args, session)
+    step_args = {"frames": n, "events": step_input_events(args, n), "shot_every": args.shot_every}
     step_args.update(watch_args(args))
     if args.monitors:
         step_args["monitors"] = 0  # Godot's Performance monitors before the first frame and after the last (perf.py)
@@ -1382,6 +1386,53 @@ def add_display_option(parser):
                              "(default: $GDH_DISPLAY, else auto)")
 
 
+def add_input_options(p):
+    """A step's input options: step's own, and the motion commands' that step (motion_cli.py)."""
+    p.add_argument("--move", action="append", default=[], metavar="X,Y",
+                   help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
+    p.add_argument("--press", action="append", default=[], metavar="INPUT",
+                   help="Press at the start and keep it pressed. INPUT is an action name, key:NAME (key:ctrl+s with "
+                        "its modifiers), mouse:left, mouse:right or mouse:middle (at the pointer), or a gamepad's "
+                        "joy:NAME (joy:a, joy:start, joy:dpad_up...)")
+    p.add_argument("--release", action="append", default=[], metavar="INPUT", help="Release at the start")
+    p.add_argument("--hold", action="append", default=[], metavar="INPUT",
+                   help="Press at the start, release at the end")
+    p.add_argument("--tap", action="append", default=[], metavar="INPUT", help="Press for one frame")
+    p.add_argument("--type", metavar="TEXT", help="Type TEXT into whatever has the keyboard's focus, a character a frame from the step's start")
+    p.add_argument("--click", action="append", default=[], metavar="X,Y", help="Left click at screenshot pixel X,Y")
+    p.add_argument("--right-click", action="append", default=[], metavar="X,Y", help="Right click at screenshot pixel X,Y")
+    p.add_argument("--left-hold", action="append", default=[], metavar="X,Y",
+                   help="Press the left button at screenshot pixel X,Y at the start, release it at the end")
+    p.add_argument("--right-hold", action="append", default=[], metavar="X,Y",
+                   help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
+    p.add_argument("--click-text", action="append", default=[], metavar="TEXT",
+                   help="Left click the node that shows TEXT (exactly, in any case; else the one whose text holds it), "
+                        "at the centre of what shows of it. None, or several, fails, naming them")
+    p.add_argument("--click-node", action="append", default=[], metavar="PATH",
+                   help="Left click a node (a path from the current scene, or /root/...) at the centre of what shows of it")
+
+    p.add_argument("--wheel", action="append", default=[], metavar="DIR[:N]",
+                   help="Turn the mouse wheel up, down, left or right N notches (default 1) where the pointer is, a "
+                        "notch a frame from the step's start")
+    p.add_argument("--wheel-at", metavar="X,Y",
+                   help="Move the pointer to screenshot pixel X,Y first, and turn the wheel there")
+    p.add_argument("--mod", action="append", default=[], metavar="MODS",
+                   help="Hold ctrl, shift, alt or meta (comma-separated) for the step: pressed at its start, released "
+                        "at its end, and carried by its keys, clicks, wheel and pointer moves")
+    p.add_argument("--axis", action="append", default=[], metavar="NAME=VALUE",
+                   help="Put a gamepad axis at VALUE (-1 to 1) at the start, where it stays until another --axis moves "
+                        "it: left_x, left_y, right_x, right_y, trigger_left or trigger_right")
+    p.add_argument("--touch", action="append", default=[], metavar="X,Y",
+                   help="Tap the touchscreen at screenshot pixel X,Y for one frame. Each --touch, then each "
+                        "--touch-drag, is a finger of its own, numbered from 0")
+    p.add_argument("--touch-drag", action="append", default=[], metavar="X,Y:X,Y",
+                   help="Put a finger down at the first point at the start, move it evenly to the second over the "
+                        "step, and lift it at the end")
+    p.add_argument("--look", action="append", default=[], metavar="DX,DY",
+                   help="Move the mouse by DX,DY screenshot pixels at the start: relative motion, for mouse-look (a "
+                        "captured mouse stays at the window's centre). A negative DX needs =: --look=-40,0")
+
+
 def add_parsers(sub):
     from gdh import blackbox
     live = sub.add_parser("live", help="Start a game off-screen and drive it step by step")
@@ -1476,49 +1527,7 @@ def add_parsers(sub):
                 instance="Which instance gets the input: a number, or all (default 0). Every instance steps")
     p.add_argument("frames", type=int, nargs="?", default=None,
                    help="How many frames (default 1); with --until, the most")
-    p.add_argument("--move", action="append", default=[], metavar="X,Y",
-                   help="Move the pointer to screenshot pixel X,Y at the start, before any press (a drag, with a button held)")
-    p.add_argument("--press", action="append", default=[], metavar="INPUT",
-                   help="Press at the start and keep it pressed. INPUT is an action name, key:NAME (key:ctrl+s with "
-                        "its modifiers), mouse:left, mouse:right or mouse:middle (at the pointer), or a gamepad's "
-                        "joy:NAME (joy:a, joy:start, joy:dpad_up...)")
-    p.add_argument("--release", action="append", default=[], metavar="INPUT", help="Release at the start")
-    p.add_argument("--hold", action="append", default=[], metavar="INPUT",
-                   help="Press at the start, release at the end")
-    p.add_argument("--tap", action="append", default=[], metavar="INPUT", help="Press for one frame")
-    p.add_argument("--type", metavar="TEXT", help="Type TEXT into whatever has the keyboard's focus, a character a frame from the step's start")
-    p.add_argument("--click", action="append", default=[], metavar="X,Y", help="Left click at screenshot pixel X,Y")
-    p.add_argument("--right-click", action="append", default=[], metavar="X,Y", help="Right click at screenshot pixel X,Y")
-    p.add_argument("--left-hold", action="append", default=[], metavar="X,Y",
-                   help="Press the left button at screenshot pixel X,Y at the start, release it at the end")
-    p.add_argument("--right-hold", action="append", default=[], metavar="X,Y",
-                   help="Press the right button at screenshot pixel X,Y at the start, release it at the end")
-    p.add_argument("--click-text", action="append", default=[], metavar="TEXT",
-                   help="Left click the node that shows TEXT (exactly, in any case; else the one whose text holds it), "
-                        "at the centre of what shows of it. None, or several, fails, naming them")
-    p.add_argument("--click-node", action="append", default=[], metavar="PATH",
-                   help="Left click a node (a path from the current scene, or /root/...) at the centre of what shows of it")
-
-    p.add_argument("--wheel", action="append", default=[], metavar="DIR[:N]",
-                   help="Turn the mouse wheel up, down, left or right N notches (default 1) where the pointer is, a "
-                        "notch a frame from the step's start")
-    p.add_argument("--wheel-at", metavar="X,Y",
-                   help="Move the pointer to screenshot pixel X,Y first, and turn the wheel there")
-    p.add_argument("--mod", action="append", default=[], metavar="MODS",
-                   help="Hold ctrl, shift, alt or meta (comma-separated) for the step: pressed at its start, released "
-                        "at its end, and carried by its keys, clicks, wheel and pointer moves")
-    p.add_argument("--axis", action="append", default=[], metavar="NAME=VALUE",
-                   help="Put a gamepad axis at VALUE (-1 to 1) at the start, where it stays until another --axis moves "
-                        "it: left_x, left_y, right_x, right_y, trigger_left or trigger_right")
-    p.add_argument("--touch", action="append", default=[], metavar="X,Y",
-                   help="Tap the touchscreen at screenshot pixel X,Y for one frame. Each --touch, then each "
-                        "--touch-drag, is a finger of its own, numbered from 0")
-    p.add_argument("--touch-drag", action="append", default=[], metavar="X,Y:X,Y",
-                   help="Put a finger down at the first point at the start, move it evenly to the second over the "
-                        "step, and lift it at the end")
-    p.add_argument("--look", action="append", default=[], metavar="DX,DY",
-                   help="Move the mouse by DX,DY screenshot pixels at the start: relative motion, for mouse-look (a "
-                        "captured mouse stays at the window's centre). A negative DX needs =: --look=-40,0")
+    add_input_options(p)
     p.add_argument("--shot-every", type=int, default=0, metavar="K", help="Save a frame every K frames")
     p.add_argument("--shot", action="store_true", help="Save a frame after stepping")
     p.add_argument("--until", metavar="EXPR",
@@ -1613,8 +1622,9 @@ def add_parsers(sub):
     p.add_argument("--stop-on-error", action="store_true", help="Stop at the first command that fails")
     command("list", cmd_list, "List every live session: project, scene, pids, displays, age")
 
-    from gdh import measure_cli
+    from gdh import measure_cli, motion_cli
     measure_cli.add_live_parsers(commands, command)
+    motion_cli.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

@@ -412,6 +412,8 @@ def add_parsers(sub):
     k.add_argument("--title", help="A title over the chart")
     k.add_argument("--json", action="store_true", help="It always prints JSON; taken for scripts' sake")
     k.set_defaults(func=cmd_measure)
+    from gdh import motion_cli
+    motion_cli.add_measure_parsers(kinds)
     k = kinds.add_parser("times", help="Summarize a frame-time record (gdh live frames --save)")
     k.add_argument("record")
     k.add_argument("--json", action="store_true")

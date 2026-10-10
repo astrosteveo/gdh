@@ -66,6 +66,8 @@ def remove_session(session):
     shutil.rmtree(session.get("shims", ""), ignore_errors=True)
     if session.get("net"):
         shutil.rmtree(Path(session["net"]["socket"]).parent, ignore_errors=True)
+    if session.get("debugger"):
+        shutil.rmtree(Path(session["debugger"]["socket"]).parent, ignore_errors=True)
 
 
 def instances(session):
@@ -324,6 +326,8 @@ def start_instance(project, args, index, count, out, shims, ports, ticks):
     # --fixed-fps matching the tick rate makes every frame exactly one physics tick.
     # --gpu-profile makes the renderer capture a timestamp at each pass, which `frames` reads (harness/frames.gd).
     profile = ["--gpu-profile"] if getattr(args, "gpu_passes", False) else []
+    if getattr(args, "_debugger_port", None):  # --profiler: gdh's debugger takes the script profiler's frames
+        profile += ["--remote-debug", f"tcp://127.0.0.1:{args._debugger_port}"]
     cmd = godot_cmd(project, args.resolution, [*profile, "--fixed-fps", str(ticks), "--script", str(LIVE_SCRIPT)], game_args)
     out.mkdir(parents=True, exist_ok=True)
     log_path = out / "godot.log"
@@ -414,6 +418,8 @@ def cmd_start(args):
     shaping = {"latency": args.net_latency, "jitter": args.net_jitter, "loss": args.net_loss}
     if any(v < 0 for v in shaping.values()) or args.net_loss > 100:
         raise LiveError("--net-latency and --net-jitter take milliseconds, and --net-loss a percent from 0 to 100.")
+    if getattr(args, "profiler", False) and args.instances > 1:
+        raise LiveError("--profiler profiles one game: start it with one instance.")
     if not args.net and any(shaping.values()):
         raise LiveError("--net-latency, --net-jitter and --net-loss go with --net NAME: the companion to put behind "
                         "the network proxy.")
@@ -450,6 +456,11 @@ def cmd_start(args):
             session["net"] = net
             for route in net["routes"]:
                 print(f"network: {netem.describe_route_start(route)}")
+        if getattr(args, "profiler", False):
+            from gdh import debugger
+            session["debugger"] = debugger.start(SESSION_DIR / f"{name}-debugger", out)
+            started_groups.append(session["debugger"]["pid"])
+            args._debugger_port = session["debugger"]["port"]
         deadline = time.monotonic() + args.timeout
         for index in range(args.instances):
             instance_out = out if args.instances == 1 else out / f"instance-{index}"
@@ -1628,6 +1639,9 @@ def add_parsers(sub):
                         "not just the game (a launcher that hands off to the game it starts), or, once the game "
                         "has exited, until --idle-timeout seconds pass without a gdh live command on the session. "
                         "Without it, spawned processes end with the session")
+    p.add_argument("--profiler", action="store_true",
+                   help="Start the game under gdh's debugger, so `gdh live profile` can read Godot's script profiler: "
+                        "each function's time, frame by frame (one instance only)")
     p.add_argument("--gpu-passes", action="store_true",
                    help="Have the renderer time each of its passes, for `frames` (Godot's --gpu-profile; it also "
                         "prints a GPU profile to the log each second)")
@@ -1787,6 +1801,8 @@ def add_parsers(sub):
     feel.add_live_parsers(commands, command)
     from gdh import compare
     compare.add_live_parsers(commands, command)
+    from gdh import profile
+    profile.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

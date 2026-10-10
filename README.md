@@ -223,6 +223,7 @@ gdh measure spots frame.png --radius 6                     # each star's or mote
 gdh live measure black --frames 60 --fail --session s     # black cut into something lit: a NaN
 gdh live start --project game --session s --gpu-passes    # time each render pass too
 gdh live bench 600 --budget-p99 8.3 --session s            # time 600 frames in one call; exit 1 over budget
+gdh live profile 600 --session s                           # with start --profiler: which script functions took the time
 gdh live monitors --leak --session s                       # nodes, orphans, objects, memory: exit 1 on steady growth
 gdh live audio --session s                                 # each bus's peak over the last step, and what played
 gdh measure sheet frames/still --out still-sheet.png      # 16 frames of a run (or a video) in one image
@@ -373,6 +374,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |
 | `src/gdh/motion.py`, `motion_cli.py`, `chart.py` | Motion in one image: onion skins, filmstrips, trails and change maps, with `gdh live onion` and `filmstrip` and their `gdh measure` forms; and trace charts |
+| `src/gdh/profile.py`, `debugger.py`, `variant.py` | `gdh live profile`, the debugger `start --profiler` runs beside the game, and Godot's binary Variant format it speaks |
 | `src/gdh/feel.py` | `gdh live latency`, `feel`, `hitstop`, `shake` and `follow` |
 | `src/gdh/compare.py`, `review.py` | Options side by side: `gdh live sweep`, `gdh capture --matrix` and their grids, and `gdh review`'s page for the user's choice |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |

@@ -46,6 +46,7 @@ MEASURE
   gdh live monitors --leak --session S                       nodes, orphans, memory growing
   gdh live audio --session S                                 bus peaks, what played
   gdh live record 90 --out D --session S; gdh measure flicker|shimmer|black D
+  gdh measure changes D --out map.png [--still]              where it changed, how often; record writes one
 
 BUILDS AND THE EDITOR
   gdh export --project P --preset Linux --smoke 10           build, run it off-screen, fail on errors

@@ -1,5 +1,5 @@
-"""gdh live onion and filmstrip, and gdh measure onion and filmstrip: motion in one image (motion.py) from a live
-session's frames, or saved ones.
+"""gdh live onion and filmstrip, and gdh measure onion, filmstrip and changes: motion in one image (motion.py) from a
+live session's frames, or saved ones.
 
 A live command steps the frames with the step's own input options, saves every Kth frame, and tracks where the node
 is on each (harness/track.gd), so the box framed is the one the node moved through.
@@ -177,6 +177,36 @@ def cmd_measure_filmstrip(args):
     return 0
 
 
+def cmd_measure_changes(args):
+    from gdh.measure import MeasureError, frame_paths
+    try:
+        paths = frame_paths(args.frames)
+        crops = None if args.no_crops else Path(args.out).with_name(Path(args.out).stem + "-crops")
+        info = motion.changes(paths, args.out, args.threshold, args.still, crops)
+    except (motion.MotionError, MeasureError) as e:
+        raise MotionCliError(str(e)) from None
+    if args.json:
+        print(json.dumps(info, indent=1))
+    else:
+        print(describe_changes(info))
+    return 0
+
+
+def describe_changes(info, prefix=""):
+    """A change map's result in a few lines."""
+    lines = [f"{prefix}changes over {info['frames']} frames: {info['changed_share']:.3%} of pixels ({info['changed_px']}) "
+             f"changed by more than {info['threshold']:g} in at least one of the {info['steps']} steps, "
+             f"{info['every_step_px']} in every one"]
+    for i, r in enumerate(info["regions"][:5], 1):
+        crop = f"  [{r['crop']}]" if r.get("crop") else ""
+        lines.append(f"{prefix}  {i}: {r['px']} px in the box {','.join(map(str, r['box']))}, changed in up to "
+                     f"{r['most_steps']} of {info['steps']} steps{crop}")
+    if info["region_count"] > 5:
+        lines.append(f"{prefix}  ... {info['region_count'] - 5} more regions (--json has the largest 10)")
+    lines.append(f"{prefix}change map: {info['out']}")
+    return "\n".join(lines)
+
+
 # --- Parsers ---------------------------------------------------------------------------------------------------------
 
 
@@ -227,7 +257,7 @@ def filmstrip_options(p):
 
 
 def add_measure_parsers(kinds):
-    """gdh measure onion and filmstrip. `kinds` is gdh measure's subparsers."""
+    """gdh measure onion, filmstrip and changes. `kinds` is gdh measure's subparsers."""
     k = kinds.add_parser("onion", help="Lay saved frames over each other in one image: an onion skin, the oldest "
                                        "faintest, for a movement's path, spacing and shape")
     k.add_argument("frames", nargs="+", help="PNG files, or directories of them (taken in name order)")
@@ -246,3 +276,15 @@ def add_measure_parsers(kinds):
     k.add_argument("--json", action="store_true", help="Print the whole result")
     filmstrip_options(k)
     k.set_defaults(func=cmd_measure_filmstrip)
+    k = kinds.add_parser("changes", help="Where a run of frames changed and how often, in one image: each pixel by how "
+                                         "many of the frame-to-frame steps it changed in, with the regions boxed")
+    k.add_argument("frames", nargs="+", help="PNG files, or directories of them (taken in name order)")
+    k.add_argument("--out", required=True, metavar="PNG", help="Where the map goes")
+    k.add_argument("--threshold", type=float, default=motion.CHANGE_THRESHOLD, metavar="T",
+                   help="A pixel changed in a step when a channel differs by more than T, of 255 (default 2)")
+    k.add_argument("--still", action="store_true", help="Tint the pixels that never changed green")
+    k.add_argument("--no-crops", action="store_true",
+                   help="Don't crop the largest regions (by default into <out>-crops/: the first frame, the last and "
+                        "the map side by side)")
+    k.add_argument("--json", action="store_true", help="Print the whole result")
+    k.set_defaults(func=cmd_measure_changes)

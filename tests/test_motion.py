@@ -1,5 +1,5 @@
-"""The motion tools against testbed/motion/motion.tscn: trace charts, onion skins, trails and filmstrips; 3D trails
-against motion3d.tscn.
+"""The motion tools against testbed/motion/motion.tscn: trace charts, onion skins, trails, filmstrips and change maps;
+3D trails against motion3d.tscn.
 
 Ball moves right 4 px a physics frame while `moving`, Spinner turns 6 degrees a frame in place, Blinker changes color
 every 10 frames, and with `follow` the camera keeps Ball at the screen's centre. In motion3d.tscn Cube moves along x
@@ -320,3 +320,55 @@ def test_measure_filmstrip_and_its_limits(game, tmp_path):
     assert reply["frames"] == ["frame 0", "frame 3", "frame 6", "frame 9"] and reply["columns"] == 4
     proc = run("filmstrip", "60", "--node", "Spinner", "--every", "1", check=False)
     assert proc.returncode == 1 and "60 frames is too many for one filmstrip (at most 48)" in proc.stderr
+
+
+# --- Change maps ------------------------------------------------------------------------------------------------------
+
+
+def test_record_writes_a_change_map_that_counts_each_pixels_changes(game, tmp_path):
+    reset()
+    live("eval", "set('moving', false)")
+    # Blinker flips every 10 frames: lined up so 40 frames hold 4 flips.
+    live("step", "--until", "ticks % 10 == 5")
+    frames = tmp_path / "rec"
+    try:
+        reply = live("record", "40", "--out", frames)
+    finally:
+        reset()
+    changes = reply["changes"]
+    assert changes["out"] == str(tmp_path / "rec-changes.png") and Path(changes["out"]).exists()
+    assert changes["frames"] == 40 and changes["steps"] == 39
+    # Two things moved: Spinner and Blinker. Ball stood still.
+    boxes = [r["box"] for r in changes["regions"]]
+    assert [1100, 80, 1160, 140] in boxes and len(boxes) == 2
+    blinker = changes["regions"][boxes.index([1100, 80, 1160, 140])]
+    assert blinker["px"] == 60 * 60 and blinker["most_steps"] == 4
+    reply = gdh_json("measure", "changes", frames, "--out", tmp_path / "map.png", "--still")
+    assert len(reply["crops"]) == 2 and all(Path(c).exists() for c in reply["crops"])
+    with Image.open(tmp_path / "map.png") as img:
+        a = np.asarray(img.convert("RGB"), dtype=np.int32)[motion.HEADER:]
+    # --still: what never changed is tinted green; Blinker's pixels are on the hot scale (red first).
+    assert a[600, 640][1] > a[600, 640][0] + 30
+    assert a[110, 1130][0] > 200 and a[110, 1130][2] < 60
+    proc = run("record", "4", "--out", tmp_path / "quiet", "--no-sheet")
+    assert "change map" not in proc.stdout and not (tmp_path / "quiet-changes.png").exists()
+
+
+def test_change_counts_are_exact(tmp_path):
+    paths = []
+    for i in range(5):
+        a = np.zeros((20, 30, 3), np.uint8)
+        a[2:6, 2:6] = 255 if i % 2 else 0  # flips every step
+        if i >= 3:
+            a[10:18, 20:28] = 200          # changes once, between frames 2 and 3
+        a[0, 29] = 1                       # under the threshold: never counted
+        path = tmp_path / f"f{i}.png"
+        Image.fromarray(a).save(path)
+        paths.append(path)
+    info = motion.changes(paths, tmp_path / "map.png", crops_dir=tmp_path / "crops")
+    assert info["steps"] == 4 and info["changed_px"] == 16 + 64 and info["every_step_px"] == 16
+    assert [(r["px"], r["box"], r["most_steps"]) for r in info["regions"]] == [(64, [20, 10, 28, 18], 1),
+                                                                               (16, [2, 2, 6, 6], 4)]
+    assert len(info["crops"]) == 2
+    proc = gdh("measure", "changes", paths[0], "--out", tmp_path / "x.png", check=False)
+    assert proc.returncode == 1 and "A change map needs 2 frames or more." in proc.stderr

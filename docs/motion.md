@@ -8,6 +8,7 @@ An image reader sees one still frame at a time, and a contact sheet of 16 frames
 | `gdh live onion N --node PATH` | A node's movement as an onion skin: its frames laid over each other, the oldest faintest ([below](#onion-skins)) |
 | `gdh live filmstrip N --node PATH` | The same box round a node from each frame side by side, labeled with its game frame ([below](#filmstrips)) |
 | `gdh live step N --trail PATH` | Where nodes went, drawn on the last frame with a dot every K frames, and the pixels between the dots ([below](#trails)) |
+| `gdh measure changes FRAMES --out F.png` | Where a run changed and how often: each pixel by how many frame-to-frame steps it changed in, with the regions boxed. `gdh live record` writes one too ([below](#change-maps)) |
 
 Each live command steps the game with the same input options as `step` (`--hold`, `--press`, `--click`, `--axis` and the rest), so the movement can be one the player makes. A recording of frames saved earlier (`gdh live record`, or any game's PNGs) works with the `gdh measure` forms.
 
@@ -67,6 +68,35 @@ trail: captures/live/s/shots/0007-trail.png
 
 With `--json` the reply gets `"trails": {"image", "every", "trails": [{"node", "dots": [[frame, x, y], ...], "spacing", "missing", "off_screen"}]}`, and the step's result holds every frame's point and box under `"track"`. A point off the frame is still drawn toward, with the line leaving the frame there; a point behind a 3D camera, or after the node was freed, has no place (`null`), and the line breaks there. Both are counted, with a note on stderr. A session of several instances draws one: give `--instance K`.
 
+## Change maps
+
+```sh
+gdh live record 120 --session s --out frames/idle          # also writes frames/idle-changes.png
+gdh measure changes frames/idle --out idle-changes.png --still
+```
+
+`gdh measure changes FRAMES... --out FILE.png` reads a run of frames (PNG files, or directories taken in name order) and counts, for each pixel, how many of the frame-to-frame steps it changed in: by more than `--threshold` (2, of 255) in any channel. The map is the first frame dimmed to grey, with every pixel that changed colored by its count, red for one step, then orange and yellow, to white for every step. The scale is logarithmic, so one, two and four changes look different. `--still` also tints the pixels that never changed green.
+
+The changed pixels are grouped into regions, as `gdh measure diff` groups them (pixels in 8-pixel blocks that touch are one region), outlined in cyan and numbered, largest first. For each of the largest five, a crop goes into `<out>-crops/`: the first frame, the last frame and the map, side by side (`--no-crops` skips them). It prints how much of the frame changed, how many pixels changed in every step, and each region's size, box and most steps. On `testbed/motion/motion.tscn` over 40 frames, Ball moving, Spinner turning and Blinker changing color:
+
+```
+changes over 40 frames: 1.664% of pixels (15339) changed by more than 2 in at least one of the 39 steps, 0 in every one
+  1: 6016 px in the box 188,344,376,376, changed in up to 2 of 39 steps  [idle-changes-crops/01-changes.png]
+  2: 5723 px in the box 594,150,690,250, changed in up to 4 of 39 steps  [idle-changes-crops/02-changes.png]
+  3: 3600 px in the box 1100,80,1160,140, changed in up to 4 of 39 steps  [idle-changes-crops/03-changes.png]
+change map: idle-changes.png
+```
+
+`--json` has every number, and up to the largest 10 regions. Read the counts against what should happen:
+
+- **A scene that should be still** (an idle screen, a paused menu): every region is something moving that maybe shouldn't, such as an animation left running, a shimmering shadow, or a light that flickers. A region changed in every step changes all the time.
+- **Something that moves once** (a door opening) changes in a step or two at each pixel it passes. Something that changes in every step is moving or animating throughout.
+- **What never changed** (`--still`): a part that should animate (water, a fire, a waiting character's idle animation) but shows green is frozen.
+
+A frame wider or taller than 1280 pixels is shrunk by a whole factor for the map, each pixel showing the most changes it covers, so a single changed pixel still shows. The crops are at full size.
+
+`gdh live record` and `gdh live measure` write the change map beside the frames' directory, as `<dir>-changes.png` next to `<dir>-sheet.png`, and print its share of changed pixels and regions; `--no-sheet` skips both.
+
 ## Tests
 
 `tests/test_motion.py` runs `testbed/motion/motion.tscn`, where Ball moves right 4 pixels a physics frame, Spinner turns 6 degrees a frame in place, Blinker changes color every 10 frames and the rest stands still; with `follow`, the camera keeps Ball at the screen's centre. In `motion3d.tscn`, Cube moves along x 0.05 a frame in front of the camera, and Ghost moves 0.25 a frame along z, from in front of the camera to behind it. It checks:
@@ -77,4 +107,5 @@ With `--json` the reply gets `"trails": {"image", "every", "trails": [{"node", "
 - `gdh measure onion` over frames `gdh live record` saved, and the note when the background moves
 - a trail of Ball: a dot every 5 frames, 20 pixels apart, the first and last where Ball was, the line and dots drawn in the first trail's color; with the camera following Ball, the path through the world ending at the screen's centre; the text output, a UI node's trail, and `--trail-out` without a trail
 - a filmstrip of Spinner: about 12 frames 3 apart, labeled with their game frames, within 1280 by 1280 pixels, every cell the same size and no two alike; one of Blinker 10 frames apart, its color alternating; `gdh measure filmstrip`, and too many frames
+- a change map of a recording with Ball still: two regions, Spinner and Blinker, Blinker's box exact and its pixels changed in 4 steps over 40 frames; `--still` and the crops; `--no-sheet` leaving the map out; exact counts on made-up frames (a block that flips every step, one that changes once, a change under the threshold)
 - 3D trails on `motion3d.tscn`: Cube's last point where the camera's own `unproject_position` puts it, and Ghost's points behind the camera missing, with the note

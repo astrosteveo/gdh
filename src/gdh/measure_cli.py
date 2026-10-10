@@ -496,11 +496,15 @@ def sheet_of_frames(paths, out, every=1):
 
 
 def after_recording(paths, samples, out_dir, args, as_json):
-    """What a recording leaves beside its frames: the contact sheet, and the panels that covered the screen. Returns
-    {"sheet", "findings"} for JSON; prints them otherwise."""
+    """What a recording leaves beside its frames: the contact sheet, the change map, and the panels that covered the
+    screen. Returns {"sheet", "changes", "findings"} for JSON; prints them otherwise."""
+    from gdh import motion
     extra = {"findings": covered_findings(samples)}
     if paths and not getattr(args, "no_sheet", False):
         extra["sheet"] = str(sheet_of_frames(paths, sheet_path(out_dir), args.every))
+        if len(paths) > 1:
+            out_dir = Path(out_dir).resolve()
+            extra["changes"] = motion.changes(paths, out_dir.parent / f"{out_dir.name}-changes.png")
     if extra["findings"] and paths:
         with Image.open(paths[len(paths) // 2]) as middle:
             size = list(middle.size)
@@ -509,6 +513,9 @@ def after_recording(paths, samples, out_dir, args, as_json):
     if not as_json:
         if extra.get("sheet"):
             print(f"contact sheet: {extra['sheet']}")
+        if extra.get("changes"):
+            c = extra["changes"]
+            print(f"change map: {c['out']} ({c['changed_share']:.3%} of pixels changed, {c['region_count']} regions)")
         for f in extra["findings"]:
             crop = f"  [{f['crop']}]" if f.get("crop") else ""
             print(f"{f['severity']}: {f['probe']} {f['node']}: {f['message']}{crop}")
@@ -553,6 +560,8 @@ def cmd_live_measure(args):
             print(f"{f['severity']}: {f['probe']} {f['node']}: {f['message']}")
         if result.get("sheet"):
             print(f"contact sheet: {result['sheet']}")
+        if result.get("changes"):
+            print(f"change map: {result['changes']['out']}")
     if not args.keep:
         for p in paths:
             p.unlink()
@@ -615,7 +624,8 @@ def add_live_parsers(commands, command):
         p.add_argument("--release", action="append", default=[], metavar="INPUT", help="As step: release at the start")
         p.add_argument("--hold", action="append", default=[], metavar="INPUT", help="As step: hold for the frames")
         p.add_argument("--no-sheet", action="store_true",
-                       help="Don't make the contact sheet (<out>-sheet.png, beside the frames' directory)")
+                       help="Don't make the contact sheet and the change map (<out>-sheet.png and <out>-changes.png, "
+                            "beside the frames' directory)")
 
     p = command("record", cmd_record, "Step and save every frame into a directory, for gdh measure",
                 instance="Which instance's frames, and who gets the input (default 0). Every instance steps")

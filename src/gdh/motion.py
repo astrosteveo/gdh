@@ -318,3 +318,117 @@ def draw_trails(image, trails, every, out):
     Path(out).parent.mkdir(parents=True, exist_ok=True)
     picture.save(out)
     return results
+
+
+# --- Change maps -------------------------------------------------------------------------------------------------------
+
+CHANGE_THRESHOLD = 2.0
+# Never-changed pixels with --still, and the boxes round the regions that changed.
+STILL_TINT = (40, 190, 110)
+BOX_COLOR = (0, 220, 255)
+# Crops of this many of the largest regions.
+CHANGE_CROPS = 5
+
+
+def change_counts(paths, threshold=CHANGE_THRESHOLD):
+    """How many of the frame-to-frame steps each pixel changed in (a channel by more than threshold), and the first
+    frame as float RGB. Reads one frame at a time."""
+    from gdh.measure import rgb
+    first = prev = rgb(paths[0])
+    counts = np.zeros(first.shape[:2], dtype=np.int32)
+    for path in paths[1:]:
+        now = rgb(path)
+        if now.shape != prev.shape:
+            raise MotionError(f"{path} is {now.shape[1]}x{now.shape[0]} and the frames before it "
+                              f"{prev.shape[1]}x{prev.shape[0]}: frames of a run are one size.")
+        counts += np.abs(now - prev).max(axis=2) > threshold
+        prev = now
+    return counts, first
+
+
+def changes(paths, out, threshold=CHANGE_THRESHOLD, still=False, crops_dir=None):
+    """Where a run of frames changed, and how often: each pixel colored by how many of the frame-to-frame steps it
+    changed in, over the first frame dimmed to grey; with `still`, the pixels that never changed tinted green. The
+    regions that changed are outlined and numbered, largest first, and the largest CHANGE_CROPS cropped into
+    crops_dir: the first frame, the last and the map, side by side. A frame wider or taller than MAX_WIDTH is shrunk
+    by a whole factor, each pixel showing the most changes it covers. Returns {"out", "frames", "steps", "threshold",
+    "changed_px", "changed_share", "every_step_px", "region_count", "regions": [{"px", "box", "most_steps", "crop"}],
+    "crops"}."""
+    from PIL import ImageDraw
+    from gdh.images import shrink, zoom
+    from gdh.measure import changed_regions
+    if len(paths) < 2:
+        raise MotionError("A change map needs 2 frames or more.")
+    counts, first = change_counts(paths, threshold)
+    steps = len(paths) - 1
+    changed = counts > 0
+    regions, region_count = changed_regions(changed, counts)
+    for r in regions:
+        r["most_steps"] = r.pop("max_diff")
+    grey = first[..., 0] * 0.2126 + first[..., 1] * 0.7152 + first[..., 2] * 0.0722
+    f = -(-max(counts.shape) // MAX_WIDTH)
+    small = colored(shrink(counts, f, np.max), shrink(grey, f, np.mean), steps, still) if f > 1 else None
+    full = colored(counts, grey, steps, still)
+    picture = Image.fromarray(small if small is not None else full)
+    d = ImageDraw.Draw(picture)
+    for i, r in enumerate(regions, 1):
+        x0, y0, x1, y1 = r["box"]
+        d.rectangle((x0 // f - 2, y0 // f - 2, -(-x1 // f) + 1, -(-y1 // f) + 1), outline=BOX_COLOR, width=2)
+        d.text((x0 // f, max(0, y0 // f - 16)), str(i), fill=BOX_COLOR, font=font(12), stroke_width=2,
+               stroke_fill=(0, 0, 0))
+    legend = (f"changes over {len(paths)} frames: how many of the {steps} frame-to-frame steps each pixel changed in "
+              f"(red: one, then orange, yellow, white: every one)" + ("; green: never" if still else ""))
+    picture = with_header(picture, legend)
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    picture.save(out)
+    crops = []
+    if crops_dir is not None and regions:
+        crops_dir = Path(crops_dir)
+        crops_dir.mkdir(parents=True, exist_ok=True)
+        heat = Image.fromarray(full)
+        h, w = counts.shape
+        with Image.open(paths[0]) as frame0, Image.open(paths[-1]) as frame1:
+            before, after = frame0.convert("RGB"), frame1.convert("RGB")
+        for i, r in enumerate(regions[:CHANGE_CROPS], 1):
+            x0, y0, x1, y1 = r["box"]
+            pad = max(16, round(0.25 * max(x1 - x0, y1 - y0)))
+            box = (max(0, x0 - pad), max(0, y0 - pad), min(w, x1 + pad), min(h, y1 + pad))
+            panels = [("first frame", before), ("last frame", after), (f"changes, region {i}", heat)]
+            path = crops_dir / f"{i:02d}-changes.png"
+            side_by_side([(label, zoom(img.crop(box), 400)) for label, img in panels], path)
+            r["crop"] = str(path)
+            crops.append(str(path))
+    return {"out": str(out), "frames": len(paths), "steps": steps, "threshold": threshold,
+            "changed_px": int(changed.sum()), "changed_share": round(float(changed.mean()), 6),
+            "every_step_px": int((counts == steps).sum()), "region_count": region_count, "regions": regions,
+            "crops": crops}
+
+
+def colored(counts, grey, steps, still):
+    """A change map's pixels (uint8 RGB): the grey dimmed, a pixel that changed on a hot scale by how many steps it
+    changed in (red for one, through orange and yellow, to white for every one; logarithmic, so one, two and four
+    changes look different), and with `still` one that never changed tinted green."""
+    img = np.repeat((grey * 0.35)[..., None], 3, axis=2)
+    if still:
+        quiet = counts == 0
+        img[quiet] = img[quiet] * 0.5 + np.array(STILL_TINT) * 0.5
+    t = np.log1p(counts) / np.log1p(steps)
+    hot = np.stack([np.clip(0.4 + 1.8 * t, 0, 1), np.clip(2 * t - 0.4, 0, 1), np.clip(3 * t - 2, 0, 1)], axis=-1) * 255
+    moved = counts > 0
+    img[moved] = hot[moved]
+    return img.astype(np.uint8)
+
+
+def side_by_side(panels, out):
+    """Labeled images ([(label, PIL image)] of one size) in a row, saved at out."""
+    from PIL import ImageDraw
+    pw, ph = panels[0][1].size
+    label_h = 18
+    sheet = Image.new("RGB", (len(panels) * (pw + 4) + 4, ph + label_h + 8), BACKGROUND)
+    d = ImageDraw.Draw(sheet)
+    for i, (label, img) in enumerate(panels):
+        x = 4 + i * (pw + 4)
+        sheet.paste(img, (x, 4 + label_h))
+        d.text((x + 2, 4), label, fill=TEXT, font=font())
+    sheet.save(out)
+    return out

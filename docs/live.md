@@ -234,6 +234,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `footslide N --skeleton PATH` | A 3D skeleton's feet sliding while they're planted: how far and fast, with crops ([art.md](art.md#foot-sliding)) |
 | `clipping N --node PATH` | A character's bones and mesh points inside solid geometry, as runs of frames, with crops ([art.md](art.md#clipping)) |
 | `contrast --node PATH` | How well a node stands out from what's round it: a luminance contrast ratio and a color difference, with a crop ([art.md](art.md#readability)) |
+| `events [--name N] [--clear]` | The game's own events (`GdhEvents.emit`) so far, with their frames, counts and a chart ([below](#the-games-events-gdhevents)) |
 | `pick X,Y...` | What's drawn at each point, topmost first: 2D and UI nodes in draw order, then 3D meshes by distance, with textures, surfaces and materials (above) |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
 | `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |
@@ -329,6 +330,25 @@ Keep it to reading state and jumping to it; what it skips (a login, a tutorial) 
 ## Locales
 
 `start --locale CODE` translates the game's text to that locale, and `--locale pseudo` turns on Godot's pseudolocalization (every text 40% longer, with accents), so `probes` and `snapshot` show the text that won't fit ([probes.md](probes.md#text-that-wont-fit---locale)).
+
+## The game's events: `GdhEvents`
+
+```sh
+gdh events install --project game          # once: adds the GdhEvents autoload
+gdh live step 600 --hold ui_right --session s
+gdh live events --session s                # what happened, with frames, counts and a chart
+```
+
+A game can tell gdh what happens in it: a death, a checkpoint, a pickup, a level loaded, a quest step. `gdh events install --project DIR` copies a small script into `addons/gdh_events/gdh_events.gd` and adds it to `project.godot` as the autoload `GdhEvents` (once; it says so when it's there already). Then the game calls it where things happen:
+
+```gdscript
+GdhEvents.emit("died", {"at": global_position, "by": attacker.name})
+GdhEvents.emit("checkpoint", 3)
+```
+
+Under gdh's harness each event is kept with the game frame it happened on, and comes back with the reply to the command it happened during: it's printed on stderr beside the game's output (`event: checkpoint at frame 23: {"x": 500.0}`), it's in the reply's `"events"` with `--json`, and a timeline keeps it. Outside gdh (in the editor, in an exported game) `emit()` does nothing and costs one lookup, so the calls can stay in. The data is any value `eval` can return. With the editor open, let it reload `project.godot` after the install, or add the autoload in Project Settings instead.
+
+`gdh live events` lists the events so far (the last `--last` (40), `--last 0` for all; `--name NAME` for one kind), counts them by name, and charts each name's count over the run (`--chart FILE.png`, default `<session out>/events/events.png`; `--no-chart`). `--clear` forgets them after listing them. The game keeps the latest 20000.
 
 ## The timeline: `--timeline`
 
@@ -563,11 +583,12 @@ One JSON object per line over TCP.
 {"id": 1, "ok": true, "result": {…}, "errors": […], "frame": 30, "held": true}
 ```
 
-This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `annotate`, `pick`, `set`, `restore`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `reload`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
+This is how gdh talks to one instance. The commands are `status`, `step`, `shot`, `annotate`, `pick`, `set`, `restore`, `events`, `probes`, `tree`, `find`, `camera`, `eval`, `frames`, `monitors`, `audio`, `reload`, `run`, `pause` and `quit`. `step` takes `frames`, `events` and `shot_every`, and `until` (an expression), `trace` (a list of expressions) and `every` (see "Waiting and tracing"). Every reply has `"errors"`, each `{type, message, where, count}` with a `backtrace` for one raised from a script, and, when the game printed anything since the previous reply, `"output"` and `"output_cut"`.
 
 - `shot` takes `{"views": [...], "label": "shot", "out": FILE, "crop": [x, y, w, h], "node": PATH, "margin": PX, "zoom": K, "max_width": W, "no_ui": bool}`, all but `views` optional; a relative `out` is under the session's output directory. It returns `{"shots": {view: path}, "image_size": [w, h]}`, with `"crop"` and `"size"` when the shot is cropped or scaled.
 - `annotate` takes `{"layers": [...], "filter": {"path", "group", "class"}, "no_ui": bool}` and returns the geometry `--annotate` draws, in screenshot pixels: `{"layers", "nodes": [{"path", "class", "box", "kind"}], "backdrops", "more", "shapes": [{"path", "kind", "lines": [{"points", "closed"}]}], "nav": [{"path", "polygons"}], "velocity": [{"path", "from", "to", "speed", "unit"}], "image_size"}`, each layer's key only when asked for.
 - `set` takes `{"object": EXPR, "property": NAME, "value": EXPR}` (an empty object is the current scene; NAME may go on with `:`, as `set_indexed` takes it), keeps the value it had before the first set, and returns `{"was", "now"}`. `restore` puts back every value `set` changed and returns `{"restored": n}`. They're what `sweep` sends, and the input log doesn't keep them.
+- `events` takes `{"name", "clear": bool}` and returns `{"events": [{"frame", "name", "data"}], "kept"}`. Every reply has `"events"`, the game's events since the previous reply, when there were any.
 - `pick` takes `{"points": [[x, y], ...]}` and returns `{"points": [{"at", "hits": [{"path", "class", "kind", ...}], "more", "takes_click"?}], "image_size"}`.
 - `tree` takes `{"path", "depth", "visible_only": bool}`.
 - `find` takes `{"text", "name", "class"}`, at least one, and returns `{"matches": [{"path", "class", "text"?, "screen", "disabled"?}], "hidden": [{..., "why"}], "more": n}`.
@@ -599,6 +620,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - `find` by text, name and class, its one-line output, the nodes that don't show and why, and its box matching `tree`'s in both stretch modes
 - `--net`: two instances of `testbed/live/net.tscn` reaching an echo server (`testbed/live/echo.py`) over UDP and TCP through ports of their own on the proxy; latency on one instance's link doubling into its round trips and not the other's; a cut link passing nothing until healed while the other talks on; a reset making the game connect again; the same seed dropping the same datagrams (`tests/test_net.py`)
 - `snapshot`: the arena's UI outline with a clicked button focused, a hidden menu left out, boxes on a 10-pixel grid, a dialog as a group with its title and the names Godot made left out; a baseline written, the same, then failing with the diff when the button was disabled; and a scenario's snapshot baseline passing, then failing with its diff (`tests/test_scenarios.py`)
+- the game's events (`tests/test_explore.py`, on `testbed/explore/explore.tscn`, which reports a checkpoint, a trap and a fall): each with its frame on stderr and in the step's reply, listed, counted, charted, by name and cleared; in the timeline; and `gdh events install` into a project with no autoloads, again (nothing to do), into one with autoloads, and where there's no project
 - `start --timeline`: a step, a click, an eval, a failed eval and a `batch`'s step and shot in `timeline/timeline.js` with their frames, values, error and thumbnails, `status` left out, the shot linked, a restart added to it and a new start beginning it again (`tests/test_timeline.py`)
 - a click on a button under a transparent panel failing without stepping and naming the panel, `--click` reporting the panel took it, and a panel with mouse_filter Ignore letting the click through; a control inside a button passing the click up with mouse_filter Pass and failing it with Stop; a click on a Node2D noting the control that stops it
 - `--click-text` and `--click-node` clicking the Go button (and over `pipe`), a dialog's OK button, a button in a SubViewport shown at 2x, and failing, without stepping, on a missing text, a hidden node, a missing path and an ambiguous text, with the candidates named

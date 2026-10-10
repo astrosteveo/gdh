@@ -18,7 +18,7 @@ import argparse
 import re
 import sys
 
-from gdh import api, editor, editor_bridge, export, guide, live, measure_cli, movie, review, scenario, testing
+from gdh import api, editor, editor_bridge, events, export, guide, live, measure_cli, movie, review, scenario, testing
 from gdh.capture import cmd_capture
 from gdh.display import default_choice
 from gdh.godot import GdhError
@@ -83,6 +83,7 @@ def build_parser():
     measure_cli.add_parsers(sub)
     guide.add_parser(sub)
     review.add_parser(sub)
+    events.add_parser(sub)
     return parser
 
 

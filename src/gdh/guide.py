@@ -42,13 +42,13 @@ SEE MOTION, CHOOSE
   gdh live sweep "OBJ.PROP=V1,V2,V3" --session S              a grid of options; gdh review --from it --wait
 
 KEEP IT
+  gdh live events --session S                                the game's GdhEvents.emit() calls (gdh events install)
   gdh live save-scenario --session S test/x.scenario.json    then add "expect" checks
   gdh scenario run test/x.scenario.json                      replays frame-exactly; gdh test too; gdh.client
 
 FEEL
   gdh live latency --press ui_accept --watch EXPR --node PATH --session S   frames to the state, to the pixels
-  gdh live feel --node PATH --session S                      speeds, stopping, jumps, coyote time, jump buffer
-  gdh live hitstop --do EXPR --hold ui_right --node PATH     a hit-stop's frames; also shake, follow --target
+  gdh live feel --node PATH --session S                      speeds, jumps, coyote, buffer; hitstop, shake, follow
 
 MEASURE
   gdh live bench 600 --budget-p99 8.3 --session S            frame times; exit 1 over budget

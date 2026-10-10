@@ -1781,9 +1781,10 @@ def add_parsers(sub):
     p.add_argument("--stop-on-error", action="store_true", help="Stop at the first command that fails")
     command("list", cmd_list, "List every live session: project, scene, pids, displays, age")
 
-    from gdh import measure_cli, motion_cli
+    from gdh import feel, measure_cli, motion_cli
     measure_cli.add_live_parsers(commands, command)
     motion_cli.add_live_parsers(commands, command)
+    feel.add_live_parsers(commands, command)
     from gdh import perf
     perf.add_live_parsers(commands, command)
     blackbox.add_live_parsers(commands, command)

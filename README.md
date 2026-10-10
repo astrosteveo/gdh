@@ -244,6 +244,18 @@ gdh measure changes frames/idle --out idle-changes.png --still  # where a run ch
 
 A trace chart shows values over time, with velocity and acceleration. An onion skin shows a movement's path, spacing and shape. A trail shows the path through the world even when the camera follows the node, and prints the pixels between its dots, so easing and overshoot show as numbers. A filmstrip shows a pose, a flash or a transition frame by frame. A change map shows what moved in a scene that should be still, and what stayed frozen that should move; `gdh live record` writes one beside each recording. See [docs/motion.md](docs/motion.md).
 
+## Measure game feel
+
+```sh
+gdh live latency --press ui_accept --watch "get_node('Player').velocity.y" --node Player --session s
+gdh live feel --node Player --session s           # top speed, stopping, jumps, coyote time, jump buffer
+gdh live hitstop --do "get_node('Player').take_hit(10)" --hold ui_right --node Player --session s
+gdh live shake --press attack --session s
+gdh live follow --target Player --hold ui_right --session s
+```
+
+Feel is mostly timing, and these put numbers on it: the frames from an input to the game's state and to the pixels, a character's top speed and the time to it, stopping, a jump's height and airtime, air control, the coyote time and jump buffer (found by pressing at each frame offset), how long a hit-stop freezes time, a camera shake's size, frequency and decay, and how far a camera lags. Each draws a chart. See [docs/feel.md](docs/feel.md).
+
 ## Record a movie
 
 ```sh
@@ -347,6 +359,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |
 | `src/gdh/motion.py`, `motion_cli.py`, `chart.py` | Motion in one image: onion skins, filmstrips, trails and change maps, with `gdh live onion` and `filmstrip` and their `gdh measure` forms; and trace charts |
+| `src/gdh/feel.py` | `gdh live latency`, `feel`, `hitstop`, `shake` and `follow` |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
 | `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |
 | `src/gdh/api.py`, `testing.py`, `export.py` | `gdh api`, `gdh test` and `gdh export` |
@@ -363,7 +376,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd`, `check.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, gdh's own test runner, and the script check with no editor, which loads scripts as the game does, autoloads and all |
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays; the bridge and hooks, `api`, `test` and `export`, which run headless, once. `claude plugin test .` runs the band's tests. |
-| `docs/` | Live control, the editor, measuring frames, seeing motion, movies, displays, probes, and test reports |
+| `docs/` | Live control, the editor, measuring frames, seeing motion, game feel, movies, displays, probes, and test reports |
 | `skills/`, `agents/`, `.claude-plugin/` | The Claude Code skills, the playtester agent, and the plugin manifests |
 
 ## License

@@ -228,6 +228,20 @@ A recording (`live record`, `live measure`) also writes a contact sheet beside i
 
 See [docs/measure.md](docs/measure.md) for each measure's definition and limits.
 
+## See motion
+
+An image reader sees one still frame at a time. These turn motion over many frames into one image, from a live session (stepped with any of `step`'s input) or from saved frames:
+
+```sh
+gdh live step 90 --hold ui_accept --trace "get_node('Player').position" --trace-chart jump.png --trace-rates
+gdh live onion 40 --node Player --hold ui_right --session s     # the frames laid over each other, oldest faintest
+gdh live step 60 --trail Player --every 5 --session s           # its path on the last frame, a dot every 5 frames
+gdh live filmstrip 24 --node Player --session s                 # the same box from each frame, side by side
+gdh measure changes frames/idle --out idle-changes.png --still  # where a run changed, and how often
+```
+
+A trace chart shows values over time, with velocity and acceleration. An onion skin shows a movement's path, spacing and shape. A trail shows the path through the world even when the camera follows the node, and prints the pixels between its dots, so easing and overshoot show as numbers. A filmstrip shows a pose, a flash or a transition frame by frame. A change map shows what moved in a scene that should be still, and what stayed frozen that should move; `gdh live record` writes one beside each recording. See [docs/motion.md](docs/motion.md).
+
 ## Record a movie
 
 ```sh
@@ -330,6 +344,7 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/companions.py`, `spawned.py`, `watchdog.py` | A live session's companion processes, the processes its game spawns, and the watchdog that stops them when its game ends |
 | `src/gdh/measure.py`, `measure_cli.py` | The measures over frames, and `gdh measure` with `gdh live record`, `measure` and `frames` |
 | `src/gdh/covered.py` | Panels that covered the middle of the screen during a recording |
+| `src/gdh/motion.py`, `motion_cli.py`, `chart.py` | Motion in one image: onion skins, filmstrips, trails and change maps, with `gdh live onion` and `filmstrip` and their `gdh measure` forms; and trace charts |
 | `src/gdh/editor_bridge.py`, `src/gdh/addon/gdh_bridge/` | `gdh bridge`, and the bridge that runs in the editor (the addon a project installs, or gdh's headless editor) |
 | `src/gdh/hooks.py`, `hooks/` | The Claude Code hooks around Write and Edit, and the band above the prompt (`hooks/register.tsx`, its state in `types/`) |
 | `src/gdh/api.py`, `testing.py`, `export.py` | `gdh api`, `gdh test` and `gdh export` |
@@ -338,13 +353,14 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 | `src/gdh/harness/screen.gd`, `camera.gd` | Where nodes show on screen, for `find`, clicks by text or node and framed shots; and gdh's camera for `gdh live camera` |
 | `src/gdh/harness/frames.gd` | Runs inside Godot for `gdh live frames`: each frame's GPU and CPU time, and each pass's |
 | `src/gdh/harness/movie.gd` | The main loop for `gdh movie`: runs the scene for the frames asked for under Movie Maker |
+| `src/gdh/harness/track.gd` | Where nodes are frame by frame during a step, for trails, onion skins and filmstrips |
 | `src/gdh/harness/covered.gd` | Lists the UI panels drawn over the screen's centre, for `covered.py` |
 | `src/gdh/harness/editor.gd` | The editor's main loop for `gdh editor`: opens each scene and saves what the editor shows |
 | `src/gdh/harness/probes.gd` | The probes |
 | `src/gdh/harness/bridge_host.gd`, `api_dump.gd`, `test_runner.gd`, `check.gd` | The headless editor's main loop for `gdh bridge start`, the help cache's reader for `gdh api`, gdh's own test runner, and the script check with no editor, which loads scripts as the game does, autoloads and all |
 | `testbed/` | Godot project with test scenes |
 | `tests/` | `uv run pytest`: probe findings on the testbed, live control, companions and spawned processes, the editor, the displays, imports, movies and the measures, each on both displays; the bridge and hooks, `api`, `test` and `export`, which run headless, once. `claude plugin test .` runs the band's tests. |
-| `docs/` | Live control, the editor, measuring frames, movies, displays, probes, and test reports |
+| `docs/` | Live control, the editor, measuring frames, seeing motion, movies, displays, probes, and test reports |
 | `skills/`, `agents/`, `.claude-plugin/` | The Claude Code skills, the playtester agent, and the plugin manifests |
 
 ## License

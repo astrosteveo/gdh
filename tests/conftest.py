@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from gdh.godot import no_core_dumps
+
 ROOT = Path(__file__).resolve().parent.parent
 TESTBED = ROOT / "testbed"
 GPU_DISPLAY = bool(shutil.which("weston") and shutil.which("Xwayland"))
@@ -30,6 +32,8 @@ def pytest_configure(config):
               file=sys.stderr, flush=True)
         fcntl.flock(lock, fcntl.LOCK_EX)
     config._gdh_suite_lock = lock
+    # Tests start Godot from this process too (fixtures that import, say), so it takes gdh's core size limit of 0.
+    no_core_dumps()
 
 
 @pytest.fixture(scope="session", autouse=True, params=["gpu", "xvfb"])

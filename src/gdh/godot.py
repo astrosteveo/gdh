@@ -2,6 +2,7 @@
 import json
 import os
 import re
+import resource
 import shutil
 import signal
 import subprocess
@@ -15,6 +16,16 @@ HARNESS = Path(__file__).resolve().parent / "harness"
 
 class GdhError(Exception):
     """A failure gdh reports in a sentence, without a traceback."""
+
+
+def no_core_dumps():
+    """Set this process's soft core size limit to 0, which every process it starts inherits. Godot 4.7 sometimes aborts
+    at the end of a headless import, and a game may crash; gdh notices both (it imports again, and reports how a game
+    ended), but a core dump would also reach the desktop's crash reporter (KDE's DrKonqi, say), which tells the user
+    Godot crashed. With the limit at 0, systemd-coredump keeps no dump and the reporter has nothing to show."""
+    resource.setrlimit(resource.RLIMIT_CORE, (0, resource.getrlimit(resource.RLIMIT_CORE)[1]))
+
+
 # Dialog programs Godot's OS.alert() runs on Linux.
 ALERT_PROGRAMS = ("zenity", "kdialog", "Xdialog", "xmessage")
 ALERT_SHIM = """#!/bin/sh

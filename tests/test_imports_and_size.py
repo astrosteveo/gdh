@@ -4,6 +4,8 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import time
 
 from conftest import TESTBED, gdh
@@ -134,3 +136,23 @@ def test_live_start_refuses_a_window_the_game_resized(tmp_path):
     assert proc.returncode == 1
     assert "640x360, not the 1280x720 asked for" in proc.stderr
     assert not session_path(SESSION).exists()
+
+
+def test_gdh_starts_processes_with_no_core_dumps():
+    """Godot sometimes aborts at the end of an import; gdh imports again, so the person should hear nothing of it. A
+    core size limit of 0, which gdh sets as it starts and its processes inherit, keeps the dump from the desktop's crash
+    reporter. This run raises its limit first, since the test suite itself runs under 0."""
+    script = """
+import resource, subprocess, sys
+hard = resource.getrlimit(resource.RLIMIT_CORE)[1]
+resource.setrlimit(resource.RLIMIT_CORE, (hard, hard))
+sys.argv = ["gdh", "--help"]
+from gdh.cli import main
+try:
+    main()
+except SystemExit:
+    pass
+print(subprocess.run(["sh", "-c", "ulimit -c"], capture_output=True, text=True).stdout.strip(), file=sys.stderr)
+"""
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60)
+    assert proc.stderr.strip().splitlines()[-1] == "0", proc.stderr

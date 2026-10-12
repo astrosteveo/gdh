@@ -21,7 +21,7 @@ import sys
 from gdh import api, editor, editor_bridge, events, export, guide, live, measure_cli, movie, review, scenario, testing
 from gdh.capture import cmd_capture
 from gdh.display import default_choice
-from gdh.godot import GdhError
+from gdh.godot import GdhError, no_core_dumps
 from gdh.imports import cmd_import
 
 
@@ -88,6 +88,7 @@ def build_parser():
 
 
 def main():
+    no_core_dumps()
     parser = build_parser()
     argv = sys.argv[1:]
     game_args = []

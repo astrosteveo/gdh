@@ -21,7 +21,6 @@ The first line on stdout is {"pid": N}, or {"error": "..."} if the program could
 import argparse
 import json
 import os
-import resource
 import shutil
 import signal
 import subprocess
@@ -29,7 +28,7 @@ import sys
 import time
 
 from gdh import spawned, x11
-from gdh.godot import GdhError, kill_groups
+from gdh.godot import GdhError, kill_groups, no_core_dumps
 
 
 def main():
@@ -44,7 +43,7 @@ def main():
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if shutil.which("stdbuf"):
         command = [shutil.which("stdbuf"), "-oL", "-eL", *command]
-    resource.setrlimit(resource.RLIMIT_CORE, (0, resource.getrlimit(resource.RLIMIT_CORE)[1]))
+    no_core_dumps()
     env = dict(os.environ)
     env[spawned.VAR] = args.mark
     started = time.time()

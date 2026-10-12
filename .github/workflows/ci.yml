@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  band:
+    name: Band tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DISABLE_AUTOUPDATER: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code@2.1.296
+      - name: Run the band tests
+        run: claude plugin test .
+
+  suite:
+    name: pytest (GPU and Xvfb displays)
+    # The suite runs on the development machine's GPU. The repository is public, so a pull request from a fork never
+    # runs there: its code would run on that machine.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, gpu]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      # Without godot or Xvfb, conftest.py skips every test and pytest passes, so fail here instead.
+      - name: Check the tools the suite needs
+        run: |
+          for tool in godot Xvfb weston Xwayland uv; do
+            command -v "$tool" || { echo "::error::$tool is not on the runner's PATH"; exit 1; }
+          done
+          godot --version
+      - name: Install gdh and pytest
+        run: uv sync --locked
+      - name: Run the suite
+        run: uv run pytest -ra

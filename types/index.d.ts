@@ -1,7 +1,10 @@
-/** What the Godot band shows: the project Claude Code's session is in, and its editor bridge's state. */
+/**
+ * What the Godot band shows: nothing, a warning that a Godot editor has the session's project open without the bridge,
+ * or the state of the bridge's editor.
+ */
 export type GodotView =
   | { kind: 'none' }
-  | { kind: 'no-bridge'; project: string }
+  | { kind: 'editor-without-bridge'; project: string }
   | {
       kind: 'bridge'
       project: string

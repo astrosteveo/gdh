@@ -60,3 +60,59 @@ test('outside a Godot project the band stays out of the way', async ($, on) => {
   expect(await band.find({ key: 'engine' })).toBeDefined()
   await band.unmount()
 })
+
+// A Godot project at /home/me/game with no bridge, and these processes on the machine: pid to command line and working
+// folder. Godot moves into the project's folder as it starts.
+function noBridge(on: Parameters<Parameters<typeof test>[1]>[1], procs: Record<string, { argv: string[]; cwd: string }>) {
+  on('session.start', async (_$, e) => ({ cwd: e.cwd }))
+  on('session.root', async () => ({ value: '/home/me/game' }))
+  on('fs.exists', async (_$, e) => ({ value: e.path === '/home/me/game/project.godot' }))
+  on('fs.read', async (_$, e) => {
+    const m = /^\/proc\/(\d+)\/cmdline$/.exec(e.path)
+    if (m && procs[m[1]]) return { value: procs[m[1]].argv.join('\0') + '\0' }
+    throw new Error('no such file')
+  })
+  on('fs.stat', async (_$, e) => {
+    const m = /^\/proc\/(\d+)\/cwd$/.exec(e.path)
+    const realPath = m ? procs[m[1]]?.cwd : e.path
+    return { value: { kind: 'directory', size: 0, mtimeMs: 0, isLink: false, realPath } }
+  })
+  on('process.run', async () => {
+    const lines = Object.entries(procs).map(([pid, p]) => `${pid.padStart(7)} ${p.argv[0].split('/').pop()!.slice(0, 15)}`)
+    return { value: { exitCode: 0, stdout: ['      1 systemd', ...lines].join('\n') + '\n', stderr: '' } }
+  })
+  on('clock.every', async () => ({ value: undefined }))
+  on('ui.render', { component: 'AbovePrompt' }, async ($$, e) => {
+    const { Box } = $$.ui.resolve(e)
+    return <Box key="engine" />
+  })
+}
+
+test('with no bridge and no editor on the project the band shows nothing', async ($, on) => {
+  noBridge(on, {
+    // A game run from the editor, gdh's headless Godot, and an editor on another project.
+    '4100': { argv: ['/usr/bin/godot', '--path', '/home/me/game', '--remote-debug', 'tcp://127.0.0.1:6007'], cwd: '/home/me/game' },
+    '4200': { argv: ['/usr/bin/godot', '--headless', '--editor', '--path', '/home/me/game'], cwd: '/home/me/game' },
+    '4300': { argv: ['/usr/bin/godot', '--path', '/home/me/other', '--editor'], cwd: '/home/me/other' },
+  })
+  await $.session.start({ cwd: '/home/me/game', surface: 'terminal', source: 'startup' } as never)
+  const band = await $.ui.mount({ plugin: 'gdh', surface: 'terminal', ...BAND })
+  expect(await band.find({ text: /Godot|bridge/ })).toBeUndefined()
+  expect(await band.find({ key: 'engine' })).toBeDefined()
+  await band.unmount()
+})
+
+for (const [how, proc] of [
+  ['from the project manager', { argv: ['/usr/bin/godot', '--path', 'game', '--editor'], cwd: '/home/me/game' }],
+  ['by its project.godot', { argv: ['/opt/Godot_v4.7-stable_linux.x86_64', 'game/project.godot'], cwd: '/home/me/game' }],
+  ['with -e in its folder', { argv: ['godot', '-e'], cwd: '/home/me/game' }],
+] as const) {
+  test(`an editor opened ${how} without the bridge gets a warning`, async ($, on) => {
+    noBridge(on, { '5100': { argv: [...proc.argv], cwd: proc.cwd } })
+    await $.session.start({ cwd: '/home/me/game', surface: 'terminal', source: 'startup' } as never)
+    const band = await $.ui.mount({ plugin: 'gdh', surface: 'terminal', ...BAND })
+    expect(await band.find({ text: /Godot editor has this project open without the gdh bridge/ })).toBeDefined()
+    expect(await band.find({ text: /gdh bridge install/ })).toBeDefined()
+    await band.unmount()
+  })
+}

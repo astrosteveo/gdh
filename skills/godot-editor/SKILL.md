@@ -21,8 +21,9 @@ Run `gdh bridge status`.
 - **It answers** with `headless: true`: it's gdh's own headless editor. Fine for UIDs, checks and edits; the user
   can't see it.
 - **Exit 3, no bridge.** Ask the user whether they have the project open in the Godot editor.
-  - If yes: offer to install the addon (`gdh bridge install`), then ask them to enable **gdh bridge** in
-    Project > Project Settings > Plugins. Don't edit project.godot under an open editor. Until it's on, follow
+  - If yes: tell them that without the bridge, saving in the editor can overwrite your edits, and your edits can
+    overwrite their unsaved work. The band above their prompt shows the same warning. Offer to install the addon
+    (`gdh bridge install`), then ask them to enable **gdh bridge** in Project > Project Settings > Plugins. Don't edit project.godot under an open editor. Until it's on, follow
     "Without the bridge" below.
   - If no: `gdh bridge start` runs gdh's own headless editor with the bridge and installs nothing in the project. It
     quits after 30 idle minutes; `gdh bridge stop` ends it sooner. Stop it before the user opens the project

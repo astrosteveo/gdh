@@ -41,8 +41,11 @@ test('the band shows the editor, the unsaved scene, the running game and waiting
   expect(await band.find({ text: /unsaved: levels\/level_1\.tscn/ })).toBeDefined()
   expect(await band.find({ text: /▶ main\.tscn/ })).toBeDefined()
   expect(await band.find({ text: /2 editor errors/ })).toBeDefined()
+  // Other mods' bands, drawn beneath, stay visible under this one.
+  expect(await band.find({ key: 'engine' })).toBeDefined()
   await band.press({ key: 'hide' })
   expect(await band.find({ text: /Godot/ })).toBeUndefined()
+  expect(await band.find({ key: 'engine' })).toBeDefined()
   await band.unmount()
 })
 

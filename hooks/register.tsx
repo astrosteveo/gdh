@@ -124,8 +124,8 @@ export const register: Register = on => {
     if (e.props.hasSurvey || v.kind === 'none' || (await read($, hidden))) return next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
     const hide = <Button key="hide" label="Hide" onPress={() => update($, hidden, () => true)} />
-    if (v.kind === 'editor-without-bridge') {
-      return (
+    const row =
+      v.kind === 'editor-without-bridge' ? (
         <Box>
           <Text color="yellow">
             The Godot editor has this project open without the gdh bridge, so saving there can overwrite Claude's edits.
@@ -134,18 +134,26 @@ export const register: Register = on => {
           </Text>
           {hide}
         </Box>
+      ) : (
+        <Box>
+          <Text dimColor>
+            Godot {v.godot.replace(/-.*/, '')} · {v.headless ? "gdh's headless editor" : 'editor'}
+          </Text>
+          {v.current ? <Text dimColor> · {short(v.current)}</Text> : null}
+          {v.unsaved.length > 0 ? <Text color="yellow"> · unsaved: {v.unsaved.map(short).join(', ')}</Text> : null}
+          {v.playing ? <Text color="green"> · ▶ {short(v.playing)}</Text> : null}
+          {v.errors > 0 ? <Text color="red"> · {v.errors} editor error{v.errors === 1 ? '' : 's'}</Text> : null}
+          <Text> </Text>
+          {hide}
+        </Box>
       )
-    }
-    const where = v.headless ? "gdh's headless editor" : 'editor'
+    // The band holds one tree, so draw this row above what the hooks beneath draw rather than in its place: other mods'
+    // bands stay visible without the person hiding this one first.
+    const below = await next(e)
     return (
-      <Box>
-        <Text dimColor>Godot {v.godot.replace(/-.*/, '')} · {where}</Text>
-        {v.current ? <Text dimColor> · {short(v.current)}</Text> : null}
-        {v.unsaved.length > 0 ? <Text color="yellow"> · unsaved: {v.unsaved.map(short).join(', ')}</Text> : null}
-        {v.playing ? <Text color="green"> · ▶ {short(v.playing)}</Text> : null}
-        {v.errors > 0 ? <Text color="red"> · {v.errors} editor error{v.errors === 1 ? '' : 's'}</Text> : null}
-        <Text> </Text>
-        {hide}
+      <Box flexDirection="column">
+        {row}
+        {below}
       </Box>
     )
   })

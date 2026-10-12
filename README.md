@@ -70,7 +70,22 @@ It runs gdh from the plugin's own copy of this repo, so `uv` is the only extra i
 | `godot-gdscript`, `godot-project`, `godot-export` skills | Typed Godot 4.7 GDScript and its Godot 3 pitfalls; scenes, autoloads, the Input Map and saves; exporting builds |
 | `playtester` agent | Plays a scene with `gdh live` against a goal and reports pass or fail with evidence, keeps each passed goal as a scenario, and leaves notes for the next playtest |
 | Hooks | Before each Write or Edit in a Godot project: refuse edits to `.godot/`, to scenes with unsaved changes in the editor, to `project.godot` under a running editor, and `uid://` values the project doesn't have. After: rescan the file, reload it if it's open, fill in a new scene's UIDs and check GDScript, returning Godot's errors. `GDH_HOOKS=off` turns them off. |
-| Band | A row above Claude Code's prompt in a Godot project: the editor bridge, the open scene, unsaved scenes, the running game and editor errors waiting for Claude |
+| Band | A row above Claude Code's prompt in a Godot project. With the bridge running, it shows the open scene, unsaved scenes, the running game and editor errors waiting for Claude. With no bridge it shows nothing, unless a Godot editor has the project open: then it warns that saving there can overwrite Claude's edits. |
+
+### With or without the Godot editor open
+
+You can work with Claude either way, and you don't need Godot open at all.
+
+- **Without the editor.** Claude edits the project's files and checks its work by rendering and playing the game off-screen. You need nothing else.
+- **With the editor open beside Claude.** Use this to watch scenes change, adjust things by hand or run the game yourself. The editor keeps open scenes in memory, so without help it can overwrite Claude's edits when it saves, and Claude's edits can overwrite your unsaved work. The bridge fixes that: it's a small addon that lets Claude make its changes through the editor. Set it up once per project, by asking Claude or with:
+
+  ```sh
+  gdh bridge install --project path/to/game
+  ```
+
+  Then enable **gdh bridge** in Godot under Project > Project Settings > Plugins. From then on, whenever the editor is open, Claude's edits reload open scenes instead of replacing them, your unsaved changes are protected, and the editor's errors come back to Claude. The addon is a development tool, so you can add `addons/gdh_bridge/` to `.gitignore`.
+
+The band shows a warning when a Godot editor has the project open without the bridge, the one case where the bridge matters. `gdh bridge start` is for Claude: it runs a headless editor with the bridge so Claude can look up UIDs and make editor edits when you don't have Godot open.
 
 ## Capture a scene
 

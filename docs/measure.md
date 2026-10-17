@@ -142,7 +142,7 @@ gdh live profile 300 --budget 8.3 --session s              # the frames over 8.3
 
 `bench` and `frames` say that a frame was slow; `profile` says which script functions it spent its time in. It reads Godot's script profiler, the one the editor's Profiler tab shows, which reports only to a debugger. So the session has to start with `--profiler`: gdh then starts its own debugger beside the game (`<out>/debugger.log`) and the game with `--remote-debug` pointing at it. The debugger tells the game to skip breakpoints and not to break on errors, so a script error is reported as always and the game runs on. `--profiler` takes one instance; `restart` keeps it.
 
-`profile N` turns the profiler on, steps N frames with any of `step`'s input options, turns it off, and sums the frames the step ran. On `testbed/profile/profile.tscn`, where `heavy()` runs every 30 frames and spends its time in `crunch()`:
+`profile N` turns the profiler on, steps N frames with any of `step`'s input options, turns it off, and sums the frames the step ran. The game turns its profiler on some frames after it's asked to, so gdh steps only once the game's profiled frames come, and turns it off once the last frame's profile has come: every frame stepped is in the profile, and it fails if the game sends none. On `testbed/profile/profile.tscn`, where `heavy()` runs every 30 frames and spends its time in `crunch()`:
 
 ```
 profile of 92 frames (90 game frames stepped): the game's processing and physics 0.341 ms median, 6.413 p99, 8.17 worst (whole frames, rendering included: 0.36 median)

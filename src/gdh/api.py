@@ -16,7 +16,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from gdh.godot import HARNESS, GdhError, alert_shims, godot_binary, godot_env, kill_groups
+from gdh.godot import HARNESS, GdhError, alert_shims, editor_build_home, godot_binary, godot_env, kill_groups
 
 DUMP_SCRIPT = HARNESS / "api_dump.gd"
 KIND = {"properties": "property", "methods": "method", "signals": "signal", "constants": "constant",
@@ -43,14 +43,14 @@ def godot_version(binary):
 
 def make_doc_cache(binary, minor):
     """Run a headless editor on an empty project until it has written its help cache. Returns the cache's path."""
-    from gdh.editor import editor_env, editor_home
-    cache = editor_home() / "cache" / "godot" / f"editor_doc_cache-{minor}.res"
+    from gdh.editor import editor_env
+    cache = editor_build_home(binary) / "cache" / "godot" / f"editor_doc_cache-{minor}.res"
     # Remove it, so the editor writes it afresh for this build (it keeps one per minor version).
     cache.unlink(missing_ok=True)
     with tempfile.TemporaryDirectory(prefix="gdh-api-") as tmp, alert_shims() as shims:
         project = Path(tmp)
         (project / "project.godot").write_text('config_version=5\n\n[application]\n\nconfig/name="gdh api"\n')
-        env = editor_env(shims, ":gdh-no-display", [])
+        env = editor_env(shims, ":gdh-no-display", [], binary)
         log = open(project / "godot.log", "w")
         proc = subprocess.Popen([binary, "--headless", "--editor", "--path", str(project)], env=env, stdout=log,
                                 stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, start_new_session=True)

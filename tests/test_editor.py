@@ -54,8 +54,8 @@ def test_editor_leaves_its_state_and_the_users_settings_alone(project, tmp_path,
     gdh("editor", "--project", project, "--scene", "res://smoke/smoke.tscn", "--out", tmp_path / "out")
     assert sorted(p.relative_to(state) for p in state.rglob("*")) == before
     assert (state / "kept.cfg").read_text() == "[kept]\nby = \"the test\"\n"
-    # Its settings went to the editor home it was given.
-    assert list((home / "config").rglob("editor_settings-*.tres"))
+    # Its settings went to the editor home it was given, in the directory of the Godot binary it ran.
+    assert list((home / "builds").glob("*/config/godot/editor_settings-*.tres"))
 
 
 def test_editor_sets_selects_and_views(project, tmp_path):

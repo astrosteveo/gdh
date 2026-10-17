@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from gdh.godot import alert_shims, build_csharp, godot_binary, godot_env
+from gdh.godot import alert_shims, build_csharp, editor_build_env, godot_binary, godot_env
 
 # Files Godot imports. A source of one of these kinds with no .import beside it has never been imported.
 IMPORTABLE = {
@@ -168,12 +168,13 @@ def run_import(project, quiet=False):
     out = subprocess.DEVNULL if quiet else None
     with alert_shims() as shims:
         # Headless needs no display. The bogus one keeps any child off the desktop.
-        env = godot_env(shims, ":gdh-no-display", game=False)
+        # The editor's settings and caches are gdh's, kept for each binary: never the user's, and never what the
+        # other build wrote (editor_build_home says why that matters).
+        env = editor_build_env(godot_env(shims, ":gdh-no-display", game=False), cmd[0])
         code = subprocess.run(cmd, env=env, stdout=out, stderr=out).returncode
         if code != 0:
-            # Godot 4.7's editor sometimes aborts at the end of a headless import
-            # ("Parameter "singleton" is null" in EditorNode::is_cmdline_mode, exit 134),
-            # in the standard and .NET builds alike. The next run succeeds.
+            # Godot 4.7's editor can abort as a headless import ends ("Parameter "singleton" is null" in
+            # EditorNode::is_cmdline_mode, exit 134). The next run succeeds.
             print(f"gdh: Godot exited with code {code} while importing; importing again", file=sys.stderr)
             code = subprocess.run(cmd, env=env, stdout=out, stderr=out).returncode
     return code

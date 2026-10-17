@@ -124,6 +124,8 @@ object: call `duplicate()` before changing one per instance.
 ## Tool scripts
 
 `@tool` at the top makes a script run in the editor. Guard game-only code with `if Engine.is_editor_hint(): return`.
+Make a script `@tool` when it builds what its scene shows (terrain, a track, a model fitted to its size), so the user
+sees it in the editor as in the game; lay out everything else as nodes in the scene (see the `godot-project` skill).
 A tool script that changes the scene every frame keeps the editor redrawing (`gdh editor` reports this).
 `@export_tool_button("Label") var action := do_something` adds an inspector button, and needs `@tool`.
 

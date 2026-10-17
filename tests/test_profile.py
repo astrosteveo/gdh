@@ -7,7 +7,7 @@ import pytest
 
 from conftest import TESTBED, gdh, gdh_json
 from gdh import variant
-from gdh.debugger import parse_frame
+from gdh.debugger import Debugger, parse_frame
 from gdh.profile import summarize
 
 SESSION = f"test-profile-{os.getpid()}"
@@ -29,7 +29,8 @@ def test_profile_ranks_the_games_functions_and_finds_the_spikes(game):
     assert set(top) == {"crunch", "_physics_process", "light", "heavy"}
     assert all(row["script"] == "res://profile/profile.gd" for row in top.values())
     assert reply["top"]["by_self"][0]["function"] == "crunch" and top["crunch"]["calls"] == 3
-    assert top["crunch"]["line"] == 30 and top["light"]["calls"] == 90
+    # The profile holds every frame stepped, the first included, and only those: a tick each.
+    assert top["crunch"]["line"] == 30 and top["light"]["calls"] == top["_physics_process"]["calls"] == 90
     # heavy() spends its time in crunch(): its total is crunch's, its self time next to nothing.
     assert top["heavy"]["total_ms"] == pytest.approx(top["crunch"]["total_ms"], rel=0.05)
     assert top["heavy"]["self_ms"] < 0.05 * top["heavy"]["total_ms"]
@@ -40,6 +41,7 @@ def test_profile_ranks_the_games_functions_and_finds_the_spikes(game):
     heavy = top["crunch"]["total_ms"] / 3
     budget = reply["game_ms"]["median"] + heavy / 2
     reply = gdh_json("live", "profile", "90", "--budget", f"{budget:.3f}", "--session", SESSION)
+    assert {row["function"]: row["calls"] for row in reply["top"]["by_self"]}["light"] == 90
     frames = [s["frame"] for s in reply["spikes"] if s["physics_ms"] > heavy / 2]
     assert len(frames) == 3 and [b - a for a, b in zip(frames, frames[1:])] == [30, 30]
     assert {"heavy", "crunch"} <= {row["function"] for row in reply["spike_top"]["by_total"][:4]}
@@ -73,6 +75,18 @@ def test_profile_needs_the_debugger(tmp_path):
     proc = gdh("live", "start", "--project", TESTBED, "--session", f"{SESSION}-two", "--profiler", "--instances", "2",
                "--out", tmp_path / "two", check=False)
     assert proc.returncode == 1 and "--profiler profiles one game" in proc.stderr
+
+
+def test_the_debugger_says_when_the_game_sends_no_profile():
+    debugger = Debugger()
+    debugger.connected = True  # with no game to send to, and so no frames
+    assert debugger.answer({"cmd": "start", "timeout": 0.05}) == {
+        "error": "The game sent gdh's debugger no profiled frames."}
+    assert not debugger.recording
+    debugger.recording = True
+    debugger.frames = [{"frame": 41}]
+    assert debugger.answer({"cmd": "stop", "until": 42, "timeout": 0.05}) == {
+        "error": "The game sent gdh's debugger no profile of frame 42."}
 
 
 def test_variants_round_trip_and_frames_parse():

@@ -204,8 +204,8 @@ def start(project, idle_timeout, timeout, build=True):
     shims = write_alert_shims(sdir / "shims")
     harness = ["--server", str(ADDON / "server.gd"), "--idle-timeout", str(idle_timeout), "--timeout", str(timeout)]
     # Headless needs no display; the bogus one keeps any child off the desktop.
-    env = editor_env(shims, ":gdh-no-display", harness)
     cmd = [godot_binary(project), "--headless", "--editor", "--path", str(project), "--script", str(HOST_SCRIPT)]
+    env = editor_env(shims, ":gdh-no-display", harness, cmd[0])
     (Path(project) / INFO).unlink(missing_ok=True)
     log = sdir / "godot.log"
     # A supervisor runs the editor and, whenever it ends, puts the project's editor state (.godot/editor) back.

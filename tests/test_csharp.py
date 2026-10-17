@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from conftest import ROOT
+from gdh.godot import editor_build_home
 
 if not (shutil.which("godot-mono") and shutil.which("dotnet")):
     pytest.skip("needs godot-mono and the .NET SDK on PATH", allow_module_level=True)
@@ -104,6 +105,24 @@ def test_editor_runs_csharp_tool_scripts(project, tmp_path, monkeypatch):
     finally:
         tool.unlink()
         scene.unlink()
+
+
+def test_the_two_builds_import_without_crashing_each_other(project, tmp_path, monkeypatch):
+    """Godot 4.7 often aborts as a headless import quits when the class reference in the editor's cache is the other
+    build's. gdh keeps each binary's editor settings and caches apart, and apart from the user's, so imports with the
+    .NET and standard builds in turn each run once, and neither writes the user's own."""
+    monkeypatch.setenv("GDH_EDITOR_HOME", str(tmp_path / "editor-home"))
+    for name in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+        monkeypatch.setenv(name, str(tmp_path / name))
+    game = tmp_path / "testbed"
+    shutil.copytree(ROOT / "testbed", game, ignore=shutil.ignore_patterns(".godot"))
+    for _ in range(2):
+        assert "importing again" not in run("import", "--project", project, "--no-build").stderr
+        assert "importing again" not in run("import", "--project", game).stderr
+    assert not (tmp_path / "XDG_CONFIG_HOME").exists() and not (tmp_path / "XDG_CACHE_HOME").exists()
+    homes = {editor_build_home(binary) for binary in ("godot-mono", "godot")}
+    assert len(homes) == 2
+    assert all(list((home / "cache" / "godot").glob("editor_doc_cache-*.res")) for home in homes)
 
 
 def test_a_start_builds_only_when_the_code_changed(project, tmp_path, monkeypatch):

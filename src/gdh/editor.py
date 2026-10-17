@@ -5,7 +5,8 @@ Godot runs as `godot --editor --path <project> --script harness/editor.gd`: the 
 scan, opens each scene, and saves the viewport (viewport.png), the whole window (editor.png) and report.json.
 
 The editor never touches the user's own: its settings, data and caches live in gdh's editor home
-(GDH_EDITOR_HOME, default ~/.local/share/gdh/editor-home), and the project's .godot/editor (its layout, recent scenes
+(GDH_EDITOR_HOME, default ~/.local/share/gdh/editor-home; the settings and caches in directories for each Godot
+binary, as editor_build_home says), and the project's .godot/editor (its layout, recent scenes
 and each scene's camera) is put back as it was. Anything else the editor writes in the project is listed, never undone.
 """
 import hashlib
@@ -17,7 +18,8 @@ import tempfile
 from pathlib import Path
 
 from gdh.display import open_display
-from gdh.godot import HARNESS, GdhError, alert_shims, build_csharp, godot_cmd, godot_env, kill_groups
+from gdh.godot import (HARNESS, GdhError, alert_shims, build_csharp, editor_build_env, editor_home, godot_cmd, godot_env,
+                       kill_groups)
 
 EDITOR_SCRIPT = HARNESS / "editor.gd"
 # The project's editor state (layout, open scenes, each scene's camera and folds), kept as it was.
@@ -28,22 +30,13 @@ HASHED = 256 * 1024
 NO_DEVICE = ("Couldn't create Vulkan device", "Couldn't initialize Vulkan device")
 
 
-def editor_home():
-    """Where the editor gdh runs keeps its settings, data and caches: never the user's own."""
-    chosen = os.environ.get("GDH_EDITOR_HOME", "")
-    if chosen:
-        return Path(os.path.expanduser(chosen)).resolve()
-    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    return Path(base) / "gdh" / "editor-home"
-
-
-def editor_env(shims, display, harness_args):
+def editor_env(shims, display, harness_args, binary):
+    """godot_env for an editor started with `binary`, with gdh's editor home in place of the user's."""
     env = godot_env(shims, display, harness_args, game=False)
-    home = editor_home()
-    for name, sub in (("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data"), ("XDG_CACHE_HOME", "cache")):
-        (home / sub).mkdir(parents=True, exist_ok=True)
-        env[name] = str(home / sub)
-    return env
+    data = editor_home() / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    env["XDG_DATA_HOME"] = str(data)
+    return editor_build_env(env, binary)
 
 
 def snapshot(project):
@@ -140,7 +133,7 @@ def cmd_editor(args):
         try:
             with open(log_path, "w") as log:
                 proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-                                        env=editor_env(shims, display.name, harness_args(args, out)),
+                                        env=editor_env(shims, display.name, harness_args(args, out), cmd[0]),
                                         start_new_session=True)
                 try:
                     code = proc.wait(timeout=args.timeout + 60 * len(args.scene))

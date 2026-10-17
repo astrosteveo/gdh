@@ -1,4 +1,5 @@
 """Launching Godot off-screen: the command line, environment and alert stand-ins. The display is display.py's."""
+import hashlib
 import json
 import os
 import re
@@ -65,6 +66,37 @@ def user_data_home():
         return os.path.abspath(os.path.expanduser(chosen))
     base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
     return os.path.join(base, "gdh", "user-data")
+
+
+def editor_home():
+    """Where the editors gdh starts keep their settings, data and caches: never the user's own."""
+    chosen = os.environ.get("GDH_EDITOR_HOME", "")
+    if chosen:
+        return Path(os.path.expanduser(chosen)).resolve()
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return Path(base) / "gdh" / "editor-home"
+
+
+def editor_build_home(binary):
+    """The part of gdh's editor home that's one Godot binary's own: the config (editor settings) and cache (the class
+    reference the editor keeps, and thumbnails) directories of the editors gdh starts with it, for an import, `editor`,
+    the bridge and `api`'s help cache. A version's standard and .NET builds use the same file names there with
+    different contents, and Godot 4.7 often aborts as a headless editor quits when the class reference it found was
+    the other build's ("Parameter "singleton" is null" in EditorNode::is_cmdline_mode, exit 134)."""
+    path = Path(shutil.which(binary) or binary).resolve()
+    name = re.sub(r"[^A-Za-z0-9_.-]", "_", path.name)
+    home = editor_home() / "builds" / f"{name}-{hashlib.sha1(str(path).encode()).hexdigest()[:8]}"
+    for sub in ("config", "cache"):
+        (home / sub).mkdir(parents=True, exist_ok=True)
+    return home
+
+
+def editor_build_env(env, binary):
+    """env with XDG_CONFIG_HOME and XDG_CACHE_HOME pointed at editor_build_home's, for an editor run with binary."""
+    home = editor_build_home(binary)
+    env["XDG_CONFIG_HOME"] = str(home / "config")
+    env["XDG_CACHE_HOME"] = str(home / "cache")
+    return env
 
 
 def godot_env(shims, display, harness_args=(), game=True):

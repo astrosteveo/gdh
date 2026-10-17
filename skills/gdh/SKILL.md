@@ -9,7 +9,9 @@ description: See and drive a Godot 4 game on Linux. Render scenes off-screen on 
 
 Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges whether the game feels good (controls, pacing, fun). You cover whether it renders correctly, runs without errors and behaves as specified, and you measure what feel is made of: latency, speeds, jumps, hit-stop, shake.
 
-The rest of this plugin: the `godot-editor` skill (changing files with the editor open, `gdh bridge`, UIDs), `godot-gdscript`, `godot-project`, `godot-export` (builds), and the `playtester` agent, which plays a scene against a goal, reports back and keeps what passed as a scenario.
+Check the editor as well as the game. The user works in the Godot editor, so for each scene you made or changed, `gdh editor --scene` shows what they'll see there ([below](#the-editor)). A scene whose script builds everything at run time is empty in the editor, and the user can't inspect or change it; the `godot-project` skill says how to build scenes that show.
+
+Load this plugin's other skills before the work each covers, not only when something goes wrong: `godot-project` before making or restructuring a scene, a screen or a system; `godot-gdscript` before writing GDScript; `godot-editor` before changing a `.tscn`, `.tres`, script, shader or project setting, and whenever the editor may be open (`gdh bridge`, UIDs); `godot-export` for builds. The `playtester` agent plays a scene against a goal, reports back and keeps what passed as a scenario.
 
 ## The fast loop
 
@@ -67,7 +69,7 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | Which script functions a slow frame spent its time in | `gdh live start --profiler`, then `gdh live profile N`: the game's functions by self and total time, overall and on the spike frames |
 | Leaks, sound | `gdh live monitors --leak`, `gdh live audio` |
 | An exported build, a launcher, anything where `OS.has_feature("editor")` matters | `gdh live start --binary PATH`; `gdh export --smoke` |
-| What the editor shows: tool scripts, `@tool` previews | `gdh editor` |
+| What the editor shows the user: each scene you made or changed, tool scripts, `@tool` previews | `gdh editor` |
 | Footage: a clip, a trailer shot, a video of a bug | `gdh movie` (its `audio.png` shows the sound: waveform, spectrogram, clipping, frame by frame) |
 | Logic with no picture to check: rules, save data, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
 | Where the game breaks over a long run: stuck spots, soft locks, holes, leaving the level | `gdh live explore N --node PATH` (at random, or `--goal X,Y`): each problem a replayable scenario, and a heat map (`${CLAUDE_PLUGIN_ROOT}/docs/explore.md`) |

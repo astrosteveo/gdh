@@ -1,6 +1,6 @@
 ---
 name: godot-project
-description: Lay out and grow a Godot 4.7+ game project — scene structure, autoloads, the Input Map, physics layers, groups, scene changes, saving player data, and folder layout. Use when starting a Godot project or a new system in one (a player, a level, a menu, a save system), when adding input actions, autoloads or project settings, or when deciding how scenes should talk to each other.
+description: Lay out and grow a Godot 4.7+ game project — scene structure (scenes built as nodes the user can see and change in the editor), autoloads, the Input Map, physics layers, groups, scene changes, saving player data, and folder layout. Use when starting a Godot project or a new system in one (a player, a level, a menu, a HUD or any other screen, a save system), when making or restructuring a scene, when adding input actions, autoloads or project settings, or when deciding how scenes should talk to each other.
 ---
 
 # Structuring a Godot 4.7+ project
@@ -36,6 +36,26 @@ Use `snake_case` for files and folders and `PascalCase` for node names and `clas
   Siblings talk through their parent, or through an autoload for game-wide events.
 - **Instance, don't copy.** Make a base scene and use inherited scenes or exported properties for variants.
 - **Mark nodes other scripts need as unique names** (`%Name`) so moving them doesn't break paths.
+
+## Scenes the user can see in the editor
+
+The user works in the Godot editor. Build every scene so it shows there as it will in the game, and can be changed
+there. A scene that is one node whose script builds everything in `_ready()` is empty in the editor: the game runs and
+captures of it look right, but the user can't see, check or change any of it.
+
+- **Lay a scene out as nodes in its `.tscn`.** A screen's panels, labels and buttons, a level's props, a character's
+  parts are nodes in the scene. Style UI with a Theme resource (`ui/theme.tres`) rather than in code. The script
+  wires behaviour and fills in what comes from data.
+- **Make what comes from data from a template.** One button per save slot or one row per racer: put the container
+  and a template (a scene of its own, or a hidden child) in the `.tscn`, and instance copies of it from code. The
+  layout and the look stay in the editor.
+- **Draw procedural content in the editor too.** Terrain, a track built from a curve, a model fitted to its size:
+  make the script `@tool` and build it in the editor as in the game, guarding game-only code with
+  `Engine.is_editor_hint()` (see the `godot-gdscript` skill). Add what it builds as internal children
+  (`add_child(node, false, Node.INTERNAL_MODE_FRONT)`) so the scene doesn't save copies of it.
+- **Check it.** `gdh editor --scene res://...` saves what the editor shows for a scene (see the `gdh` skill). Run it
+  for each scene you made or changed and look: a scene that is empty or wrong there isn't done. If something can
+  only be seen in the running game, tell the user so.
 
 ## Autoloads
 

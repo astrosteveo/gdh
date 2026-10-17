@@ -144,7 +144,7 @@ def cmd_profile(args):
         result = report(call(session, "step", {"frames": args.frames, "events": step_input_events(args, args.frames)},
                              timeout=max(300, args.frames * 5)), args.json, echo=False)
         after = report(call(session, "eval", {"expr": "Engine.get_process_frames()"}), args.json, echo=False)["value"]
-        got = debugger.request(record, "stop")
+        got = debugger.request(record, "stop", until=after)
     except debugger.DebuggerError as e:
         raise LiveError(str(e)) from None
     frames = [f for f in got["frames"] if before < f["frame"] <= after]

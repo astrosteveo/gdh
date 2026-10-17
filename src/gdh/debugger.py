@@ -7,8 +7,10 @@ not to break on errors, so it never stops waiting for a debugger's say-so, and k
 as the game runs, as the game can't connect later.
 
 It answers requests on a Unix socket only this user can reach, a JSON object a line:
-  {"cmd": "start", "max": 256}   turn the profiler on (at most `max` functions a frame), keeping its frames
-  {"cmd": "stop"}                turn it off, and return {"frames": [...], "signatures": {id: "path::line::name"}}
+  {"cmd": "start", "max": 256}   turn the profiler on (at most `max` functions a frame), keeping its frames, and
+                                 answer once the first has come
+  {"cmd": "stop", "until": N}    turn it off once frame N's profile has come (or after a moment, with no `until`),
+                                 and return {"frames": [...], "signatures": {id: "path::line::name"}}
   {"cmd": "status"}              {"connected": bool, "recording": bool}
 
 Each frame the profiler sends ("servers:profile_frame") is kept as {"frame", "frame_time", "process_time",
@@ -117,13 +119,36 @@ class Debugger:
             self.frames = []
             self.recording = True
             self.send("profiler:servers", [True, [int(request.get("max", 256)), bool(request.get("native", False))]])
+            # The game turns its profiler on when its debugger next reads messages, which can be some frames on, so
+            # wait for its frames: a step after this is profiled from its first frame. (They come while it's held.)
+            if not self.wait(lambda: self.frames, float(request.get("timeout", 10))):
+                self.send("profiler:servers", [False, []])
+                self.recording = False
+                return {"error": "The game sent gdh's debugger no profiled frames."}
             return {"ok": True}
         if cmd == "stop":
+            # The game sends a frame's profile after the frame, so with `until`, wait for that frame's; without,
+            # give the frames still on the way a moment.
+            until = request.get("until")
+            if until is None:
+                time.sleep(float(request.get("settle", 0.3)))
+            came = until is None or self.wait(lambda: self.frames and self.frames[-1]["frame"] >= until,
+                                              float(request.get("timeout", 10)))
             self.send("profiler:servers", [False, []])
-            time.sleep(float(request.get("settle", 0.3)))  # the frames still on the way
             self.recording = False
+            if not came:
+                return {"error": f"The game sent gdh's debugger no profile of frame {until}."}
             return {"frames": self.frames, "signatures": {str(k): v for k, v in self.signatures.items()}}
         return {"error": f"Unknown command {cmd!r}."}
+
+    def wait(self, done, timeout):
+        """Whether `done()` came true within `timeout` seconds, while the game is connected."""
+        deadline = time.monotonic() + timeout
+        while not done():
+            if self.ended or time.monotonic() > deadline:
+                return False
+            time.sleep(0.01)
+        return True
 
 
 def read_exact(sock, n):

@@ -108,16 +108,15 @@ def write_shims(directory):
 
 
 def program_env(shims, display):
-    """godot_env's isolation (the display, alert stand-ins, gdh's user data), and none of the user's session."""
+    """godot_env's isolation (the display, alert stand-ins, gdh's user data, no Vulkan overlays), and none of the
+    user's session."""
     env = godot_env(shims, display)
     env.pop("GDH_ARGS", None)
     runtime = Path(shims) / "runtime"
     env["XDG_RUNTIME_DIR"] = str(runtime)
     env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={runtime / 'bus'}"
-    for name in ("PULSE_SERVER", "PIPEWIRE_REMOTE", "SESSION_MANAGER", "XAUTHORITY", "MANGOHUD", "ENABLE_VKBASALT"):
+    for name in ("PULSE_SERVER", "PIPEWIRE_REMOTE", "SESSION_MANAGER", "XAUTHORITY"):
         env.pop(name, None)
-    # Vulkan overlays draw into the program's frames, which the screen then shows: keep only the program's own drawing.
-    env["DISABLE_MANGOHUD"] = env["DISABLE_VKBASALT"] = "1"
     return env
 
 

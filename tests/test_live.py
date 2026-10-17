@@ -136,10 +136,16 @@ def test_the_game_keeps_its_user_data_apart_from_the_players(arena):
     assert value("OS.get_user_data_dir()").startswith(user_data_home() + "/")
 
 
-def test_the_game_runs_without_the_users_vulkan_overlays(arena):
-    # MangoHud and vkBasalt, which a desktop session can turn on for every program, stay out of the game.
-    assert value("OS.get_environment('DISABLE_MANGOHUD')") == value("OS.get_environment('DISABLE_VKBASALT')") == "1"
+def test_the_game_runs_without_the_users_vulkan_overlays(arena, monkeypatch):
+    # MangoHud and vkBasalt, which a desktop session can turn on for every program, aren't turned on for the game. (A
+    # Godot game clears DISABLE_MANGOHUD and DISABLE_VKBASALT as it starts, so it's leaving these out that counts.)
     assert not value("OS.has_environment('MANGOHUD')") and not value("OS.has_environment('ENABLE_VKBASALT')")
+    from gdh.godot import godot_env
+    monkeypatch.setenv("MANGOHUD", "1")
+    monkeypatch.setenv("ENABLE_VKBASALT", "1")
+    env = godot_env("shims", ":0")
+    assert "MANGOHUD" not in env and "ENABLE_VKBASALT" not in env
+    assert env["DISABLE_MANGOHUD"] == env["DISABLE_VKBASALT"] == "1"
 
 
 def test_shots_and_step_recording(arena):

@@ -85,6 +85,11 @@ def godot_env(shims, display, harness_args=(), game=True):
     env["WAYLAND_DISPLAY"] = "gdh-no-wayland"
     env["GDK_BACKEND"] = "x11"
     env["QT_QPA_PLATFORM"] = "xcb"
+    # Vulkan overlays the user turned on for their session hook every frame Godot presents: their work would count in
+    # the frame times gdh measures, and a --binary program's screenshots, taken from the screen, would show them.
+    for name in ("MANGOHUD", "ENABLE_VKBASALT"):
+        env.pop(name, None)
+    env["DISABLE_MANGOHUD"] = env["DISABLE_VKBASALT"] = "1"
     # OS.alert() runs zenity/kdialog/etc. The shims log the message instead.
     env["PATH"] = f"{shims}{os.pathsep}{env.get('PATH', '')}"
     return env

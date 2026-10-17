@@ -500,11 +500,10 @@ Positions are screenshot pixels, the screen's. Every option is checked before an
 
 ### Kept off the desktop
 
-A `--binary` session's program gets what a project's game gets: the display, the alert stand-ins, `user://` in gdh's own directory, the `GDH_MARK` that finds what it spawns, the watchdog, and the cleanup. A black box can do anything, so it's kept further off the user's session too:
+A `--binary` session's program gets what a project's game gets: the display, the alert stand-ins, `user://` in gdh's own directory, MangoHud and vkBasalt turned off, the `GDH_MARK` that finds what it spawns, the watchdog, and the cleanup. A black box can do anything, so it's kept further off the user's session too:
 
 - Its `XDG_RUNTIME_DIR` is an empty directory of the session's, so it finds no Wayland, D-Bus, PulseAudio or PipeWire socket of the user's, and its `DBUS_SESSION_BUS_ADDRESS` names a socket that isn't there.
 - `xdg-open`, `kde-open`, `kde-open5` and `gnome-open` are stand-ins that write `gdh: xdg-open URL` to the log, so `OS.shell_open` and the like never open the user's browser.
-- MangoHud and vkBasalt are turned off (`DISABLE_MANGOHUD=1`, `DISABLE_VKBASALT=1`): they draw into the program's frames, which the screen shows.
 - Its core size limit is 0, so a crash leaves no core dump for a desktop's crash reporter to show the user.
 
 ### When it ends
@@ -633,6 +632,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - `shot --no-ui` leaving the UI out of that shot and the game in, and the next shot the same as the one before
 - `camera` in 2D and 3D (`testbed/smoke/smoke.tscn`): the view moved, the boxes moved with it, and after `--release` the game's camera back and the frame the same as before, pixel for pixel
 - screenshots, the tree, error reporting and the unpause note
+- the game's `user://` in gdh's own directory, and the game running without MangoHud and vkBasalt
 - an array of over 100 items in a reply saying how many were left out, shots numbered on from an earlier session's in the same out dir, and a pipe step's wait growing with its frames
 - a bad scene, the idle timeout and cleanup after a crash
 

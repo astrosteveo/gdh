@@ -136,6 +136,12 @@ def test_the_game_keeps_its_user_data_apart_from_the_players(arena):
     assert value("OS.get_user_data_dir()").startswith(user_data_home() + "/")
 
 
+def test_the_game_runs_without_the_users_vulkan_overlays(arena):
+    # MangoHud and vkBasalt, which a desktop session can turn on for every program, stay out of the game.
+    assert value("OS.get_environment('DISABLE_MANGOHUD')") == value("OS.get_environment('DISABLE_VKBASALT')") == "1"
+    assert not value("OS.has_environment('MANGOHUD')") and not value("OS.has_environment('ENABLE_VKBASALT')")
+
+
 def test_shots_and_step_recording(arena):
     shots = live("shot", "--view", "normal", "--view", "wireframe")["result"]["shots"]
     assert set(shots) == {"normal", "wireframe"}

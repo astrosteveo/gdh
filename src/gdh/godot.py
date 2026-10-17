@@ -87,6 +87,8 @@ def godot_env(shims, display, harness_args=(), game=True):
     env["QT_QPA_PLATFORM"] = "xcb"
     # Vulkan overlays the user turned on for their session hook every frame Godot presents: their work would count in
     # the frame times gdh measures, and a --binary program's screenshots, taken from the screen, would show them.
+    # Leaving out the variables that turn them on is what keeps them out of a Godot game, which clears the DISABLE_
+    # ones as it starts (a project's, even headless); those are for other programs.
     for name in ("MANGOHUD", "ENABLE_VKBASALT"):
         env.pop(name, None)
     env["DISABLE_MANGOHUD"] = env["DISABLE_VKBASALT"] = "1"

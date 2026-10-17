@@ -395,7 +395,7 @@ Godot's window is on its own display, never your session's. Each GPU display has
 
 A game run under gdh also keeps its `user://` (saves, settings, logs, caches) in `~/.local/share/gdh/user-data`, never your own `~/.local/share/godot`, so a test run can't touch your saves or rotate out your logs. `GDH_USER_DATA=<dir>` picks another directory, `GDH_USER_DATA=real` uses yours ([docs/live.md](docs/live.md)).
 
-Vulkan overlays turned on for your whole session, MangoHud and vkBasalt, are turned off in every Godot gdh starts (`DISABLE_MANGOHUD=1`, `DISABLE_VKBASALT=1`). They do work of their own on every frame a game presents, which `bench` and `frames` would count, and an exported program's screenshots, taken from the screen, would show them.
+Vulkan overlays turned on for your whole session, MangoHud and vkBasalt, are turned off in every Godot gdh starts: gdh leaves out `MANGOHUD` and `ENABLE_VKBASALT`, which turn them on. They do work of their own on every frame a game presents, which `bench` and `frames` would count, and an exported program's screenshots, taken from the screen, would show them.
 
 For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `xmessage` to a temporary directory and puts that directory first on `PATH`. When Godot pops up an alert, the stand-in writes the message to `godot.log` and no dialog opens.
 

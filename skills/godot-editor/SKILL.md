@@ -20,7 +20,9 @@ Run `gdh bridge status`.
 - **It answers** with `headless: false`: the user's editor is open with the bridge. Use it.
 - **It answers** with `headless: true`: it's gdh's own headless editor. Fine for UIDs, checks and edits; the user
   can't see it.
-- **Exit 3, no bridge.** Ask the user whether they have the project open in the Godot editor.
+- **Exit 3, no bridge.** Find out whether the user has the project open in the Godot editor. `pgrep -af godot`
+  lists the Godots running (an editor has `-e`, `--editor` or a `project.godot` on its command line, and no `--headless`); ask the user
+  when that doesn't settle it.
   - If yes: tell them that without the bridge, saving in the editor can overwrite your edits, and your edits can
     overwrite their unsaved work. The band above their prompt shows the same warning. Offer to install the addon
     (`gdh bridge install`), then ask them to enable **gdh bridge** in Project > Project Settings > Plugins. Don't edit project.godot under an open editor. Until it's on, follow
@@ -45,6 +47,25 @@ Look at `open_scenes` and `unsaved_scenes` in `gdh bridge status`.
 
 Moving, renaming or deleting with shell commands isn't seen by the hooks: run `gdh bridge scan` afterwards. If the
 user's editor is open, prefer asking them to move files in the FileSystem dock, which fixes every reference.
+
+## Writing scenes and resources
+
+Godot reads a `.tscn` or `.tres` forgivingly: a property it doesn't know (a typo, a Godot 3 name, a theme override
+written wrong) is dropped without an error, and the game runs without it. No hook, check or capture reports it.
+
+- **Take property names from `gdh api`.** `gdh api Button` lists the properties a scene can set on a Button, and its
+  theme properties, which a scene sets as `theme_override_<kind>s/<name>` with the kind shown in brackets:
+  `font_size: int (font_size)` is `theme_override_font_sizes/font_size = 32`. `references/tscn.md` has a scene and
+  a resource with each part (sub-resources, nested and instanced nodes, groups, a unique name, theme overrides, a
+  signal connection) as Godot 4.7 writes them.
+- **Check what you wrote.** `gdh bridge check res://ui/menu.tscn` loads a scene or resource and reports parse errors
+  and references to files that don't exist. Without a bridge the hooks check only `.gd` files, so run it yourself.
+  It can't see a dropped property: look at a capture, or read the value back in the running game
+  (`gdh live eval "get_node('Panel/Buttons/Play').text"`).
+- **Or let Godot write it.** For a new scene with many nodes or sub-resources, build it in an `exec` script and save
+  it with `PackedScene.pack()` and `ResourceSaver.save()` (`references/tscn.md` has the script). A misspelt property
+  is an error there, and Godot writes the UIDs, the nodes' `unique_id`s and every property in its own form. Do this
+  only for a file that isn't open; change an open scene with the undoable edits below.
 
 ## UIDs
 
@@ -104,6 +125,8 @@ gdh bridge open res://main.tscn   # exec works on the current scene
 gdh bridge exec edit.gd           # or: gdh bridge exec - < edit.gd
 ```
 
+- Read the reply, not only the exit status: a script that fails while it runs still exits 0, with the error on an
+  `editor script:` line and `result: null`. Only a script that doesn't compile exits 1.
 - Open the right scene first; `exec` sees only the current one.
 - Put every change in an undo action. Change properties with `add_do_property` / `add_undo_property`.
 - Set `owner` to the scene root on every node you add, children included. A node with no owner isn't saved.
@@ -127,7 +150,8 @@ errors` returns the editor's errors since your last bridge command.
 
 - Ask whether the editor is open. If it is, tell the user which scenes you changed, so they reload them, or ask them
   to close the editor while you work.
-- The hooks still refuse `.godot/` edits and made-up UIDs, and still check GDScript.
+- The hooks still refuse `.godot/` edits and made-up UIDs, and still check GDScript, but not scenes or resources:
+  `gdh bridge check` those yourself ([Writing scenes and resources](#writing-scenes-and-resources)).
 - New scenes stay without UIDs until Godot next saves them. `gdh bridge start` then `gdh bridge resave PATH` fills
   them in.
 - `gdh import --project DIR` imports assets and writes `.uid` files.

@@ -83,7 +83,7 @@ timer.timeout.connect(_on_timeout, CONNECT_ONE_SHOT)
 ## await
 
 ```gdscript
-await get_tree().create_timer(0.5).timeout
+await get_tree().create_timer(0.5, false).timeout   # false: stops while the tree is paused, as gdh holds it
 await get_tree().process_frame
 await animation_player.animation_finished
 var result = await load_level()   # a function that awaits is a coroutine; await its call

@@ -57,8 +57,9 @@ layout_mode = 2
   scene overrides.
 - **Groups** go in the node's header (`groups=["enemies"]`). `unique_name_in_owner = true` is what lets a script
   reach the node as `%Play`.
-- **Theme overrides** are `theme_override_<kind>s/<name>`, the kind being what `gdh api CLASS` shows in brackets
-  after the theme property: `colors`, `constants`, `fonts`, `font_sizes`, `icons`, `styles`.
+- **Theme overrides** are `theme_override_<kind>s/<name>`, the kind being what `gdh api CLASS` shows in parentheses
+  after the theme property: `color`, `constant`, `font`, `font_size`, `icon`, `style`. Keep the `s` in the pattern:
+  `font_color: Color (color)` is `theme_override_colors/font_color`.
 - **Layout.** `layout_mode = 2` marks a child a container lays out: the container sets its position and size, so
   give it none. A Control outside a container is placed by its anchors and offsets; the root of a screen usually
   fills it (`anchors_preset = 15`, `anchor_right` and `anchor_bottom` 1.0).

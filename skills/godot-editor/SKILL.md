@@ -54,7 +54,7 @@ Godot reads a `.tscn` or `.tres` forgivingly: a property it doesn't know (a typo
 written wrong) is dropped without an error, and the game runs without it. No hook, check or capture reports it.
 
 - **Take property names from `gdh api`.** `gdh api Button` lists the properties a scene can set on a Button, and its
-  theme properties, which a scene sets as `theme_override_<kind>s/<name>` with the kind shown in brackets:
+  theme properties, which a scene sets as `theme_override_<kind>s/<name>` with the kind shown in parentheses:
   `font_size: int (font_size)` is `theme_override_font_sizes/font_size = 32`. `references/tscn.md` has a scene and
   a resource with each part (sub-resources, nested and instanced nodes, groups, a unique name, theme overrides, a
   signal connection) as Godot 4.7 writes them.

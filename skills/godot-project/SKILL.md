@@ -68,8 +68,9 @@ while structuring it decide how easy that is:
 - **Draw random numbers from Godot's global generator** (`randi()`, `randf_range()`, `shuffle()`) and don't call
   `randomize()`, which Godot 4 already does at start. `gdh live start --seed N` then repeats a run and scenarios
   replay; a `RandomNumberGenerator` of your own repeats only if you seed it from `randi()`.
-- **Time gameplay in game time:** `delta`, `Timer` nodes and `get_tree().create_timer()`, never the wall clock
-  (`Time.get_ticks_msec()`), which runs on while gdh holds the game between steps.
+- **Time gameplay in game time:** `delta`, `Timer` nodes and `get_tree().create_timer(sec, false)`, never the wall
+  clock (`Time.get_ticks_msec()`), which runs on while gdh holds the game between steps. A default
+  `create_timer(sec)` also runs on while gdh holds the game, because its second argument, `process_always`, is true.
 - **Give a game bigger than a scene or two a `Debug` autoload** whose methods return the state you'd check as
   dictionaries (`Debug.state()`) and jump straight to a state (`Debug.goto("hangar")`), and call `GdhEvents.emit()`
   where things happen (`gdh events install`). The `gdh` skill says how checks use both.

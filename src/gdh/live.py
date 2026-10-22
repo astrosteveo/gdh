@@ -846,7 +846,7 @@ def watched(reply, result, args):
             last = (f"its last check, at frame {until['frame']}, failed: {until['error']}" if until.get("error")
                     else f"it was {json.dumps(until['value'])} at frame {until['frame']}" if until["checks"]
                     else "it was never checked, as --every is more than that")
-            unmet = f"{prefix}--until {until['expr']} didn't hold in {r['frames']} frames: {last}"
+            unmet = f"{prefix}--until {until['expr']} didn't hold in {r.get('ran', r['frames'])} frames: {last}"
         if args.json:
             continue
         if until and until["met"]:

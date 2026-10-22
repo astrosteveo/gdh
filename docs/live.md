@@ -32,7 +32,8 @@ Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/h
 - Holding uses `SceneTree.paused`. It has these side effects:
   - Nodes whose process mode is `ALWAYS` or `WHEN_PAUSED` keep running while held. `status` lists them.
   - If the game unpauses itself while held, `gdh` pauses it again and says so in the next reply. It runs on the next step.
-  - A game that pauses itself (its pause menu open) stays paused: gdh keeps the game's own pause apart from its hold and gives it back when a step lets the game go, so only the nodes that run while paused (the menu) run, as for a player. Such a step's reply counts in `frames` the frames the game ran in, and in `ran` the frames the step ran (`stepped 30 frames (the game paused itself for 30 of them)`). `status` has `game_paused` (`paused by the game itself`). While held, `get_tree().paused` reads true either way.
+  - A game that pauses itself during a step (its pause menu open) stays paused: gdh keeps the game's own pause apart from its hold and gives it back when a step lets the game go, so only the nodes that run while paused (the menu) run, as for a player. Such a step's reply counts in `frames` the frames the game ran in, and in `ran` the frames the step ran (`stepped 30 frames (the game paused itself for 30 of them)`). `status` has `game_paused` (`paused by the game itself`). While held, `get_tree().paused` reads true either way.
+  - gdh sees the game's pause only when it takes hold (a step's end, or `pause` after `run`), as the tree is already paused while held. A pause made while held (by `eval` or `set`, or in the game's own `_ready` at startup) isn't kept: the next step unpauses the game. Open the menu with a step's input instead.
 
 ## Input
 

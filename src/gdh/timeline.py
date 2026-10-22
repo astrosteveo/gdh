@@ -69,7 +69,8 @@ def record(session, cmd, args, instance, replies, games, started, request):
         parts.append(part)
     entry["replies"] = parts
     if cmd == "step" and entry["ok"]:
-        entry["ran"] = replies[0].get("result", {}).get("frames")
+        result = replies[0].get("result", {})
+        entry["ran"] = result.get("ran", result.get("frames"))
     if cmd in THUMBNAILED and entry["ok"]:
         number = _count(folder)
         thumbs = []

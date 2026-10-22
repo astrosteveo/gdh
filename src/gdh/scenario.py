@@ -409,17 +409,18 @@ def run_step(run, game, item, where, out, update):
             result = game.step(spec["step"], instance=instance, **options)
             until = result.get("until") if isinstance(result, dict) else None
             if until and not until.get("met"):
+                ran = result.get("ran", result["frames"])
                 return run.check(name if spec.get("name") else f"until {until['expr']}", "until", False,
-                                 f"didn't hold in {result['frames']} frames: {client.describe_unmet(until)}", where)
+                                 f"didn't hold in {ran} frames: {client.describe_unmet(until)}", where)
             return True
         if kind == "until":
             options = {k: v for k, v in spec.items() if k not in ("until", "name", "instance")}
             try:
                 until = game.until(spec["until"], instance=instance, **options)
             except client.Unmet as e:
+                ran = e.result.get("ran", e.result.get("frames"))
                 return run.check(name, "until", False,
-                                 f"didn't hold in {e.result.get('frames')} frames: {client.describe_unmet(e.until)}",
-                                 where)
+                                 f"didn't hold in {ran} frames: {client.describe_unmet(e.until)}", where)
             run.check(name, "until", True, f"held at frame {until['frame']}: {brief(until['value'])}", where,
                       value=until["value"], frame=until["frame"])
             return True

@@ -250,7 +250,8 @@ class Session:
             result = result[0]
         until = result.get("until", {})
         if not until.get("met"):
-            raise Unmet(f"until {expr} didn't hold in {result.get('frames')} frames: {describe_unmet(until)}", result)
+            ran = result.get("ran", result.get("frames"))
+            raise Unmet(f"until {expr} didn't hold in {ran} frames: {describe_unmet(until)}", result)
         return until
 
     def click(self, text=None, node=None, at=None, *, right=False, frames=2, instance=0):

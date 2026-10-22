@@ -1,6 +1,6 @@
 ---
 name: godot-gdscript
-description: Write GDScript that is correct for Godot 4.7+ — typed, idiomatic, and free of Godot 3 leftovers. Use when writing or reviewing any .gd file, a @tool script, a custom Resource, signals, await/coroutines, exports, input handling, or physics movement, and whenever you're unsure whether an API name or GDScript feature exists in Godot 4.
+description: Write GDScript that is correct for Godot 4.7+ — typed, idiomatic, and free of Godot 3 leftovers. Use when writing or reviewing any .gd file, a @tool script, a custom Resource, signals, await/coroutines, exports, input handling, physics movement or unit tests, and whenever you're unsure whether an API name or GDScript feature exists in Godot 4.
 ---
 
 # GDScript for Godot 4.7+
@@ -59,7 +59,11 @@ func take_damage(amount: int) -> void:
 - `get_node_or_null()` when the node may be missing; `get_node()` (and `$`) print an error when it is.
 - Make scenes from code with `preload("res://enemy.tscn").instantiate()`. It's `instantiate()`, not Godot 3's
   `instance()`.
-- Free nodes with `queue_free()`, not `free()`, unless you know nothing touches them later in the frame.
+- Free nodes with `queue_free()`, not `free()`, unless you know nothing touches them later in the frame. A variable
+  holding a node that may since have been freed isn't `null`: test it with `is_instance_valid(target)`.
+- A parent's `_ready()` runs after all of its children's, so a child can't use what its parent sets up there.
+- Point a scene at another node with `@export var target: Node2D`, set in the inspector, rather than a hard-coded
+  path to somewhere outside it.
 - A node you add from code to a scene being edited needs `owner` set to be saved. See the `godot-editor` skill.
 
 ## Signals
@@ -90,17 +94,25 @@ var result = await load_level()   # a function that awaits is a coroutine; await
 ## Movement and physics
 
 ```gdscript
+const SPEED := 200.0
+const ACCELERATION := 1500.0
+const JUMP_VELOCITY := -400.0
+
+
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity += get_gravity() * delta
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 	var direction := Input.get_axis("move_left", "move_right")
-	velocity.x = direction * speed if direction else move_toward(velocity.x, 0, speed)
+	velocity.x = move_toward(velocity.x, direction * SPEED, ACCELERATION * delta)
 	move_and_slide()
 ```
 
 - Move physics bodies in `_physics_process`, not `_process`.
+- Don't change physics state inside a physics callback (`body_entered`, `area_entered`): Godot refuses with "Can't
+  change this state while flushing queries". Defer it: `$CollisionShape2D.set_deferred("disabled", true)`,
+  `add_child.call_deferred(bullet)`.
 - `CharacterBody2D`/`3D` replaced Godot 3's `KinematicBody`. `velocity` is a property and `move_and_slide()` takes no
   arguments.
 - Read input with actions from the Input Map (`Input.get_axis`, `Input.get_vector`,
@@ -129,6 +141,35 @@ sees it in the editor as in the game; lay out everything else as nodes in the sc
 A tool script that changes the scene every frame keeps the editor redrawing (`gdh editor` reports this).
 `@export_tool_button("Label") var action := do_something` adds an inspector button, and needs `@tool`.
 
+## Tests
+
+Give logic with no picture to check (rules, inventories, save data, maths) tests that `gdh test --project <dir>`
+runs. In a project without GUT or gdUnit4, gdh's own runner takes each `test*.gd` file under `res://test` or
+`res://tests`, and each method whose name starts with `test` is a test. A test fails when it raises an engine error:
+a failed `assert()`, a `push_error()`, a script error. Give `assert()` a message, which the failure report shows.
+
+```gdscript
+# res://test/test_inventory.gd
+extends RefCounted
+
+var inventory: Inventory
+
+
+func before_each() -> void:
+	inventory = Inventory.new()
+
+
+func test_adding_stacks() -> void:
+	inventory.add("potion", 2)
+	inventory.add("potion", 3)
+	assert(inventory.count("potion") == 5, "got %d potions" % inventory.count("potion"))
+```
+
+`before_all`, `after_each` and `after_all` run when the file has them. Extend `Node` instead for a test that needs
+the scene tree: it's added to the tree, so it can instance scenes and `await` frames and timers. A project with GUT
+or gdUnit4 runs that framework the same way. What you can only see in the running game, check with `gdh live` and
+keep as a scenario (the `gdh` skill).
+
 ## Newer features (4.5+)
 
 - `@abstract` on a class or a method: the class can't be instantiated, the method must be overridden.
@@ -151,6 +192,12 @@ A tool script that changes the scene every frame keeps the editor redrawing (`gd
 | `Spatial`, `Position2D`, `Sprite` (3D) | `Node3D`, `Marker2D`, `Sprite3D` |
 | `rand_range` | `randf_range`, `randi_range` |
 | `PoolStringArray` | `PackedStringArray` |
+| `array.empty()` | `array.is_empty()` |
+| `OS.get_ticks_msec()` | `Time.get_ticks_msec()` |
+| `BUTTON_LEFT`, `event.scancode` | `MOUSE_BUTTON_LEFT`, `event.keycode` (or `physical_keycode`) |
+| `to_json`, `parse_json`, `str2var` | `JSON.stringify`, `JSON.parse_string`, `str_to_var` |
+| `Engine.editor_hint` | `Engine.is_editor_hint()` |
+| `VisibilityNotifier2D`, `Light2D` | `VisibleOnScreenNotifier2D`, `PointLight2D` |
 | `setget` | `var x: int: set = _set_x, get = _get_x` or inline `set(value):` |
 
 When in doubt, `gdh api --search <word>` finds the Godot 4 name.

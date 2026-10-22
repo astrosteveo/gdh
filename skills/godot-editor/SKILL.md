@@ -20,9 +20,10 @@ Run `gdh bridge status`.
 - **It answers** with `headless: false`: the user's editor is open with the bridge. Use it.
 - **It answers** with `headless: true`: it's gdh's own headless editor. Fine for UIDs, checks and edits; the user
   can't see it.
-- **Exit 3, no bridge.** Find out whether the user has the project open in the Godot editor. `pgrep -af godot`
-  lists the Godots running (an editor has `-e`, `--editor` or a `project.godot` on its command line, and no `--headless`); ask the user
-  when that doesn't settle it.
+- **Exit 3, no bridge.** Find out whether the user has the project open in the Godot editor. `pgrep -afi godot`
+  lists the Godots running (an editor has `-e`, `--editor` or a `project.godot` on its command line, and no
+  `--headless`). Ignore the line for your own shell, which contains "godot" too. Ask the user when that doesn't
+  settle it.
   - If yes: tell them that without the bridge, saving in the editor can overwrite your edits, and your edits can
     overwrite their unsaved work. The band above their prompt shows the same warning. Offer to install the addon
     (`gdh bridge install`), then ask them to enable **gdh bridge** in Project > Project Settings > Plugins. Don't edit project.godot under an open editor. Until it's on, follow

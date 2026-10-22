@@ -1,15 +1,19 @@
 ---
 name: gdh
-description: See and drive a Godot 4 game on Linux. Render scenes off-screen on the real GPU, read screenshots and debug views (wireframe, normals, lighting, overdraw), get engine errors and automatic defect checks, play the game frame by frame with scripted input, wait for conditions, find and click UI by its text, keep playthroughs as replayable scenarios, run exported builds off-screen, see what the Godot editor itself shows a scene as (tool scripts included), see motion in one image (trace charts, onion skins, trails, filmstrips, change maps), and measure what it draws (flicker, shimmer, line width, NaN and crushed pixels, frame time and budgets, per-pass GPU cost, leaks, audio levels). Use this whenever you build, change or debug anything in a Godot project, including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks wrong, asks you to check or verify a scene, playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
+description: See and drive a Godot 4 game on Linux with gdh. Render scenes off-screen on the real GPU and read screenshots, debug views (wireframe, normals, lighting, overdraw), engine errors and automatic defect checks; play the game frame by frame with scripted input, click UI by its text and keep playthroughs as replayable scenarios; see what the Godot editor shows a scene as; see motion in one image; and measure game feel (input latency, jumps, hit-stop), frame times, GPU cost, flicker, leaks and audio. Use this whenever you build, change or debug anything in a Godot project (a folder with project.godot), including scenes, levels, materials, shaders, UI, sprites, cameras, player controls and gameplay logic. Also use it when the user says something looks or feels wrong, asks you to check, verify or playtest, reproduce a bug, or confirm a change works. Godot's --headless mode draws nothing, so without this you're guessing at what the game shows.
 ---
 
 # gdh: seeing and driving a Godot game
 
 `gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. `gdh capture` renders a scene once: six views, the engine errors and the probe findings. `gdh live` starts the game held at frame 0 and steps it an exact number of frames with input, so you can look between steps. `gdh movie` records a video, and `gdh editor` saves what the Godot editor shows. `gdh guide` prints a one-page cheat sheet.
 
-Use it to check your own work. After you change a scene, material, shader or UI, capture it and look before telling the user it's done. After you change controls or gameplay, drive it live and measure. The user judges whether the game feels good (controls, pacing, fun). You cover whether it renders correctly, runs without errors and behaves as specified, and you measure what feel is made of: latency, speeds, jumps, hit-stop, shake.
+Use it to check your own work before you tell the user it's done. The user judges whether the game feels good (controls, pacing, fun). You cover whether it loads without errors, renders correctly and behaves as specified, and you measure what feel is made of: latency, speeds, jumps, hit-stop, shake. For each change:
 
-Check the editor as well as the game. The user works in the Godot editor, so for each scene you made or changed, `gdh editor --scene` shows what they'll see there ([below](#the-editor)). A scene whose script builds everything at run time is empty in the editor, and the user can't inspect or change it; the `godot-project` skill says how to build scenes that show.
+1. **It loads.** The hooks hand back Godot's errors for each `.gd` you write: fix them first. A `.tscn` or `.tres` isn't always checked, and Godot drops a misspelt property in one without a word; the `godot-editor` skill says how to check them.
+2. **It draws right.** `gdh capture` each scene you made or changed. Read its errors, `DEFECT:` lines and findings, then open `normal.png`, and in 3D the debug views ([Looking at images](#looking-at-images)).
+3. **It behaves right.** After a change to controls, gameplay or UI flow, drive it with `gdh live` and measure: a position before and after, a frame count, a value read with `eval`.
+4. **It shows in the editor.** The user works in the Godot editor, so run `gdh editor --scene` for each scene you made or changed and look at `viewport.png` ([below](#the-editor)). A scene whose script builds everything at run time is empty there, and the user can't inspect or change it; the `godot-project` skill says how to build scenes that show.
+5. **Keep it, and say what you checked.** If you drove it, save that as a scenario with checks, so it replays as a regression test. Report what you verified and how, and what you didn't ([Reporting](#reporting-to-the-user)).
 
 Load this plugin's other skills before the work each covers, not only when something goes wrong: `godot-project` before making or restructuring a scene, a screen or a system; `godot-gdscript` before writing GDScript; `godot-editor` before changing a `.tscn`, `.tres`, script, shader or project setting, and whenever the editor may be open (`gdh bridge`, UIDs); `godot-export` for builds. The `playtester` agent plays a scene against a goal, reports back and keeps what passed as a scenario.
 
@@ -71,7 +75,8 @@ Check that `gdh guide` works. If it doesn't, or a command or option this skill n
 | An exported build, a launcher, anything where `OS.has_feature("editor")` matters | `gdh live start --binary PATH`; `gdh export --smoke` |
 | What the editor shows the user: each scene you made or changed, tool scripts, `@tool` previews | `gdh editor` |
 | Footage: a clip, a trailer shot, a video of a bug | `gdh movie` (its `audio.png` shows the sound: waveform, spectrogram, clipping, frame by frame) |
-| Logic with no picture to check: rules, save data, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner) |
+| Logic with no picture to check: rules, save data, maths | `gdh test` (GUT, gdUnit4, or gdh's own runner; the `godot-gdscript` skill has a test file's shape) |
+| A multiplayer game: a server beside it, several players, lag, drops and reconnects | `gdh live start --companion`, `--instances N` and `--net NAME`, then `gdh live net` (`${CLAUDE_PLUGIN_ROOT}/docs/live.md`: Companions, Several instances, A worse network) |
 | Where the game breaks over a long run: stuck spots, soft locks, holes, leaving the level | `gdh live explore N --node PATH` (at random, or `--goal X,Y`): each problem a replayable scenario, and a heat map (`${CLAUDE_PLUGIN_ROOT}/docs/explore.md`) |
 | A long play-through against a goal, kept out of the main conversation | the `playtester` agent |
 
@@ -104,9 +109,8 @@ gdh live probes --session <name>
 - **Reading the UI without a screenshot.** `gdh live snapshot [PATH]` prints what's on screen to read or use as an outline (`GoButton (Button) "Go" [disabled]`, a slider's `80/100`, the focus), cheaper than a shot and exact. `--baseline FILE` checks it hasn't changed (`--update-baseline` writes it); a scenario's `{"snapshot": NAME, "baseline": true}` does the same.
 - **A record of the session.** `start --timeline` keeps every command, with its frames, errors, notes, values and a thumbnail of the frame after it, in `<out>/timeline/index.html` (a page that opens from the disk). Use it for a playtest someone will check, or one you'll want to look back through; point the user at it in your report.
 - **Starting where you need to be.** `--recipe FILE` runs batch lines once the game is ready; `--seed N` makes `randi()` repeat (restart keeps the seed); `start --replay <out>/inputs.jsonl` replays a saved session. `gdh live reload` keeps state but cancels a pending `await`, and doesn't reload scenes, resources or C#: use `restart --replay` for those.
-- **Companions and instances.** `--companion 'NAME=COMMAND'` starts a program beside the game (a server) and stops it with the session: `{port}` is a free port, `{NAME.port}` passes it to the game's arguments, `--companion-ready NAME=http://127.0.0.1:{port}/health` waits for it. `--instances N` runs N games that step together; input goes to `--instance K`, and `eval`, `shot` and `tree` take `--instance K` or `all`.
+- **Multiplayer.** A server beside the game (`--companion`), several games stepping together (`--instances N`, then `--instance K` on each command) and a worse network between them (`--net`, `gdh live net`) each have a section in `${CLAUDE_PLUGIN_ROOT}/docs/live.md`. Network delays are in real time, so test them with `gdh live run`, wait, `gdh live pause`.
 - **Other languages.** `--locale pseudo` on `capture` or `live start` makes every text 40% longer with accents (Godot's pseudolocalization), and the `text_overflow` probe lists what's cut off or spills out; `--locale fr` uses a real translation.
-- **A worse network.** `--net NAME` (NAME a `--companion`) puts the companion behind gdh's proxy: `gdh live net --latency 150 --jitter 30 --loss 5 [--instance K]`, `--cut`/`--heal` (the link goes down and comes back), `--reset` (TCP connections closed: does the game reconnect?), and `gdh live net` alone for what went through. Delays are in real time, so test them with `gdh live run`, wait, `gdh live pause`.
 - **Spawned processes and builds.** What the game spawns runs on its display and ends with the session; `--keep-children` keeps it for a launcher that hands off (watch it, but start the real game directly to step it). An exported build, a launcher or any X program runs as it is with `start --binary PATH [-- args]`: `wait --log REGEX`, `shot`, `input --click X,Y --type T --key Return --shot`, `status`, `stop`. `gdh export --preset Linux --smoke 10` is the quick release check.
 
 ## Movies
@@ -189,7 +193,7 @@ The probes check scene data for likely defects: objects floating above surfaces,
 
 ## Checking a Godot API name
 
-The installed Godot may be newer than your training data, and Godot 3 names (`KinematicBody2D`, `instance()`, `yield`) slip in easily. Look up what you aren't sure of in the installed version's reference: `gdh api CharacterBody2D` (its chain and members), `gdh api CharacterBody2D.move_and_slide` (one member), `gdh api --search floor`, `gdh api @GDScript`. A wrong name exits 1 with close matches.
+The installed Godot may be newer than your training data, and Godot 3 names (`KinematicBody2D`, `instance()`, `yield`) slip in easily. Look up what you aren't sure of in the installed version's reference: `gdh api CharacterBody2D` (its chain and members), `gdh api CharacterBody2D.move_and_slide` (one member), `gdh api --search floor`, `gdh api @GDScript`, and an annotation with its `@` (`gdh api @GDScript.@export_range`). A wrong name exits 1 with close matches. The properties it lists are the names a `.tscn` or `.tres` uses, and its theme properties are how a scene overrides a control's look (the `godot-editor` skill: Writing scenes and resources).
 
 ## Reporting to the user
 
@@ -199,8 +203,13 @@ The installed Godot may be newer than your training data, and Godot 3 names (`Ki
 
 ## References
 
+Read the one you need when this skill isn't enough. `docs/live.md` is long (about 700 lines): list its sections with `grep -n '^##' ${CLAUDE_PLUGIN_ROOT}/docs/live.md` and read the one you need.
+
 - `references/probes.md`: each probe, its thresholds and its blind spots
-- `${CLAUDE_PLUGIN_ROOT}/docs/live.md`: live control in full, batches, the protocol for scripts, restart and replays, `--binary` sessions
+- `${CLAUDE_PLUGIN_ROOT}/docs/live.md`: live control in full: input, finding and clicking nodes, snapshots, framing and annotated shots, the debug autoload, events, the timeline, companions, instances and the network, batches, the protocol for scripts, restart and replays, `--binary` sessions
 - `${CLAUDE_PLUGIN_ROOT}/docs/scenarios.md`: scenario files, `gdh scenario run` and the Python client
+- `${CLAUDE_PLUGIN_ROOT}/docs/test.md`: `gdh test`, its frameworks, gdh's own runner and its report
 - `${CLAUDE_PLUGIN_ROOT}/docs/measure.md`: every measure, diffs and baselines, frame times, bench, monitors and audio
-- `${CLAUDE_PLUGIN_ROOT}/docs/editor.md`: how `gdh editor` drives the Godot editor
+- `${CLAUDE_PLUGIN_ROOT}/docs/feel.md`, `motion.md`, `art.md`: game feel, motion in one image, animation and art checks
+- `${CLAUDE_PLUGIN_ROOT}/docs/compare.md`, `explore.md`, `movie.md`: sweeps, matrices and the user's pick; the exploring bot; movies
+- `${CLAUDE_PLUGIN_ROOT}/docs/editor.md`, `bridge.md`: how `gdh editor` drives the Godot editor, and the bridge

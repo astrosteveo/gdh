@@ -53,4 +53,3 @@ The rules were tuned on a small set of test scenes, so expect false positives an
 - Deferred checks:
   - Stretched triangles (#8). A pole or chain has edges many times longer than its ring edges, so a simple ratio fires constantly.
   - Hard edges shaded smooth (#10). A smooth 6-sided cylinder measures close to a smoothed box.
-  - Text overflowing its container.

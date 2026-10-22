@@ -46,7 +46,7 @@ gdh export --project <dir> --preset Linux --pack             # only the game's d
   Arguments after `--` go to the game. A Windows or macOS build can't be run here; say so.
 - To drive the build itself (a menu, a launcher; where `OS.has_feature("editor")` matters), run it as a black box:
   `gdh live start --binary build/game.x86_64`, then `gdh live wait --log REGEX`, `shot`, `input --click X,Y`,
-  `status` and `stop` (docs/live.md, "Programs as they are"). Never run the build bare: it would open on the
+  `status` and `stop` (`${CLAUDE_PLUGIN_ROOT}/docs/live.md`, "Programs as they are"). Never run the build bare: it would open on the
   user's desktop.
 - `--debug` builds print script errors and warnings; use them to chase a problem that only shows in the exported
   game.

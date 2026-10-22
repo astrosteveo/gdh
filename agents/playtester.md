@@ -51,7 +51,8 @@ does the game meet the goal you were given? You don't change the game's files. Y
    numbers and vectors), put the final ones in `"expect"`, and add a checkpoint shot at the moment that matters
    (`{"shot": "door-open"}`). Then replay it: `gdh scenario run <file> --session <name>-replay`. Fix the file until
    it passes, and say in your report if it never does (that's a finding: the game doesn't replay the same). Write
-   none for a goal that failed or that you couldn't tell. docs/scenarios.md has the format.
+   none for a goal that failed or that you couldn't tell. The plugin's `docs/scenarios.md` has the format (the gdh
+   skill's References give its full path).
 7. **Try to break it, a little.** After the goal passes and is saved, try one or two obvious variations: hold the key
    longer, press two keys together, do it twice. Report what happens.
 8. **Always stop the session**, whatever happens, even after an error: `gdh live stop --session <name>`.

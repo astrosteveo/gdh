@@ -133,6 +133,29 @@ def test_exec_reports_a_script_that_doesnt_compile(project):
     assert reply["ok"] is False
 
 
+def test_exec_fails_a_script_that_raises_an_error_as_it_runs(project, tmp_path):
+    """A script that compiles but raises an error in run() fails the command; errors raised before it come back
+    apart from its own, and don't fail it."""
+    import time
+    from gdh import editor_bridge
+    script = tmp_path / "null.gd"
+    script.write_text('extends RefCounted\n\nfunc run(editor):\n\tvar missing = null\n\tmissing.name = "Hero"\n'
+                      '\treturn "done"\n')
+    proc = gdh("bridge", "exec", script, "--project", project, "--json", check=False)
+    reply = json.loads(proc.stdout)
+    assert proc.returncode == 1 and reply["ok"] is False and reply["result"] is None
+    assert any("'name'" in e["message"] for e in reply["errors"]), reply["errors"]
+    # An error raised after an exec's reply (a deferred lookup of a node that doesn't exist) comes back with the next
+    # exec as one of its earlier errors.
+    later = ('extends RefCounted\n\nfunc run(editor):\n'
+             '\teditor.get_base_control().get_node.call_deferred("NoSuchNodeForGdh")\n\treturn 1\n')
+    editor_bridge.call(project, {"cmd": "exec", "code": later})
+    time.sleep(0.5)
+    reply = editor_bridge.call(project, {"cmd": "exec", "code": "extends RefCounted\n\nfunc run(editor):\n\treturn 2\n"})
+    assert reply["ok"] is True and reply["result"] == 2 and reply["errors"] == []
+    assert any("NoSuchNodeForGdh" in e["message"] for e in reply["earlier_errors"])
+
+
 def test_hooks_refuse_edits_that_fight_the_editor(project):
     assert denied(hook("pre", "Write", project / ".godot" / "x.cfg", content="x"))
     assert denied(hook("pre", "Edit", project / "project.godot", old_string="a", new_string="b"))

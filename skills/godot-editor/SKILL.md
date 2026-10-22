@@ -125,8 +125,8 @@ gdh bridge open res://main.tscn   # exec works on the current scene
 gdh bridge exec edit.gd           # or: gdh bridge exec - < edit.gd
 ```
 
-- Read the reply, not only the exit status: a script that fails while it runs still exits 0, with the error on an
-  `editor script:` line and `result: null`. Only a script that doesn't compile exits 1.
+- A script that doesn't compile, or raises an error as it runs, exits 1 with the error in the reply (an
+  `editor script:` line). Errors the editor raised before it come back apart, as `earlier_errors`, and don't fail it.
 - Open the right scene first; `exec` sees only the current one.
 - Put every change in an undo action. Change properties with `add_do_property` / `add_undo_property`.
 - Set `owner` to the scene root on every node you add, children included. A node with no owner isn't saved.

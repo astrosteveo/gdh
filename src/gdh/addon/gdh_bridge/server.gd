@@ -441,21 +441,28 @@ func _check(paths: Array) -> Dictionary:
 	return {"ok": ok, "checked": out, "earlier_errors": earlier}
 
 
+## Runs a script's run(editor). It fails when the script doesn't compile, or raises an error while it runs.
 func _exec(code: String) -> Dictionary:
+	var earlier := _log.drain()  # Raised before this exec: kept apart so they aren't blamed on the script.
 	var script := GDScript.new()
 	script.source_code = code
 	_log.capture(true)
 	var err := script.reload()
 	if err != OK:
 		_log.capture(false)
-		return {"ok": false, "error": "the script didn't compile (%s): see errors" % error_string(err)}
+		return {"ok": false, "error": "the script didn't compile (%s): see errors" % error_string(err),
+				"earlier_errors": earlier}
 	var obj = script.new()
 	if obj == null or not obj.has_method("run"):
 		_log.capture(false)
-		return {"ok": false, "error": "the script needs func run(editor), and must extend RefCounted"}
+		return {"ok": false, "error": "the script needs func run(editor), and must extend RefCounted",
+				"earlier_errors": earlier}
 	var result = obj.run(EditorInterface)
 	var output := _log.capture(false)
-	return {"ok": true, "result": _plain(result), "output": Array(output)}
+	var reply := {"ok": _log.count() == 0, "result": _plain(result), "output": Array(output), "earlier_errors": earlier}
+	if not reply.ok:
+		reply["error"] = "the script raised errors as it ran: see errors"
+	return reply
 
 
 func _plain(v: Variant) -> Variant:

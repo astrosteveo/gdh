@@ -91,7 +91,7 @@ format=3]`, then `[resource]` and its properties.
 
 Built in an `exec` script (`gdh bridge exec build.gd`, with a bridge running: `gdh bridge start` when the user's
 editor isn't open), a scene like the one above comes out with its UIDs and `unique_id`s, and a misspelt property is
-an error in the reply instead of a silent loss. Read the reply: a script that fails while it runs still exits 0.
+an error (exit 1, with the error in the reply) instead of a silent loss.
 
 ```gdscript
 extends RefCounted

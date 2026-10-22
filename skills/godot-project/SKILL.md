@@ -57,6 +57,23 @@ captures of it look right, but the user can't see, check or change any of it.
   for each scene you made or changed and look: a scene that is empty or wrong there isn't done. If something can
   only be seen in the running game, tell the user so.
 
+## Built to be checked
+
+gdh checks a game through its node paths, groups and expressions, and replays it frame for frame. A few choices made
+while structuring it decide how easy that is:
+
+- **Name nodes for what they are** (`Player`, `HUD/Health`, `Menu/Play`): `gdh live eval "get_node('Player')..."`,
+  `--click-node Menu/Play` and annotated shots use the names. Put nodes a check needs to find in groups (`player`,
+  `enemies`).
+- **Draw random numbers from Godot's global generator** (`randi()`, `randf_range()`, `shuffle()`) and don't call
+  `randomize()`, which Godot 4 already does at start. `gdh live start --seed N` then repeats a run and scenarios
+  replay; a `RandomNumberGenerator` of your own repeats only if you seed it from `randi()`.
+- **Time gameplay in game time:** `delta`, `Timer` nodes and `get_tree().create_timer()`, never the wall clock
+  (`Time.get_ticks_msec()`), which runs on while gdh holds the game between steps.
+- **Give a game bigger than a scene or two a `Debug` autoload** whose methods return the state you'd check as
+  dictionaries (`Debug.state()`) and jump straight to a state (`Debug.goto("hangar")`), and call `GdhEvents.emit()`
+  where things happen (`gdh events install`). The `gdh` skill says how checks use both.
+
 ## Autoloads
 
 An autoload is a scene or script Godot loads at start and keeps for the whole game, reachable by name everywhere. Use
@@ -84,7 +101,8 @@ see it right away.
 ## Input Map
 
 Read input through named actions, never raw keys, so players can rebind them and gamepads work too. Add actions
-through the editor:
+through the editor, even with none open (`gdh bridge start` runs gdh's own; `gdh bridge stop` after): Godot saves
+each event in `project.godot` as a long `Object(InputEventKey, ...)` with every field, easy to get wrong by hand.
 
 ```gdscript
 extends RefCounted

@@ -189,7 +189,7 @@ It runs `godot --editor` with gdh's harness as its main loop, so the project's t
 
 ## Probes
 
-The probes check scene data for likely defects: objects floating above surfaces, a rolled camera, geometry cut off by the far plane, material values outside 0–1, a texture with alpha drawn opaque, zero shadow bias, mirrored `Label3D` text, pixel art blurred by linear filtering, smeared sprite regions, raw translation keys and placeholder text, and one UI item out of line with its siblings. Treat a `warning` as a strong lead and confirm it on its crop; an `info` is often intended. An empty list doesn't mean the scene is fine, so still look. `references/probes.md` has what each measures and where it's weak.
+The probes check scene data for likely defects: objects floating above surfaces, a rolled camera, geometry cut off by the far plane, material values outside 0–1, a texture with alpha drawn opaque, zero shadow bias, mirrored `Label3D` text, pixel art blurred by linear filtering, smeared sprite regions, raw translation keys, placeholder text, text cut off or spilling out of its box, and one UI item out of line with its siblings. Treat a `warning` as a strong lead and confirm it on its crop; an `info` is often intended. An empty list doesn't mean the scene is fine, so still look. `references/probes.md` has what each measures and where it's weak.
 
 ## Checking a Godot API name
 

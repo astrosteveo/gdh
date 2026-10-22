@@ -286,7 +286,8 @@ def describe_display(instance):
 def describe_status(status, prefix=""):
     seconds = status["frame"] / max(status.get("ticks_per_second", 60), 1)
     state = "held" if status["held"] else "running"
-    lines = [f"{prefix}{state} at frame {status['frame']} ({seconds:.2f} s), scene {status['scene']}"]
+    paused = ", paused by the game itself" if status.get("game_paused") else ""
+    lines = [f"{prefix}{state} at frame {status['frame']} ({seconds:.2f} s){paused}, scene {status['scene']}"]
     for node in status.get("runs_while_held", []):
         lines.append(f"{prefix}  runs while held ({node['mode']}): {node['node']}")
     return "\n".join(lines)
@@ -754,7 +755,9 @@ def cmd_step(args):
     result = report(reply, args.json, echo=not args.trail)
     if not args.json:
         for prefix, r in each(reply, result):
-            print(f"{prefix}stepped {r['frames']} frames")
+            ran = r.get("ran", r["frames"])
+            paused = f" (the game paused itself for {ran - r['frames']} of them)" if ran != r["frames"] else ""
+            print(f"{prefix}stepped {ran} frames{paused}")
             for target in r.get("aimed", []):
                 took = f", which passed it to {describe_took(target['took'])}" if "took" in target else ""
                 print(f"{prefix}  clicked {describe_match(target)} at {target['at'][0]:g},{target['at'][1]:g}{took}")

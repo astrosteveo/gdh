@@ -9,7 +9,8 @@ the game (log_input):
   {"cmd": "eval", "args": {"expr": "..."}, "instance": 0, "frame": 30}
 
 "frame" is the game's frame after the command, and "ran" the frames a step ran (fewer than "frames" when --until
-held). Steps, evals (which can set values), camera, run and pause are logged, from every way in: a command, batch,
+held). A step in which the game was paused (it paused itself: a pause menu) for some of its frames also has
+"game_frames", the frames the game ran in. Steps, evals (which can set values), camera, run and pause are logged, from every way in: a command, batch,
 pipe, a recipe and a replay. A replay sends them again in order to a game started the same way, stepping the frames
 the game ran by itself (run) as plain steps, so it comes back to the same frame.
 
@@ -58,7 +59,10 @@ def log_input(session, cmd, args, instance, replies):
         return
     entry = {"cmd": cmd, "args": args, "instance": instance, "frame": replies[0].get("frame", 0)}
     if cmd == "step":
-        entry["ran"] = replies[0].get("result", {}).get("frames", args.get("frames", 1))
+        result = replies[0].get("result", {})
+        entry["ran"] = result.get("ran", result.get("frames", args.get("frames", 1)))
+        if "ran" in result:  # The game was paused for some of the step's frames: it ran in only these.
+            entry["game_frames"] = result.get("frames", 0)
     try:
         with open(path, "a") as f:
             f.write(json.dumps(entry) + "\n")
@@ -104,7 +108,7 @@ def replay_plan(entries):
     plan = []
     frame = 0
     for entry in entries:
-        before = entry["frame"] - entry.get("ran", 0)
+        before = entry["frame"] - entry.get("game_frames", entry.get("ran", 0))
         if before > frame:
             plan.append(("step", {"frames": before - frame, "events": []}, 0))
             frame = before

@@ -59,6 +59,9 @@ var _conns: Array[Dictionary] = []
 var _queue: Array[Dictionary] = []
 var _busy := false
 var _held := true
+## Whether the game paused itself (a pause menu's get_tree().paused = true). Holding pauses the tree too, so this
+## keeps the game's own pause apart while gdh holds it, and _set_held gives it back when gdh lets go.
+var _game_paused := false
 var _last_request_ms := 0
 var _notes: Array[String] = []
 var _shot_count := 0
@@ -136,6 +139,7 @@ func _process(_delta: float) -> void:
 		_game_frames += 1
 	_frame_done.emit()
 	if _held and not get_tree().paused:
+		_game_paused = false  # It runs when gdh next lets it go.
 		get_tree().paused = true
 		_notes.append("The game unpaused itself while held. gdh paused it again.")
 	_poll_network()
@@ -302,9 +306,15 @@ func _handle(item: Dictionary) -> void:
 
 # --- Commands -------------------------------------------------------------------
 
+## Holds the game, or lets it go. Letting go gives back the game's own pause, so a game that paused itself (its pause
+## menu open) stays paused: only its nodes that process while paused run, as for a player.
 func _set_held(held: bool) -> void:
+	if held == _held:
+		return
+	if held:
+		_game_paused = get_tree().paused
 	_held = held
-	get_tree().paused = held
+	get_tree().paused = held or _game_paused
 
 
 ## args: frames, events [{at, ...event}], shot_every, views, cover_every (sample the panels over the screen's centre
@@ -365,6 +375,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	_note_window_size()
 	var was_held := _held
 	var start_frame := _game_frames
+	var ran := 0  # The step's frames, the game paused or not; _game_frames counts the ones it ran in.
 	_set_held(false)
 	var shots := []
 	var shot_frames := []
@@ -379,6 +390,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 			Input.flush_buffered_events()
 			break
 		await _frame_done
+		ran += 1
 		if track != null:
 			track.sample(_game_frames)
 		if clip != null:
@@ -407,6 +419,8 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	_set_held(was_held)
 	Common.wait_saves()  # every frame written before the reply names it
 	var result := {"frames": _game_frames - start_frame, "shots": shots, "status": _status()}
+	if ran != result.frames:
+		result.ran = ran  # The game was paused for some of the step's frames.
 	if not shots.is_empty():
 		result.shot_frames = shot_frames
 	if track != null:
@@ -843,7 +857,7 @@ func _watch_result(watch: Dictionary) -> Dictionary:
 
 func _status() -> Dictionary:
 	var scene := get_tree().current_scene
-	return {
+	var status := {
 		"scene": scene.scene_file_path if scene else "",
 		"held": _held,
 		"frame": _game_frames,
@@ -852,6 +866,9 @@ func _status() -> Dictionary:
 		"window_size": [DisplayServer.window_get_size().x, DisplayServer.window_get_size().y],
 		"runs_while_held": _unpausable_nodes(),
 	}
+	if (_game_paused if _held else get_tree().paused):
+		status.game_paused = true  # The game paused itself: held or not, it stays paused until it unpauses.
+	return status
 
 
 ## Nodes whose own process mode keeps them running while the game is held.

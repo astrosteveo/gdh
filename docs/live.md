@@ -31,7 +31,8 @@ Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/h
 - Steps run as fast as the GPU draws, since gdh starts Godot with V-Sync off. A game that turns V-Sync on itself waits for the display's 60 Hz refresh on the GPU display, and the first `step` after it does says so in a note.
 - Holding uses `SceneTree.paused`. It has these side effects:
   - Nodes whose process mode is `ALWAYS` or `WHEN_PAUSED` keep running while held. `status` lists them.
-  - If the game unpauses itself while held, `gdh` pauses it again and says so in the next reply.
+  - If the game unpauses itself while held, `gdh` pauses it again and says so in the next reply. It runs on the next step.
+  - A game that pauses itself (its pause menu open) stays paused: gdh keeps the game's own pause apart from its hold and gives it back when a step lets the game go, so only the nodes that run while paused (the menu) run, as for a player. Such a step's reply counts in `frames` the frames the game ran in, and in `ran` the frames the step ran (`stepped 30 frames (the game paused itself for 30 of them)`). `status` has `game_paused` (`paused by the game itself`). While held, `get_tree().paused` reads true either way.
 
 ## Input
 
@@ -536,7 +537,7 @@ gdh live restart --replay            # started again, and the session's input re
 gdh live start --project game --replay captures/live/default/inputs.jsonl   # a saved log, in a new session
 ```
 
-- **The input log.** Every session writes `<out>/inputs.jsonl`: a header line, `{"gdh_input_log": 1, "session", "project", "scene", "seed", "started"}`, then a line for each command that changed the game, `{"cmd", "args", "instance", "frame", "ran"}`. `args` are the protocol's (below), `frame` is the game's frame after the command, and `ran` the frames a step ran. Steps, `eval` (which can set values), `camera`, `run` and `pause` are logged, however they came: a command, `batch`, `pipe`, a recipe or a replay. A command that failed isn't.
+- **The input log.** Every session writes `<out>/inputs.jsonl`: a header line, `{"gdh_input_log": 1, "session", "project", "scene", "seed", "started"}`, then a line for each command that changed the game, `{"cmd", "args", "instance", "frame", "ran"}`. `args` are the protocol's (below), `frame` is the game's frame after the command, and `ran` the frames a step ran; a step the game was paused for some of (it paused itself) also has `game_frames`, the frames the game ran in. Steps, `eval` (which can set values), `camera`, `run` and `pause` are logged, however they came: a command, `batch`, `pipe`, a recipe or a replay. A command that failed isn't.
 - **`restart`** stops the session if it runs, and starts it again with what it was started with: the project, scene, resolution, display, instances, companions (on new ports, filled into the game's arguments again), the game's arguments, its seed, `--user-data`, `--replay` and `--recipe`, from the directory it was started in. It rebuilds a C# project and imports the project again only when they're stale (below). It works on a session that has ended too: gdh keeps what a session was started with in `$XDG_RUNTIME_DIR/gdh/starts/`, for a week after its last start. The new start writes a new log, and the old one stays beside it as `inputs-before-restart.jsonl`.
 - **`restart --replay`** replays the session's input log once the game is ready, and doesn't run its `--replay` log or recipe again, since the log holds what they sent. `start --replay FILE` replays a saved log, and takes its seed unless `--seed` gives one. A replay sends each command again in order: each step for the frames it ran, without its `--until`, `--trace` and saved frames, and the frames the game ran by itself after `run` as a step of their own, so the game comes back to the same frame. It prints `replayed N requests from LOG in S s: held at frame F`. A command that fails now (a `--click-text` whose button the new code moved off screen) stops the replay, and the start exits 1 saying which; the session stays, held there.
 - **The same frame is the same state** when the game does the same with the same input: physics at a fixed tick does, and the global random number generator does with the same seed. What a game reads from the clock, the network, or a `RandomNumberGenerator` it seeds itself, and anything that ran while the game was held, can differ: a node whose process mode ignores the pause, or code that awaits the tree's `process_frame` or `physics_frame` signals, which fire while it's held.
@@ -653,6 +654,12 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - `--recipe` running after start and again on `restart`, stopping with exit 1 at a failing line with the session held there, and a line that isn't a command failing before the game starts
 - `--user-data fresh` and `--user-data-from` giving the session its own `user://`, made afresh by `restart`, with the shader caches linked and the fixture and the shared user data untouched; and where Godot puts `user://`
 - `reload` putting a changed script in with the state kept and a new member at its initial value, and a script that doesn't compile leaving the one that ran
+
+`tests/test_pause.py` runs `testbed/live/pause.tscn`, which pauses itself on `ui_cancel` and shows a menu, running while paused, with a Resume button. It checks:
+
+- the game staying paused across steps once it paused itself, its mover still, the step's `frames` and `ran` and the printed count, and `status` saying so
+- Resume, clicked while the game is paused, letting it go on
+- the input log keeping the frames such a step ran and the ones the game ran in, and `restart --replay` coming back to the same frame and state
 
 `tests/test_csharp.py` also checks that a start of an unchanged C# project doesn't run `dotnet build`, a changed `.cs` builds and runs the new code, and `--rebuild` builds anyway; that a change in a project the `.csproj` references from outside the Godot folder builds again; and that the stamp follows references (written with `\` or `/`, one reached twice), leaves out `obj`, counts the build files above a referenced folder, and gives up on a property in a path or a missing project.
 

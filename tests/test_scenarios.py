@@ -41,6 +41,14 @@ def gone(session):
     return not live.session_path(session).exists()
 
 
+def test_a_step_takes_an_until(tmp_path):
+    # A step stops at the first check where its until holds, as docs/scenarios.md says it takes one.
+    path = scenario_file(tmp_path, "step-until", {"steps": [{"step": 30, "until": "Engine.get_physics_frames() >= 5"}],
+                                                  "expect": ["Engine.get_physics_frames() < 30"]})
+    proc = run_scenarios(path, out=tmp_path / "out", session=f"s10-step-until-{PID}")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_the_client_drives_the_arena(tmp_path):
     name = f"s10-client-{PID}"
     with Session.start(TESTBED, scene=ARENA, name=name, out=tmp_path / "live", resolution="640x360",

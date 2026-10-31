@@ -1278,13 +1278,93 @@ def cmd_eval(args):
     return 0
 
 
+# The most seconds `run --until` lets the game run when --seconds doesn't say, and the seconds between its checks.
+RUN_MOST = 30.0
+RUN_EVERY = 0.05
+
+
+def truthy(value):
+    """Whether a Godot value, as JSON, is true as an if takes it: not false, 0, "", [], {} or null."""
+    return value not in (None, False, 0, "", [], {})
+
+
+def run_for(send, seconds=None, until=None, every=RUN_EVERY, instance=0, hold=()):
+    """Let every instance run in real time, then hold them again: after `seconds`, or as soon as `until` (a Godot
+    expression, evaluated on `instance`) is truthy, checked every `every` seconds of real time and waited for at most
+    `seconds` (RUN_MOST when it's None). `hold` lists inputs (actions, key:NAME, mouse:left, joy:a) pressed on `instance`
+    in a frame before the run and let go in a frame after it. `send(cmd, args, instance)` sends a request and returns
+    its reply. Returns {"seconds", "frame", "until"?: {"expr", "met", "value", "checks"}}.
+
+    A game whose server checks it in real time (a networked game's moves, say) has to run in real time: a step runs
+    frames as fast as the GPU draws them."""
+    if hold:
+        send("step", {"frames": 1, "events": [input_event(token, True, 0) for token in hold]}, instance)
+    most = RUN_MOST if seconds is None and until is not None else seconds or 0.0
+    started = time.monotonic()
+    send("run", {}, instance)
+    checks, value, met = 0, None, None
+    try:
+        while True:
+            if until is not None:
+                # (a check only looks: "peek" keeps it out of the input log and the timeline)
+                reply = send("eval", {"expr": until, "peek": True}, instance)
+                value = reply.get("result", {}).get("value") if reply.get("ok") else None
+                checks += 1
+                if truthy(value):
+                    met = True
+                    break
+            left = most - (time.monotonic() - started)
+            if left <= 0:
+                met = False if until is not None else None
+                break
+            time.sleep(min(every, left))
+    finally:
+        held = send("pause", {}, instance)
+        if hold:
+            held = send("step", {"frames": 1, "events": [input_event(token, False, 0) for token in hold]}, instance)
+    result = {"seconds": round(time.monotonic() - started, 3), "frame": held.get("frame")}
+    if until is not None:
+        result["until"] = {"expr": until, "met": bool(met), "value": value, "checks": checks}
+    return result
+
+
 def cmd_run(args):
     session = load_session(args.session)
-    reply = call(session, "run")
-    result = report(reply, args.json)
-    if not args.json:
-        for prefix, r in each(reply, result):
-            print(describe_status(r, prefix))
+    if args.seconds is None and args.until is None:
+        if args.hold:
+            raise LiveError("--hold goes with --seconds or --until: its inputs are let go when the run ends.")
+        reply = call(session, "run")
+        result = report(reply, args.json)
+        if not args.json:
+            for prefix, r in each(reply, result):
+                print(describe_status(r, prefix))
+        return 0
+    if args.seconds is not None and args.seconds < 0:
+        raise LiveError("--seconds is a number of seconds, 0 or more.")
+    if args.instance == "all" and (args.until is not None or args.hold):
+        raise LiveError("--until and --hold go to one instance: give --instance K.")
+
+    def send(cmd, request_args, instance):
+        reply = call(session, cmd, request_args, instance)
+        for part in reply.get("instances", [reply]):
+            problems(part, f"[{part['instance']}] " if "instance" in part else "")
+            count_errors(part)
+        if cmd != "eval" and not reply.get("ok"):
+            raise LiveError(reply.get("error", "Request failed."))
+        return reply
+
+    result = run_for(send, args.seconds, args.until, args.every, args.instance, args.hold)
+    until = result.get("until")
+    if args.json:
+        print(json.dumps(result, indent=2))
+    elif until is None:
+        print(f"ran {result['seconds']:.2f} s of real time; held at frame {result['frame']}")
+    elif until["met"]:
+        print(f"until held after {result['seconds']:.2f} s, at frame {result['frame']}: {json.dumps(until['value'])}")
+    if until is not None and not until["met"]:
+        print(f"gdh: --until {until['expr']} didn't hold in {result['seconds']:.2f} s: it was {json.dumps(until['value'])}"
+              f" ({until['checks']} checks)", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -1793,7 +1873,19 @@ def add_parsers(sub):
     p = command("eval", cmd_eval, "Evaluate a Godot expression against the current scene", instance=one)
     p.add_argument("expr", help="e.g. \"get_node('Player').position\" (inputs: scene, tree, root)")
 
-    command("run", cmd_run, "Let every instance run in real time")
+    p = command("run", cmd_run, "Let every instance run in real time: until pause, for --seconds, or until --until holds",
+                instance=one)
+    p.add_argument("--seconds", type=float, metavar="S",
+                   help="Hold the game again after S seconds of real time (with --until, the most it waits; default "
+                        f"{RUN_MOST:g})")
+    p.add_argument("--until", metavar="EXPR",
+                   help="Hold the game again as soon as EXPR (a Godot expression, on --instance) is truthy; exit 1 if "
+                        "it never is")
+    p.add_argument("--every", type=float, default=RUN_EVERY, metavar="S",
+                   help=f"Seconds of real time between checks of --until (default {RUN_EVERY:g})")
+    p.add_argument("--hold", action="append", default=[], metavar="INPUT",
+                   help="Keep INPUT (an action, key:NAME, mouse:left, joy:a) pressed on --instance while it runs, and "
+                        "let it go after")
     command("pause", cmd_pause, "Hold every instance")
     command("pipe", cmd_pipe, "Take requests as JSON lines on stdin and answer each on stdout (for scripts)")
     p = command("batch", cmd_batch, "Run command lines from stdin, written as on the command line (\"step 30 --hold "

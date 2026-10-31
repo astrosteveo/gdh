@@ -254,6 +254,28 @@ class Session:
             raise Unmet(f"until {expr} didn't hold in {ran} frames: {describe_unmet(until)}", result)
         return until
 
+    def run(self, seconds=None, *, until=None, every=live.RUN_EVERY, hold=(), instance=0):
+        """Let the game run in real time, then hold it again: after `seconds`, or as soon as `until` (an expression,
+        on `instance`) holds, checked every `every` seconds and waited for at most `seconds` (30 when it's None), with
+        `hold`'s inputs pressed while it runs (gdh live run --seconds/--until/--hold; live.run_for). For a game whose
+        server checks it in real time, where a step's frames come too fast. Returns {"seconds", "frame", "until"?};
+        raises Unmet when `until` never held."""
+        def send(cmd, args, i):
+            try:
+                return self._send(cmd, args, i)
+            except ClientError as e:
+                # (a check whose evaluation fails counts as not yet, as a step's until has it)
+                if cmd == "eval" and len(e.args) > 1:
+                    return e.args[1]
+                raise
+
+        result = live.run_for(send, seconds, until, every, instance, as_list(hold))
+        until_record = result.get("until")
+        if until_record is not None and not until_record["met"]:
+            raise Unmet(f"until {until} didn't hold in {result['seconds']:.2f} s: it was "
+                        f"{json.dumps(until_record['value'])}", {**result, "until": until_record})
+        return result
+
     def click(self, text=None, node=None, at=None, *, right=False, frames=2, instance=0):
         """Click what shows `text`, the node at `node` (a path), or the point `at` (screenshot pixels), in a step of
         `frames` frames (the button goes down at its start and up a frame later); the step's result, whose "aimed"

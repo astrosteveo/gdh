@@ -49,6 +49,44 @@ def test_a_step_takes_an_until(tmp_path):
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
 
+def test_the_client_and_a_scenario_let_the_game_run_in_real_time(tmp_path):
+    name = f"s10-run-{PID}"
+    with Session.start(TESTBED, scene=ARENA, name=name, out=tmp_path / "live", resolution="640x360",
+                       args=["--level", "3"], echo=False) as game:
+        x = game.eval("get_node('Player').position.x")
+        result = game.run(0.5, hold="ui_right")
+        assert 0.45 <= result["seconds"] <= 1.2 and result["frame"] > 20
+        assert 45 <= game.eval("get_node('Player').position.x") - x <= 110
+        start = game.eval("Engine.get_physics_frames()")
+        until = game.run(5, until=f"Engine.get_physics_frames() >= {start + 20}")
+        assert until["until"]["met"] and until["seconds"] < 2
+        with pytest.raises(Unmet) as unmet:
+            game.run(0.3, until="clicks > 99")
+        assert "didn't hold in" in str(unmet.value) and unmet.value.until["value"] is False
+    # A scenario's run step: its until is a check, and one that never holds ends the scenario there.
+    path = scenario_file(tmp_path, "realtime", {"steps": [
+        {"step": 10, "until": "Engine.get_physics_frames() > 3", "name": "a step's until"},
+        {"run": 0.3},
+        {"run": None, "until": "Engine.get_physics_frames() > 10", "name": "it ran"},
+        {"run": 0.3, "until": "clicks > 99", "name": "never"},
+        {"step": 1},
+    ]})
+    proc = run_scenarios(path, out=tmp_path / "out", session=f"s10-run-scenario-{PID}")
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "FAIL" not in proc.stdout.split("FAIL  never")[0], proc.stdout  # (nothing before the run meant to fail)
+    assert "pass  it ran: held after" in proc.stdout
+    assert "FAIL  never: didn't hold in" in proc.stdout and "it was false" in proc.stdout
+
+
+def test_a_run_step_takes_seconds_or_an_until(tmp_path):
+    for bad, message in (({"run": None}, "a run takes seconds, or null with an until"),
+                         ({"run": -1}, "a run's seconds are a number, 0 or more"),
+                         ({"run": 1, "max": 3}, "a run step takes no max")):
+        path = scenario_file(tmp_path, "bad", {"steps": [bad]})
+        proc = run_scenarios(path, out=tmp_path / "out", session=f"s10-bad-{PID}")
+        assert proc.returncode != 0 and message in proc.stdout + proc.stderr, (bad, proc.stdout, proc.stderr)
+
+
 def test_the_client_drives_the_arena(tmp_path):
     name = f"s10-client-{PID}"
     with Session.start(TESTBED, scene=ARENA, name=name, out=tmp_path / "live", resolution="640x360",

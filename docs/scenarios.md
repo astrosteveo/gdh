@@ -54,6 +54,7 @@ An object is a structured step, named by its one kind key:
 |---|---|
 | `{"step": N, ...}` | Steps N frames (`null` with `until`). Its input takes `gdh live step`'s options by name, underscores for dashes, each a value or a list: `press`, `release`, `hold`, `tap` (an action, `key:NAME`, `mouse:left`, `joy:a`), `type`, `move`, `click`, `right_click`, `left_hold`, `right_hold` (`"X,Y"` or `[x, y]`), `click_text`, `click_node`, `wheel`, `wheel_at`, `mod`, `axis`, `touch`, `touch_drag`, `look`; and `until`, `every`, `max`, `trace`, `shot_every`, and `events` (the raw protocol's) |
 | `{"until": EXPR, ...}` | Steps until EXPR is truthy, checked every `every` frames (default 1), at most `max` frames (default 3600), with input as `step` takes it. A check: it passes when EXPR held |
+| `{"run": SECONDS, ...}` | Lets the game run in real time for SECONDS, as `gdh live run --seconds` does, with `hold` (an input or a list) pressed while it runs. With `until`, it holds the game again as soon as EXPR is truthy (checked every `every` seconds, default 0.05; SECONDS, or `null` for 30, is the most it waits), and it's a check: it passes when EXPR held. For a game a server checks in real time, where a step's frames come too fast; it doesn't replay frame for frame |
 | `{"expect": EXPR, ...}` | A check of EXPR's value, below |
 | `{"shot": NAME, ...}` | A checkpoint shot, below |
 | `{"snapshot": NAME, ...}` | A snapshot of the UI on screen, below |
@@ -113,7 +114,7 @@ What the game printed, its engine errors and notes go to stderr as `gdh live` pr
 - **`--json`** prints `results.json` instead of the lines.
 - **Exit status:** 0 when every check of every scenario passed, 1 otherwise.
 
-`results.json` holds `passed`, and `scenarios`, one record per scenario: `name`, `file`, `session`, `out`, `passed`, `seconds`, `frame` (the game frame it ended at), `shots` (each checkpoint shot's file), `errors` (the engine errors, up to 50), and `checks`, each with `name`, `kind` (`expect`, `until`, `shot`, `step`, `steps`, `errors`, `start` or `load`), `passed` (`null` when skipped), `message`, `step` (`step 3`, `expect 1`), and what it found: an expect's `value`, a check's `frame`, a shot's `shot`, `baseline` and diff numbers, a snapshot's `snapshot`, `baseline` and `diff`. `junit.xml` has a test suite per scenario and a test case per check, failed or skipped as the check was, for CI.
+`results.json` holds `passed`, and `scenarios`, one record per scenario: `name`, `file`, `session`, `out`, `passed`, `seconds`, `frame` (the game frame it ended at), `shots` (each checkpoint shot's file), `errors` (the engine errors, up to 50), and `checks`, each with `name`, `kind` (`expect`, `until`, `run`, `shot`, `step`, `steps`, `errors`, `start` or `load`), `passed` (`null` when skipped), `message`, `step` (`step 3`, `expect 1`), and what it found: an expect's `value`, a check's `frame`, a shot's `shot`, `baseline` and diff numbers, a snapshot's `snapshot`, `baseline` and `diff`. `junit.xml` has a test suite per scenario and a test case per check, failed or skipped as the check was, for CI.
 
 ### Under `gdh test`
 

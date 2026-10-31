@@ -30,6 +30,7 @@ FRAMING = ("view", "crop", "node", "margin", "zoom", "max_width", "no_ui")
 KINDS = {
     "step": (*client.STEP_INPUTS, *STEP_OPTIONS),
     "until": (*client.STEP_INPUTS, "every", "max"),
+    "run": ("until", "every", "hold"),
     "expect": ("equals", "approx", "within"),
     "shot": ("baseline", "tolerance", "threshold", *FRAMING),
     "snapshot": ("baseline", "path", "boxes", "grid"),
@@ -113,8 +114,8 @@ def read_step(path, where, spec, only=None):
     if not isinstance(spec, dict):
         raise ScenarioError(f"{path}: {where}: a step is a command line or an object, not {json.dumps(spec)}.")
     kinds = [k for k in KINDS if k in spec]
-    if "until" in kinds and len(kinds) == 2 and "step" in kinds:
-        kinds.remove("until")  # (until is a kind of step of its own, and an option of a step)
+    if "until" in kinds and len(kinds) == 2 and ("step" in kinds or "run" in kinds):
+        kinds.remove("until")  # (until is a kind of step of its own, and an option of a step and of a run)
     if len(kinds) != 1 or (only and kinds != [only]):
         wanted = f'"{only}"' if only else f"one of {', '.join(KINDS)}"
         raise ScenarioError(f"{path}: {where}: a step has {wanted}: {json.dumps(spec)[:200]}")
@@ -125,6 +126,12 @@ def read_step(path, where, spec, only=None):
         what = "a step" if kind == "step" else f"a{'n' if kind[0] in 'aeiu' else ''} {kind} step"
         raise ScenarioError(f"{path}: {where}: {what} takes no {', '.join(unknown)}; it takes "
                             f"{', '.join(sorted(allowed - {kind}))}.")
+    if kind == "run":
+        seconds = spec["run"]
+        if seconds is None and "until" not in spec:
+            raise ScenarioError(f"{path}: {where}: a run takes seconds, or null with an until.")
+        if seconds is not None and (isinstance(seconds, bool) or not isinstance(seconds, (int, float)) or seconds < 0):
+            raise ScenarioError(f"{path}: {where}: a run's seconds are a number, 0 or more, not {json.dumps(seconds)}.")
     if kind == "expect":
         if "equals" in spec and "approx" in spec:
             raise ScenarioError(f"{path}: {where}: an expect takes equals or approx, not both.")
@@ -147,6 +154,8 @@ def label(kind, spec):
         return str(spec["expect"])
     if kind == "until":
         return f"until {spec['until']}"
+    if kind == "run":
+        return f"run until {spec['until']}" if "until" in spec else f"run {spec['run']} s"
     if kind in ("shot", "snapshot"):
         return f"{kind} {spec[kind]}"
     if kind == "request":
@@ -425,6 +434,17 @@ def run_step(run, game, item, where, out, update):
                                  f"didn't hold in {ran} frames: {client.describe_unmet(e.until)}", where)
             run.check(name, "until", True, f"held at frame {until['frame']}: {brief(until['value'])}", where,
                       value=until["value"], frame=until["frame"])
+            return True
+        if kind == "run":
+            try:
+                result = game.run(spec["run"], until=spec.get("until"), every=spec.get("every", live.RUN_EVERY),
+                                  hold=spec.get("hold", ()), instance=instance)
+            except client.Unmet as e:
+                return run.check(name, "run", False, str(e).removeprefix(f"until {spec['until']} "), where,
+                                 value=e.until.get("value"))
+            if "until" in spec:
+                run.check(name, "run", True, f"held after {result['seconds']:.2f} s, at frame {result['frame']}: "
+                          f"{brief(result['until']['value'])}", where, value=result["until"]["value"], frame=result["frame"])
             return True
         if kind == "expect":
             passed, message, value = expect(game, spec)

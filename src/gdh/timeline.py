@@ -49,7 +49,7 @@ def record(session, cmd, args, instance, replies, games, started, request):
     the command moved on. `games` are the instances that answered, in the replies' order; `request(index, cmd, args)`
     asks an instance for something without logging it."""
     folder = session.get("timeline")
-    if not folder or cmd in SKIPPED:
+    if not folder or cmd in SKIPPED or (cmd == "eval" and args.get("peek")):
         return
     folder = Path(folder)
     entry = {"cmd": cmd, "args": args, "instance": instance, "time": started, "ms": round((time.time() - started) * 1000),

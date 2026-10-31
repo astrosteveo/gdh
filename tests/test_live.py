@@ -482,6 +482,52 @@ def test_run_is_about_real_time(arena):
     assert 90 <= frames <= 180  # about 130 at 60 ticks a second
 
 
+def test_run_for_seconds_holds_the_game_again_after_them(arena):
+    start = live("status")["result"]["frame"]
+    result = live("run", "--seconds", "1")
+    assert 0.95 <= result["seconds"] <= 1.6
+    assert 40 <= result["frame"] - start <= 100  # about 60 at 60 ticks a second, and the round trips
+    assert live("status")["result"]["held"]
+
+
+def test_run_until_holds_the_game_as_soon_as_it_does(arena):
+    start = value("Engine.get_physics_frames()")
+    result = live("run", "--until", f"Engine.get_physics_frames() >= {start + 30}", "--seconds", "10")
+    assert result["until"]["met"] and result["until"]["value"] is True and result["until"]["checks"] >= 1
+    assert result["seconds"] < 2  # half a second of frames, not the ten it could have waited
+    assert live("status")["result"]["held"]
+
+
+def test_run_until_that_never_holds_says_so_and_fails(arena):
+    proc = gdh("live", "run", "--until", "clicks > 1000", "--seconds", "0.4", "--session", SESSION, check=False)
+    assert proc.returncode == 1
+    assert "--until clicks > 1000 didn't hold in" in proc.stderr and "it was false" in proc.stderr
+    assert live("status")["result"]["held"]
+
+
+def test_run_holds_an_input_while_it_runs_and_lets_it_go(arena):
+    x = value("get_node('Player').position.x")
+    live("run", "--seconds", "1", "--hold", "ui_right")
+    moved = value("get_node('Player').position.x") - x
+    assert 90 <= moved <= 180  # 120 px/s for about a second, and the frames either side
+    live("step", "30")
+    assert value("get_node('Player').position.x") - x == pytest.approx(moved)  # let go: it stands
+
+
+def test_run_untils_checks_stay_out_of_the_input_log(arena):
+    log = arena / "inputs.jsonl"
+    before = log.read_text().count('"eval"')
+    live("run", "--until", "true")
+    assert log.read_text().count('"eval"') == before
+    assert '"run"' in log.read_text().splitlines()[-2] and '"pause"' in log.read_text().splitlines()[-1]
+
+
+def test_run_takes_hold_only_with_seconds_or_until(arena):
+    proc = gdh("live", "run", "--hold", "ui_right", "--session", SESSION, check=False)
+    assert proc.returncode == 1 and "--hold goes with --seconds or --until" in proc.stderr
+    live("pause")
+
+
 def test_commands_while_held_dont_wait_for_the_next_frame(arena):
     # Held frames come 50 ms apart; a request wakes the bridge, so a script's many commands don't each wait.
     import subprocess

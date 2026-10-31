@@ -57,6 +57,8 @@ def log_input(session, cmd, args, instance, replies):
     path = session.get("input_log")
     if not path or cmd not in LOGGED or not all(r.get("ok") for r in replies):
         return
+    if cmd == "eval" and args.get("peek"):  # (a check that only looks: run --until's)
+        return
     entry = {"cmd": cmd, "args": args, "instance": instance, "frame": replies[0].get("frame", 0)}
     if cmd == "step":
         result = replies[0].get("result", {})

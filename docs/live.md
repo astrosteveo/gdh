@@ -27,7 +27,7 @@ Nothing is installed into the project. `gdh` runs Godot with `--script src/gdh/h
 - `step N` runs exactly N frames, then holds again. Godot is launched with `--fixed-fps` set to the project's physics tick rate, so each frame is exactly one physics tick of game time, however long it takes to render.
 - The frame number in every reply counts game frames only. Frames rendered while held don't count.
 - Held, the game still draws 20 frames a second, so it barely loads the GPU, and a request wakes it at once. gdh paces these frames itself, since Godot's own limiter (`Engine.max_fps`) is off under `--fixed-fps`.
-- `run` lets the game run at about real time until `pause`.
+- `run` lets the game run at about real time until `pause`. `run --seconds S` holds it again after S seconds, and `run --until EXPR` as soon as EXPR is truthy (checked every `--every` seconds, 0.05 by default, at most `--seconds`, 30 by default; exit 1 if it never held). `--hold INPUT` keeps an input pressed while it runs. It's how to wait for what happens in real time, such as a network's delays or a server's clock: a step runs frames as fast as the GPU draws them, faster than real time. With several instances every one runs, and EXPR and `--hold` go to `--instance K`. Its checks aren't kept in the input log or the timeline.
 - Steps run as fast as the GPU draws, since gdh starts Godot with V-Sync off. A game that turns V-Sync on itself waits for the display's 60 Hz refresh on the GPU display, and the first `step` after it does says so in a note.
 - Holding uses `SceneTree.paused`. It has these side effects:
   - Nodes whose process mode is `ALWAYS` or `WHEN_PAUSED` keep running while held. `status` lists them.
@@ -385,7 +385,7 @@ gdh live start --project client --session vs \
 gdh live start --project game --instances 2 --net server --net-latency 80 \
   --companion 'server=exec ./server --port {port}' -- --connect 127.0.0.1:{server.port}
 gdh live net --cut --instance 1          # instance 1's link goes down
-gdh live run; sleep 5; gdh live pause    # the game notices, in real time
+gdh live run --seconds 5                # the game notices, in real time
 gdh live net --heal --instance 1
 gdh live net --reset --instance 0        # close instance 0's TCP connections now: does it reconnect?
 gdh live net                             # each link's settings, and what went through it
@@ -394,7 +394,7 @@ gdh live net                             # each link's settings, and what went t
 - **The links:** the companion keeps its port. Each game instance gets a port of its own on the proxy, which `{NAME.port}` names in its arguments, and the proxy passes what comes in, TCP and UDP alike (ENet, WebSockets, a game's own protocol), on to the companion and back. Only the instances' links go through it: the companion's own command still gets its real `{port}`.
 - **What it does:** `--latency MS` delays everything, each way; `--jitter MS` adds up to that much more to each packet, drawn at random, so UDP datagrams can arrive out of order; `--loss PCT` drops that share of UDP datagrams each way. TCP loses nothing (it resends: a game sees only delay), and its data stays in order. `--cut` is a link that's gone: UDP is dropped, and TCP data is held, without closing anything, until `--heal`, as a network that goes down and comes back does (a game that times out first closes the connection itself). `--reset` closes the link's TCP connections at once, with a reset, as a server that drops its clients does.
 - **Which link:** `gdh live net` changes every link, or one instance's with `--instance K`, or one companion's with `--companion NAME`. `--net-latency`, `--net-jitter` and `--net-loss` on `start` set every link from the start. With no change, `net` prints each link and what went through it: TCP connections and bytes each way, UDP datagrams each way and those dropped (`--json` for all of it).
-- **Time:** the delays are in real time, as a network's are. A held game doesn't read its sockets, and `step` runs frames as fast as the GPU goes, so let the game run in real time (`gdh live run`, then `pause`) or wait on what it measured (`step --until`, in a session of one instance). The random draws repeat with the session's seed: the same datagrams are dropped, in a game that sends the same ones.
+- **Time:** the delays are in real time, as a network's are. A held game doesn't read its sockets, and `step` runs frames as fast as the GPU goes, so let the game run in real time: `gdh live run --seconds S`, or `gdh live run --until EXPR --instance K` to wait for what one instance sees (`--hold move_forward` to walk while it runs). The random draws repeat with the session's seed: the same datagrams are dropped, in a game that sends the same ones.
 - The proxy is a process of the session's (its output is `<out>/net.log`), and stops with it.
 
 ## Several instances

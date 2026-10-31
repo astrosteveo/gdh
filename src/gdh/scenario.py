@@ -113,6 +113,8 @@ def read_step(path, where, spec, only=None):
     if not isinstance(spec, dict):
         raise ScenarioError(f"{path}: {where}: a step is a command line or an object, not {json.dumps(spec)}.")
     kinds = [k for k in KINDS if k in spec]
+    if "until" in kinds and len(kinds) == 2 and "step" in kinds:
+        kinds.remove("until")  # (until is a kind of step of its own, and an option of a step)
     if len(kinds) != 1 or (only and kinds != [only]):
         wanted = f'"{only}"' if only else f"one of {', '.join(KINDS)}"
         raise ScenarioError(f"{path}: {where}: a step has {wanted}: {json.dumps(spec)[:200]}")

@@ -570,6 +570,7 @@ gdh live reload res://player/player.gd    # just these
 Each changed script is compiled again in place, as the editor's Debug > "Synchronize Script Changes" does for a game it runs (`Script.reload(true)`), and the loaded scripts that extend it after it, so they see its new members. It goes to every instance (`--instance` picks one). It prints `reloaded res://...` for each, and exits 1 if one doesn't compile. A script is loaded when a node in the tree or an autoload has it, it's one they extend or preload as a constant, or it's a global class (`class_name`) that has been loaded; a script only loaded some other way can be named.
 
 - Member variables keep their values, and so do static variables. Functions, and methods and lambdas connected to signals, run the new code from the next frame.
+- An input or process callback a change adds (`_input`, `_shortcut_input`, `_unhandled_input`, `_unhandled_key_input`, `_process` or `_physics_process`) runs from the next frame too: the reload turns its processing on in the nodes in the tree with that script, as Godot does when a node becomes ready. One the script already had keeps the state the game left it in, so one the game turned off with `set_process(false)` and the like stays off.
 - A member variable a change adds starts at its initial value in the nodes in the tree, taken from a fresh instance of the script (unless its `_init` needs arguments); `@onready` ones, and those of objects outside the tree, start `null`. The reply says which were added.
 - A function waiting at an `await` in a reloaded script is cancelled, and Godot warns: `Canceling suspended execution of "..." due to a script reload`. A coroutine that loops forever (a state machine's) stops there.
 - A script that doesn't compile is put back to the version that ran, so the game never runs without it, and its parse error is on stderr. Fix it and reload again.
@@ -654,7 +655,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 - `--seed` repeating `randi()` and the positions across starts, another seed drawing others, and the seed gdh picks kept by `restart`
 - `--recipe` running after start and again on `restart`, stopping with exit 1 at a failing line with the session held there, and a line that isn't a command failing before the game starts
 - `--user-data fresh` and `--user-data-from` giving the session its own `user://`, made afresh by `restart`, with the shader caches linked and the fixture and the shared user data untouched; and where Godot puts `user://`
-- `reload` putting a changed script in with the state kept and a new member at its initial value, and a script that doesn't compile leaving the one that ran
+- `reload` putting a changed script in with the state kept and a new member at its initial value, the input and process callbacks a reload adds running (one the game had turned off stays off), and a script that doesn't compile leaving the one that ran
 
 `tests/test_pause.py` runs `testbed/live/pause.tscn`, which pauses itself on `ui_cancel` and shows a menu, running while paused, with a Resume button. It checks:
 

@@ -2,12 +2,26 @@ extends RefCounted
 ## `gdh live reload`: puts the GDScript files that changed on disk into the running game, keeping its state. Each
 ## script is recompiled in place (Script.reload(true), as the editor's "Synchronize Script Changes" does for a game it
 ## runs), so every instance keeps its member values, static variables keep theirs, and connected methods and lambdas
-## run the new code. The scripts that extend a changed one are recompiled after it, so they see its new members.
+## run the new code. The scripts that extend a changed one are recompiled after it, so they see its new members. An
+## input or process callback (_input, _process...) that a reload adds is turned on in the nodes in the tree, as Node
+## does for a script's callbacks when it becomes ready; one the script already had keeps the state the game left.
 ##
 ## What it can't carry over: a function suspended at an await in a reloaded script is cancelled (Godot warns), and a
 ## member variable that a reload adds starts at its initial value only in the nodes in the tree (from a fresh instance
 ## of the script; an @onready one stays null), elsewhere null. A script that doesn't compile is put back to the
 ## version that ran, so the game never runs without it.
+
+
+## The callbacks Node turns on as it becomes ready when its script has them (Node::_notification, READY), each with
+## the method that turns it on.
+const CALLBACKS := {
+	"_input": "set_process_input",
+	"_shortcut_input": "set_process_shortcut_input",
+	"_unhandled_input": "set_process_unhandled_input",
+	"_unhandled_key_input": "set_process_unhandled_key_input",
+	"_process": "set_process",
+	"_physics_process": "set_physics_process",
+}
 
 
 ## args.paths: the res:// scripts to reload (default: every loaded script whose file changed). Returns
@@ -38,8 +52,10 @@ static func command(tree: SceneTree, args: Dictionary) -> Dictionary:
 			order.append(script)
 	order.sort_custom(func(a: GDScript, b: GDScript) -> bool: return _depth(a) < _depth(b))
 	var members := {}
+	var methods := {}
 	for script in order:
 		members[script] = _member_names(script)
+		methods[script] = _method_names(script)
 	var reloaded := []
 	var failed := []
 	var broken: Array[GDScript] = []
@@ -65,6 +81,7 @@ static func command(tree: SceneTree, args: Dictionary) -> Dictionary:
 		var added := _member_names(script).filter(func(name: String) -> bool: return not members[script].has(name))
 		if not added.is_empty() and _fill(tree, script, added) > 0:
 			filled[script.resource_path] = added
+		_turn_on_added_callbacks(tree, script, methods[script])
 	return {"reloaded": reloaded, "failed": failed, "unchanged": unchanged, "filled": filled}
 
 
@@ -72,11 +89,8 @@ static func command(tree: SceneTree, args: Dictionary) -> Dictionary:
 ## constants, and the global classes' that are loaded.
 static func loaded_scripts(tree: SceneTree) -> Dictionary:
 	var out := {}
-	var stack: Array[Node] = [tree.root]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
+	for node in _tree_nodes(tree):
 		_add_script(out, node.get_script())
-		stack.append_array(node.get_children(true))
 	for info in ProjectSettings.get_global_class_list():
 		var path: String = info.get("path", "")
 		if path.ends_with(".gd") and not out.has(path) and ResourceLoader.has_cached(path):
@@ -115,6 +129,35 @@ static func _member_names(script: Script) -> Array:
 	return script.get_script_property_list().map(func(p: Dictionary) -> String: return p.name)
 
 
+static func _method_names(script: Script) -> Array:
+	return script.get_script_method_list().map(func(m: Dictionary) -> String: return m.name)
+
+
+static func _tree_nodes(tree: SceneTree) -> Array[Node]:
+	var out: Array[Node] = []
+	var stack: Array[Node] = [tree.root]
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		out.append(node)
+		stack.append_array(node.get_children(true))
+	return out
+
+
+static func _nodes_with(tree: SceneTree, script: Script) -> Array[Node]:
+	return _tree_nodes(tree).filter(func(node: Node) -> bool: return node.get_script() == script)
+
+
+## Turns on, in the nodes in the tree whose script is `script`, the callbacks it has now and didn't have `before`.
+static func _turn_on_added_callbacks(tree: SceneTree, script: GDScript, before: Array) -> void:
+	var now := _method_names(script)
+	var added := CALLBACKS.keys().filter(func(name: String) -> bool: return now.has(name) and not before.has(name))
+	if added.is_empty():
+		return
+	for node in _nodes_with(tree, script):
+		for name: String in added:
+			node.call(CALLBACKS[name], true)
+
+
 ## Gives the nodes in the tree whose script is `script` the members a reload added, at their initial values in a fresh
 ## instance. Returns how many nodes it gave them to: none for a script whose _init needs arguments.
 static func _fill(tree: SceneTree, script: GDScript, added: Array) -> int:
@@ -126,16 +169,11 @@ static func _fill(tree: SceneTree, script: GDScript, added: Array) -> int:
 	var fresh: Object = script.new()
 	if fresh == null:
 		return 0
-	var count := 0
-	var stack: Array[Node] = [tree.root]
-	while not stack.is_empty():
-		var node: Node = stack.pop_back()
-		if node.get_script() == script:
-			count += 1
-			for name: String in added:
-				var value: Variant = fresh.get(name)
-				node.set(name, value.duplicate(true) if value is Array or value is Dictionary else value)
-		stack.append_array(node.get_children(true))
+	var nodes := _nodes_with(tree, script)
+	for node in nodes:
+		for name: String in added:
+			var value: Variant = fresh.get(name)
+			node.set(name, value.duplicate(true) if value is Array or value is Dictionary else value)
 	if not fresh is RefCounted:
 		fresh.free()
-	return count
+	return nodes.size()

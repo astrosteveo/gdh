@@ -270,3 +270,27 @@ def test_reload_puts_changed_scripts_in_and_keeps_state(copy, tmp_path):
         assert value(name, "[ticks, distance]") == [30, 110.0]
     finally:
         gdh("live", "stop", "--session", name)
+
+
+def test_reload_turns_on_the_callbacks_it_adds(copy, tmp_path):
+    name = f"{SESSION}-callbacks"
+    script = copy / "restart" / "walker.gd"
+    source = script.read_text()
+    gdh("live", "start", "--project", copy, "--session", name, "--out", tmp_path / "out")
+    try:
+        live(name, "step", "5")
+        # The game turned off a callback it already had, so the reload leaves it off.
+        live(name, "eval", "set_physics_process(false)")
+        script.write_text(source.replace("var clicks := 0", "var clicks := 0\nvar frames := 0\nvar keys := 0")
+                          + "\n\nfunc _process(_delta: float) -> void:\n\tframes += 1\n"
+                          + "\n\nfunc _input(event: InputEvent) -> void:\n"
+                          + "\tif event is InputEventKey and event.pressed:\n\t\tkeys += 1\n"
+                          + "".join(f"\n\nfunc {f}(_event: InputEvent) -> void:\n\tpass\n"
+                                    for f in ("_shortcut_input", "_unhandled_input", "_unhandled_key_input")))
+        assert "reloaded res://restart/walker.gd" in gdh("live", "reload", "--session", name).stdout
+        live(name, "step", "10", "--tap", "key:space")
+        assert value(name, "[frames, keys, ticks]") == [10, 1, 5]
+        assert value(name, "[is_processing_shortcut_input(), is_processing_unhandled_input(), "
+                           "is_processing_unhandled_key_input()]") == [True, True, True]
+    finally:
+        gdh("live", "stop", "--session", name)

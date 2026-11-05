@@ -12,6 +12,9 @@ from gdh.godot import no_core_dumps
 ROOT = Path(__file__).resolve().parent.parent
 TESTBED = ROOT / "testbed"
 GPU_DISPLAY = bool(shutil.which("weston") and shutil.which("Xwayland"))
+# CI runs a pull request's tests on the GPU display only (GDH_TEST_DISPLAYS=gpu) to halve the run: test_display.py still
+# checks the two against each other, and main runs both.
+DISPLAYS = os.environ.get("GDH_TEST_DISPLAYS", "gpu,xvfb").split(",")
 
 if not (shutil.which("Xvfb") and shutil.which("godot")):
     pytest.skip("needs godot and Xvfb on PATH", allow_module_level=True)
@@ -36,9 +39,9 @@ def pytest_configure(config):
     no_core_dumps()
 
 
-@pytest.fixture(scope="session", autouse=True, params=["gpu", "xvfb"])
+@pytest.fixture(scope="session", autouse=True, params=DISPLAYS)
 def display(request):
-    """Every test runs on both displays: gdh reads GDH_DISPLAY when --display isn't given.
+    """Every test runs on each display in DISPLAYS: gdh reads GDH_DISPLAY when --display isn't given.
     A module-scoped fixture that starts a game must depend on this, so it starts again for each."""
     if request.param == "gpu" and not GPU_DISPLAY:
         pytest.skip("the GPU display needs weston and Xwayland")

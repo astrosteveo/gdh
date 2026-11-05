@@ -241,7 +241,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `pick X,Y...` | What's drawn at each point, topmost first: 2D and UI nodes in draw order, then 3D meshes by distance, with textures, surfaces and materials (above) |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
 | `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |
-| `eval EXPR` | Any Godot expression. The base is the current scene. `scene`, `tree`, `root`, each autoload by name and the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) are also available. |
+| `eval EXPR` | A Godot Expression, which isn't GDScript ([below](#what-an-expression-cant-do)). The base is the current scene. `scene`, `tree`, `root`, each autoload by name, the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) and each GDScript global class by its `class_name` (its constants, static functions and static vars: `Rules.MAX_SPEED`, `Rules.speed_at(3)`) are also available. |
 | `status` | Game frame, held or running, scene, image and window size, nodes that run while held, processes the game spawned |
 | `record N [--out DIR]` | N frames stepped and each saved as `DIR/frame-0000.png` on, for `gdh measure` |
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
@@ -257,6 +257,19 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `hitstop`, `shake`, `follow` | A hit-stop's frames, a camera shake's size, frequency and decay, and a camera's lag and overshoot ([feel.md](feel.md#hit-stop-shake-and-follow)) |
 
 Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Their names start with a number that goes on from the highest already in the folder, so a session started again with the same `--out` never writes over earlier shots. An array in a reply (from `eval`, say) keeps its first 100 items and ends with a string saying how many more there were: `"... 150 more (250 in all)"`. Add `--json` to any command for the raw reply.
+
+### What an Expression can't do
+
+`eval`, `--until`, `--trace` and a scenario's checks take one Godot Expression: names, calls, indexing, operators and literals, as in GDScript, but no statements, no lambdas and no `x if c else y`. These fail with an error:
+
+- `=`, `+=` and the other assignments (`Expected '='`). Call a setter instead: `get_node('Door').set('locked', false)`.
+- `var`, `return`, `await`, `if` and `for` blocks (`Invalid named index 'var'`), and `;` between two expressions. Run several `eval`s, or put the steps in a method on a [debug autoload](#a-debug-autoload) and call that.
+- A lambda, such as `[1, 2].map(func(x): return x * 2)`. Give the debug autoload a method that does it.
+
+These don't fail but give the wrong value, as Godot stops reading at the end of the first whole expression and drops the rest without an error:
+
+- `x if c else y` is `x`, whatever `c` is. Index with the condition instead, `[y, x][int(c)]` (both are evaluated), or give the debug autoload a method.
+- `1 2` is 1.
 
 ## Waiting and tracing
 
@@ -619,6 +632,7 @@ The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every te
 
 - exact frame counts and movement at 60 and 120 ticks per second
 - that taps reach `_physics_process`, `_process` and `_input` once each
+- `eval`, `--until` and `--trace` reaching a global class by its `class_name` (`testbed/live/arena_rules.gd`, which no scene loads): a constant and a static function
 - held input across steps
 - button clicks at the positions `tree` reports, with no stretching and in both stretch modes
 - `find` by text, name and class, its one-line output, the nodes that don't show and why, and its box matching `tree`'s in both stretch modes

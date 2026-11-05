@@ -63,8 +63,9 @@ jobs:
           fi
       - name: Run the suite
         env:
-          # A pull request runs on the GPU display only, as tests/test_display.py still checks Xvfb against it.
-          GDH_TEST_DISPLAYS: ${{ github.event_name == 'pull_request' && 'gpu' || 'gpu,xvfb' }}
+          # A pull request runs on the GPU display only, as tests/test_display.py still checks Xvfb against it. Main runs
+          # on Xvfb only, as its pull request ran the GPU display on the same code. A manual run does both.
+          GDH_TEST_DISPLAYS: ${{ github.event_name == 'pull_request' && 'gpu' || github.event_name == 'push' && 'xvfb' || 'gpu,xvfb' }}
           TESTS: ${{ steps.changes.outputs.tests }}
         # A re-run of a failed job runs only the tests that failed in the attempt before, once that attempt finished
         # (pytest exited 0 or 1): an interrupted one (2, as on a cancel) saved a last-failed list of only the tests it got

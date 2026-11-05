@@ -12,8 +12,8 @@ from gdh.godot import no_core_dumps
 ROOT = Path(__file__).resolve().parent.parent
 TESTBED = ROOT / "testbed"
 GPU_DISPLAY = bool(shutil.which("weston") and shutil.which("Xwayland"))
-# CI runs a pull request's tests on the GPU display only (GDH_TEST_DISPLAYS=gpu) to halve the run: test_display.py still
-# checks the two against each other, and main runs both.
+# CI runs a pull request's tests on the GPU display only (GDH_TEST_DISPLAYS=gpu) to halve the run, as test_display.py
+# still checks the two against each other, and main's on Xvfb only.
 DISPLAYS = os.environ.get("GDH_TEST_DISPLAYS", "gpu,xvfb").split(",")
 
 if not (shutil.which("Xvfb") and shutil.which("godot")):

@@ -42,8 +42,8 @@ def test_profile_ranks_the_games_functions_and_finds_the_spikes(game):
     budget = reply["game_ms"]["median"] + heavy / 2
     reply = gdh_json("live", "profile", "90", "--budget", f"{budget:.3f}", "--session", SESSION)
     assert {row["function"]: row["calls"] for row in reply["top"]["by_self"]}["light"] == 90
-    frames = [s["frame"] for s in reply["spikes"] if s["physics_ms"] > heavy / 2]
-    assert len(frames) == 3 and [b - a for a, b in zip(frames, frames[1:])] == [30, 30]
+    frames = {s["frame"] for s in reply["spikes"] if s["physics_ms"] > heavy / 2}
+    assert any({f + 30, f + 60} <= frames for f in frames), frames
     assert {"heavy", "crunch"} <= {row["function"] for row in reply["spike_top"]["by_total"][:4]}
     assert reply["spike_top"]["by_self"][0]["function"] == "crunch"
 

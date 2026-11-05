@@ -20,6 +20,13 @@ if not (shutil.which("godot-mono") and shutil.which("dotnet")):
 SESSION = f"test-cs-{os.getpid()}"
 
 
+@pytest.fixture(scope="module", autouse=True)
+def once(display):
+    if display != "gpu" and os.environ.get("GDH_CSHARP_TESTS_RAN"):
+        pytest.skip("C# changes how gdh builds the game, not how a display shows it: once is enough")
+    os.environ["GDH_CSHARP_TESTS_RAN"] = "1"
+
+
 def godot_version():
     out = subprocess.run(["godot-mono", "--version"], capture_output=True, text=True).stdout
     return re.match(r"(\d+\.\d+(?:\.\d+)?)", out.strip().splitlines()[-1]).group(1)

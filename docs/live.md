@@ -628,7 +628,7 @@ A mouse event with `"on": {"text": TEXT}` or `"on": {"node": PATH}` instead of a
 
 ## Tests
 
-The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every test runs on both displays, the GPU display and Xvfb (the GPU display's are skipped without weston and Xwayland). `uv run pytest` runs `tests/test_live.py` against `testbed/live/arena.tscn`. It checks:
+The tests need Godot, a GPU with Vulkan, Xvfb, and weston and Xwayland. Every test runs on both displays, the GPU display and Xvfb (the GPU display's are skipped without weston and Xwayland), or on the ones `GDH_TEST_DISPLAYS` names (`gpu`, `xvfb`, `gpu,xvfb`). CI runs a pull request's tests on the GPU display only, since `tests/test_display.py` checks the two displays against each other either way, and main's on both. A re-run of a failed CI job runs only the tests that failed, and a change to Markdown files only runs only `tests/test_guide.py`. `uv run pytest` runs `tests/test_live.py` against `testbed/live/arena.tscn`. It checks:
 
 - exact frame counts and movement at 60 and 120 ticks per second
 - that taps reach `_physics_process`, `_process` and `_input` once each

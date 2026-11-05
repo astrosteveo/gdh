@@ -54,6 +54,7 @@ var resolution := Vector2i.ZERO
 var recorder: Node  # frames.gd: each game frame's render times
 var listener: Node  # audio.gd: the buses' levels and the players over the last step
 
+static var _identifier := RegEx.create_from_string("[\\p{L}\\p{N}_]+")
 var _server := TCPServer.new()
 var _conns: Array[Dictionary] = []
 var _queue: Array[Dictionary] = []
@@ -650,7 +651,7 @@ func _cmd_restore() -> Dictionary:
 ## An expression evaluated as eval does: {"value"} or {"error"}.
 func _evaluate(text: String) -> Dictionary:
 	var expression := Expression.new()
-	var inputs := _eval_inputs()
+	var inputs := _eval_inputs(text)
 	if expression.parse(text, inputs[0]) != OK:
 		return {"error": expression.get_error_text()}
 	var value: Variant = expression.execute(inputs[1], get_tree().current_scene, false)
@@ -744,13 +745,14 @@ func _hover_back() -> void:
 
 
 ## Evaluates a Godot Expression with the current scene as base. Inputs: tree,
-## scene, root, each autoload by name, and the engine's singletons (OS, Engine,
-## Input, Time, RenderingServer...), as in GDScript.
+## scene, root, each autoload by name, the engine's singletons (OS, Engine,
+## Input, Time, RenderingServer...) and the GDScript global classes it names, as in GDScript.
 func _cmd_eval(args: Dictionary) -> Dictionary:
 	var expression := Expression.new()
 	var scene := get_tree().current_scene
-	var inputs := _eval_inputs()
-	var err := expression.parse(args.get("expr", ""), inputs[0])
+	var text := str(args.get("expr", ""))
+	var inputs := _eval_inputs(text)
+	var err := expression.parse(text, inputs[0])
 	if err != OK:
 		return {"error": expression.get_error_text()}
 	var value: Variant = expression.execute(inputs[1], scene, false)
@@ -759,8 +761,8 @@ func _cmd_eval(args: Dictionary) -> Dictionary:
 	return {"value": _to_json(value)}
 
 
-## An expression's input names and their values: [names, values]. "scene" is the second.
-func _eval_inputs() -> Array:
+## The input names and their values for expressions in text: [names, values]. "scene" is the second.
+func _eval_inputs(text: String) -> Array:
 	var names := PackedStringArray(["tree", "scene", "root"])
 	var values := [get_tree(), get_tree().current_scene, get_tree().root]
 	for setting in ProjectSettings.get_property_list():
@@ -772,6 +774,17 @@ func _eval_inputs() -> Array:
 		if not names.has(singleton):
 			names.append(singleton)
 			values.append(Engine.get_singleton(singleton))
+	# Only the classes text names are loaded: loading one runs its static initialisers, and loading them all would
+	# put every broken script's errors in each reply. GDScript only: a loaded GDScript answers for its constants,
+	# static functions and static vars, as the class's name does in GDScript.
+	var words := {}
+	for found in _identifier.search_all(text):
+		words[found.get_string()] = true
+	for info in ProjectSettings.get_global_class_list():
+		var name := str(info["class"])
+		if info.language == &"GDScript" and words.has(name) and not names.has(name):
+			names.append(name)
+			values.append(load(info.path))
 	return [names, values]
 
 
@@ -787,7 +800,7 @@ func _watch_start(args: Dictionary) -> Dictionary:
 		traces = args.trace
 	if until.is_empty() and traces.is_empty():
 		return {}
-	var inputs := _eval_inputs()
+	var inputs := _eval_inputs("\n".join(PackedStringArray([until] + traces.map(str))))
 	var watch := {"every": maxi(int(args.get("every", 1)), 1), "names": inputs[0], "values": inputs[1],
 			"traces": [], "texts": traces, "rows": [], "failed": {}}
 	for text in traces:

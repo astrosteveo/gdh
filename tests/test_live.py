@@ -46,6 +46,11 @@ def test_eval_reaches_engine_singletons(arena):
     assert value("Engine.get_physics_ticks_per_second()") == 60
 
 
+def test_eval_reaches_a_global_class_by_name(arena):
+    # testbed/live/arena_rules.gd, class_name ArenaRules: nothing loads it until an expression names it.
+    assert value("[ArenaRules.GOAL_X, ArenaRules.COLOR.r, ArenaRules.double(21)]") == [400.0, 1.0, 42]
+
+
 def test_game_gets_only_its_own_arguments(arena):
     assert value("OS.get_cmdline_user_args()") == ["--level", "3", "--hard"]
 
@@ -69,6 +74,12 @@ def test_step_runs_exact_frames(arena):
     assert reply["result"]["frames"] == 30
     # 120 px/s for 30 frames at 60 ticks per second.
     assert value("get_node('Player').position.x") == pytest.approx(x + 60)
+
+
+def test_until_and_trace_reach_a_global_class_by_name(arena):
+    reply = live("step", "5", "--until", "ArenaRules.double(2) == 4", "--trace", "ArenaRules.GOAL_X")
+    assert reply["result"]["until"]["met"] and reply["result"]["frames"] == 1
+    assert [row[1] for row in reply["result"]["trace"]["rows"]] == [400.0]
 
 
 def test_tap_reaches_every_callback_once(arena):

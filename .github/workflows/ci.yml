@@ -31,7 +31,7 @@ jobs:
         run: claude plugin test .
 
   suite:
-    name: pytest (GPU and Xvfb displays)
+    name: pytest
     # The suite runs on the development machine's GPU. The repository is public, so a pull request from a fork never
     # runs there: its code would run on that machine.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
@@ -39,6 +39,8 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # for the diff in "Find what changed"
       # Without godot or Xvfb, conftest.py skips every test and pytest passes, so fail here instead.
       - name: Check the tools the suite needs
         run: |
@@ -48,5 +50,35 @@ jobs:
           godot --version
       - name: Install gdh and pytest
         run: uv sync --locked
+      # A change to Markdown files only can still break the docs check (tests/test_guide.py), but needs no game. When the
+      # diff can't be had (a new branch, a force push), everything runs.
+      - name: Find what changed
+        id: changes
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && 'HEAD^1' || github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] && changed=$(git diff --name-only "$BASE" HEAD) \
+              && ! grep -qvE '\.md$' <<<"$changed"; then
+            echo "tests=tests/test_guide.py" >> "$GITHUB_OUTPUT"
+          fi
       - name: Run the suite
-        run: uv run pytest -ra
+        env:
+          # A pull request runs on the GPU display only, as tests/test_display.py still checks Xvfb against it.
+          GDH_TEST_DISPLAYS: ${{ github.event_name == 'pull_request' && 'gpu' || 'gpu,xvfb' }}
+          TESTS: ${{ steps.changes.outputs.tests }}
+        # A re-run of a failed job runs only the tests that failed in the attempt before, once that attempt finished
+        # (pytest exited 0 or 1): an interrupted one (2, as on a cancel) saved a last-failed list of only the tests it got
+        # to. The cache is the run's own, kept outside the checkout, which actions/checkout cleans.
+        run: |
+          cache="$HOME/.cache/gdh-ci/$GITHUB_RUN_ID"
+          find "$HOME/.cache/gdh-ci" -mindepth 1 -maxdepth 1 -mtime +14 -exec rm -rf {} + 2>/dev/null || true
+          args=(-ra -o "cache_dir=$cache")
+          if [ -e "$cache/finished" ]; then
+            args+=(--last-failed)
+          fi
+          status=0
+          uv run pytest "${args[@]}" ${TESTS:+"$TESTS"} || status=$?
+          if [ "$status" -le 1 ]; then
+            mkdir -p "$cache" && touch "$cache/finished"
+          fi
+          exit "$status"

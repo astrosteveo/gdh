@@ -241,7 +241,7 @@ Every position `gdh` accepts or reports is in screenshot pixels: clicks, the `sc
 | `pick X,Y...` | What's drawn at each point, topmost first: 2D and UI nodes in draw order, then 3D meshes by distance, with textures, surfaces and materials (above) |
 | `find [TEXT] [--name P] [--class C]` | The nodes that show on screen and match, each with its box (above) |
 | `camera --view ... \| --release` | Look through gdh's own camera, or give the game its view back (above) |
-| `eval EXPR` | A Godot Expression, which isn't GDScript ([below](#what-an-expression-cant-do)). The base is the current scene. `scene`, `tree`, `root`, each autoload by name, the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) and each GDScript global class by its `class_name` (its constants, static functions and static vars: `Rules.MAX_SPEED`, `Rules.speed_at(3)`) are also available. |
+| `eval EXPR` | A Godot Expression, which isn't GDScript ([below](#what-an-expression-cant-do)). The base is the current scene. `scene`, `tree`, `root`, each autoload by name, the engine's singletons (`OS`, `Engine`, `Input`, `Time`, `RenderingServer` and the rest) and each GDScript global class by its `class_name` (its constants, static functions and static vars: `Rules.MAX_SPEED`, `Rules.speed_at(3)`) are also available, and so are GDScript's `load`, `preload`, `len` and `range`. |
 | `status` | Game frame, held or running, scene, image and window size, nodes that run while held, processes the game spawned |
 | `record N [--out DIR]` | N frames stepped and each saved as `DIR/frame-0000.png` on, for `gdh measure` |
 | `measure KIND [--frames N]` | The same, measured: flicker, shimmer, jitter, black, crush or line ([measure.md](measure.md)) |
@@ -265,6 +265,7 @@ Screenshots go to `./captures/live/<session>/shots/`, or to `--out` if given. Th
 - `=`, `+=` and the other assignments (`Expected '='`). Call a setter instead: `get_node('Door').set('locked', false)`.
 - `var`, `return`, `await`, `if` and `for` blocks (`Invalid named index 'var'`), and `;` between two expressions. Run several `eval`s, or put the steps in a method on a [debug autoload](#a-debug-autoload) and call that.
 - A lambda, such as `[1, 2].map(func(x): return x * 2)`. Give the debug autoload a method that does it.
+- GDScript's own functions, other than `load`, `preload`, `len` and `range`, which gdh adds. An Expression has Godot's global functions (`str`, `abs`, `clamp`, `lerp` and the rest) but not GDScript's, so `is_instance_of(...)` or `Color8(...)` fails with `'is_instance_of' isn't a method of the scene's root`. A bare `load(...)` reaches the scene's own `load` method if it has one, as before gdh added these.
 
 These don't fail but give the wrong value, as Godot stops reading at the end of the first whole expression and drops the rest without an error:
 

@@ -21,6 +21,7 @@ const Clip := preload("clip.gd")
 const Common := preload("common.gd")
 const Covered := preload("covered.gd")
 const ErrorCollector := preload("errors.gd")
+const Expressions := preload("expressions.gd")
 const Probes := preload("probes.gd")
 const Reload := preload("reload.gd")
 const Screen := preload("screen.gd")
@@ -68,6 +69,8 @@ var _notes: Array[String] = []
 var _shot_count := 0
 var _game_frames := 0
 var _vsync_noted := false
+## Stands in for GDScript's load, len and range in expressions (expressions.gd).
+var _gdscript_calls := Expressions.new()
 var _size_noted := false
 var _next_frame_us := 0
 ## What `set` changed: {key: [object, property, the value before]}, for `restore`.
@@ -651,12 +654,13 @@ func _cmd_restore() -> Dictionary:
 ## An expression evaluated as eval does: {"value"} or {"error"}.
 func _evaluate(text: String) -> Dictionary:
 	var expression := Expression.new()
+	var scene := get_tree().current_scene
 	var inputs := _eval_inputs(text)
-	if expression.parse(text, inputs[0]) != OK:
+	if expression.parse(Expressions.rewrite(text, scene), inputs[0]) != OK:
 		return {"error": expression.get_error_text()}
-	var value: Variant = expression.execute(inputs[1], get_tree().current_scene, false)
+	var value: Variant = expression.execute(inputs[1], scene, false)
 	if expression.has_execute_failed():
-		return {"error": expression.get_error_text()}
+		return {"error": Expressions.explain(expression.get_error_text(), text, scene)}
 	return {"value": value}
 
 
@@ -746,25 +750,26 @@ func _hover_back() -> void:
 
 ## Evaluates a Godot Expression with the current scene as base. Inputs: tree,
 ## scene, root, each autoload by name, the engine's singletons (OS, Engine,
-## Input, Time, RenderingServer...) and the GDScript global classes it names, as in GDScript.
+## Input, Time, RenderingServer...) and the GDScript global classes it names, as in GDScript. A bare load, preload,
+## len or range call reaches GDScript's (expressions.gd).
 func _cmd_eval(args: Dictionary) -> Dictionary:
 	var expression := Expression.new()
 	var scene := get_tree().current_scene
 	var text := str(args.get("expr", ""))
 	var inputs := _eval_inputs(text)
-	var err := expression.parse(text, inputs[0])
+	var err := expression.parse(Expressions.rewrite(text, scene), inputs[0])
 	if err != OK:
 		return {"error": expression.get_error_text()}
 	var value: Variant = expression.execute(inputs[1], scene, false)
 	if expression.has_execute_failed():
-		return {"error": "Evaluation failed: %s" % expression.get_error_text()}
+		return {"error": "Evaluation failed: %s" % Expressions.explain(expression.get_error_text(), text, scene)}
 	return {"value": _to_json(value)}
 
 
 ## The input names and their values for expressions in text: [names, values]. "scene" is the second.
 func _eval_inputs(text: String) -> Array:
-	var names := PackedStringArray(["tree", "scene", "root"])
-	var values := [get_tree(), get_tree().current_scene, get_tree().root]
+	var names := PackedStringArray(["tree", "scene", "root", Expressions.INPUT])
+	var values := [get_tree(), get_tree().current_scene, get_tree().root, _gdscript_calls]
 	for setting in ProjectSettings.get_property_list():
 		var autoload: String = setting.name.trim_prefix("autoload/")
 		if setting.name.begins_with("autoload/") and get_tree().root.has_node(autoload):
@@ -803,14 +808,15 @@ func _watch_start(args: Dictionary) -> Dictionary:
 	var inputs := _eval_inputs("\n".join(PackedStringArray([until] + traces.map(str))))
 	var watch := {"every": maxi(int(args.get("every", 1)), 1), "names": inputs[0], "values": inputs[1],
 			"traces": [], "texts": traces, "rows": [], "failed": {}}
+	var scene := get_tree().current_scene
 	for text in traces:
 		var expression := Expression.new()
-		if expression.parse(str(text), inputs[0]) != OK:
+		if expression.parse(Expressions.rewrite(str(text), scene), inputs[0]) != OK:
 			return {"error": "trace %s: %s" % [text, expression.get_error_text()]}
 		watch.traces.append(expression)
 	if not until.is_empty():
 		var expression := Expression.new()
-		if expression.parse(until, inputs[0]) != OK:
+		if expression.parse(Expressions.rewrite(until, scene), inputs[0]) != OK:
 			return {"error": "until %s: %s" % [until, expression.get_error_text()]}
 		watch.until = expression
 		watch.state = {"expr": until, "met": false, "value": null, "frame": _game_frames, "checks": 0}
@@ -839,7 +845,7 @@ func _watch_check(watch: Dictionary, n: int) -> bool:
 	if expression.has_execute_failed():
 		# A node that isn't there yet, a scene changing: not yet, and the reply says why if it never holds.
 		state.value = null
-		state.error = expression.get_error_text()
+		state.error = Expressions.explain(expression.get_error_text(), state.expr, scene)
 		return false
 	state.value = _to_json(value)
 	state.met = true if value else false
@@ -850,7 +856,7 @@ func _watch_check(watch: Dictionary, n: int) -> bool:
 func _watch_value(watch: Dictionary, expression: Expression, text: String, scene: Node) -> Variant:
 	var value: Variant = expression.execute(watch.values, scene, false)
 	if expression.has_execute_failed():
-		watch.failed[text] = expression.get_error_text()
+		watch.failed[text] = Expressions.explain(expression.get_error_text(), text, scene)
 		return null
 	return _to_json(value)
 

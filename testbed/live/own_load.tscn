@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://live/own_load.gd" id="1_own"]
+
+[node name="OwnLoad" type="Node2D"]
+script = ExtResource("1_own")

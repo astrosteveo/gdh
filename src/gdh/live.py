@@ -750,7 +750,12 @@ def cmd_step(args):
     if args.monitors:
         step_args["monitors"] = 0  # Godot's Performance monitors before the first frame and after the last (perf.py)
     # Generous: a big window that saves a frame every step can take seconds a frame under Xvfb.
-    reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
+    if args.until and len(instances(session)) > 1:
+        instance = pick(session, args.instance)[0]
+        reply = step_until_together(lambda c, a, i: call(session, c, a, instance=i, timeout=max(300, 2 * n)),
+                                    step_args, instance)
+    else:
+        reply = call(session, "step", step_args, instance=args.instance, timeout=max(300, 2 * n))
     # With --trail, the JSON waits for the trails, which go in it.
     result = report(reply, args.json, echo=not args.trail)
     if not args.json:
@@ -807,9 +812,63 @@ def step_length(args, session):
             raise LiveError("--max bounds a step with --until.")
         return 1 if args.frames is None else args.frames
     if len(instances(session)) > 1:
-        raise LiveError("--until needs a session of one instance: the instances step together, and each would stop "
-                        "on its own.")
+        if args.instance == "all":
+            raise LiveError("--until is checked on one instance: give --instance K.")
+        for given, option in ((args.trace, "--trace"), (args.trail, "--trail"), (args.shot_every, "--shot-every"),
+                              (args.monitors, "--monitors")):
+            if given:
+                raise LiveError(f"{option} goes with --until in a session of one instance.")
     return args.max or args.frames or UNTIL_MAX
+
+
+def step_until_together(send, args, instance):
+    """A step with an until (args: a step's, with frames, events, until and every) in a session of several instances,
+    which step together. Each instance would check the until and stop on its own, so every instance runs `every`
+    frames at a time instead, and after each run the until is checked on `instance` alone; once it holds, every
+    instance stops there. The step's events go to `instance` as a step of one instance has them: each at its frame,
+    and on an early stop those due before the next frame and those at the step's end (a hold's release), so nothing
+    is left down that the step would have let go. `send(cmd, args, instance)` sends one request and returns its
+    reply. Returns a reply shaped like a step's, with the until record in `instance`'s result."""
+    n, every, expr = int(args["frames"]), max(int(args.get("every") or 1), 1), args["until"]
+    events = args.get("events", [])
+    record = {"expr": expr, "met": False, "value": None, "frame": None, "checks": 0}
+    done, reply = 0, None
+    while done < n and not record["met"]:
+        chunk = min(every, n - done)
+        last = done + chunk == n
+        due = [{**e, "at": e.get("at", 0) - done} for e in events
+               if done <= e.get("at", 0) < done + chunk or (last and e.get("at", 0) >= n)]
+        reply = send("step", {"frames": chunk, "events": due}, instance)
+        done += chunk
+        checked = send("eval", {"expr": expr}, instance)
+        record["checks"] += 1
+        # A check whose evaluation fails counts as not yet, as a step's until has it.
+        if checked.get("ok"):
+            record.update(value=checked["result"]["value"], met=truthy(checked["result"]["value"]))
+            record.pop("error", None)
+        else:
+            record["error"] = checked.get("error", "the check failed")
+    if record["met"] and done < n:
+        rest = [{**e, "at": 0} for e in events if e.get("at", 0) == done or e.get("at", 0) >= n]
+        if rest:
+            send("step", {"frames": 0, "events": rest}, instance)
+    parts = reply["instances"]
+    for part in parts:
+        result = part.setdefault("result", {})
+        result["frames"] = done
+        result.pop("ran", None)
+    mine = next(part for part in parts if part.get("instance") == instance)
+    record["frame"] = mine["result"].get("status", {}).get("frame")
+    mine["result"]["until"] = record
+    return reply
+
+
+def truthy(value):
+    """Whether a value an expression gave, as JSON, is true as Godot has it: a zero vector or empty text is false."""
+    if isinstance(value, list) and value and all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                                                 for v in value):
+        return any(value)
+    return bool(value)
 
 
 def watch_args(args):

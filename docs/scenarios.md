@@ -53,7 +53,7 @@ An object is a structured step, named by its one kind key:
 | Step | What it does |
 |---|---|
 | `{"step": N, ...}` | Steps N frames (`null` with `until`). Its input takes `gdh live step`'s options by name, underscores for dashes, each a value or a list: `press`, `release`, `hold`, `tap` (an action, `key:NAME`, `mouse:left`, `joy:a`), `type`, `move`, `click`, `right_click`, `left_hold`, `right_hold` (`"X,Y"` or `[x, y]`), `click_text`, `click_node`, `wheel`, `wheel_at`, `mod`, `axis`, `touch`, `touch_drag`, `look`; and `until`, `every`, `max`, `trace`, `shot_every`, and `events` (the raw protocol's) |
-| `{"until": EXPR, ...}` | Steps until EXPR is truthy, checked every `every` frames (default 1), at most `max` frames (default 3600), with input as `step` takes it. A check: it passes when EXPR held |
+| `{"until": EXPR, ...}` | Steps until EXPR is truthy, checked every `every` frames (default 1), at most `max` frames (default 3600), with input as `step` takes it. A check: it passes when EXPR held. In a session of several instances, EXPR is checked on the step's `instance` alone, and every instance stops together ([live.md](live.md#waiting-and-tracing)) |
 | `{"run": SECONDS, ...}` | Lets the game run in real time for SECONDS, as `gdh live run --seconds` does, with `hold` (an input or a list) pressed while it runs. With `until`, it holds the game again as soon as EXPR is truthy (checked every `every` seconds, default 0.05; SECONDS, or `null` for 30, is the most it waits), and it's a check: it passes when EXPR held. For a game a server checks in real time, where a step's frames come too fast; it doesn't replay frame for frame |
 | `{"expect": EXPR, ...}` | A check of EXPR's value, below |
 | `{"shot": NAME, ...}` | A checkpoint shot, below |

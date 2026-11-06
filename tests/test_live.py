@@ -51,6 +51,36 @@ def test_eval_reaches_a_global_class_by_name(arena):
     assert value("[ArenaRules.GOAL_X, ArenaRules.COLOR.r, ArenaRules.double(21)]") == [400.0, 1.0, 42]
 
 
+def test_eval_calls_gdscripts_load_preload_len_and_range(arena):
+    assert value("[load('res://live/arena.tscn').resource_path, preload('res://live/arena.tscn').resource_path, "
+                 "len([1, 2, 3]), len ('abc'), range(3), range(2, 8, 3)]") == [
+        "res://live/arena.tscn", "res://live/arena.tscn", 3, 3, [0, 1, 2], [2, 5]]
+
+
+def test_eval_leaves_strings_and_member_calls_alone(arena):
+    assert value("""['load(x)'.length(), "a\\"len(", ResourceLoader.load('res://live/arena.tscn').resource_path]""") == [
+        7, 'a"len(', "res://live/arena.tscn"]
+
+
+def test_a_function_an_expression_lacks_is_named(arena):
+    proc = gdh("live", "eval", "is_instance_of(scene, 1)", "--session", SESSION, check=False)
+    assert proc.returncode != 0
+    assert "'is_instance_of' isn't a method of the scene's root (Node2D)" in proc.stderr
+    # A method the scene has, called wrongly, keeps Godot's own error.
+    proc = gdh("live", "eval", "get_node()", "--session", SESSION, check=False)
+    assert proc.returncode != 0 and "isn't a method" not in proc.stderr
+
+
+def test_a_scenes_own_load_method_still_answers_a_bare_load(tmp_path):
+    session = f"{SESSION}-own-load"
+    gdh("live", "start", "--project", TESTBED, "--scene", "res://live/own_load.tscn", "--session", session,
+        "--out", tmp_path)
+    try:
+        assert gdh_json("live", "eval", "load('x')", "--session", session)["result"]["value"] == "own x"
+    finally:
+        gdh("live", "stop", "--session", session)
+
+
 def test_game_gets_only_its_own_arguments(arena):
     assert value("OS.get_cmdline_user_args()") == ["--level", "3", "--hard"]
 
@@ -80,6 +110,13 @@ def test_until_and_trace_reach_a_global_class_by_name(arena):
     reply = live("step", "5", "--until", "ArenaRules.double(2) == 4", "--trace", "ArenaRules.GOAL_X")
     assert reply["result"]["until"]["met"] and reply["result"]["frames"] == 1
     assert [row[1] for row in reply["result"]["trace"]["rows"]] == [400.0]
+
+
+def test_until_and_trace_call_gdscripts_functions_and_keep_their_own_text(arena):
+    reply = live("step", "3", "--until", "len(range(4)) == 4", "--trace", "load('res://live/arena.tscn').resource_path")
+    assert reply["result"]["until"]["met"] and reply["result"]["until"]["expr"] == "len(range(4)) == 4"
+    assert reply["result"]["trace"]["exprs"] == ["load('res://live/arena.tscn').resource_path"]
+    assert reply["result"]["trace"]["rows"][0][1] == "res://live/arena.tscn"
 
 
 def test_tap_reaches_every_callback_once(arena):

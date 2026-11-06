@@ -74,7 +74,7 @@ Any step also takes `name`, the name its check is reported by, and `instance`, t
 | `{"shot": NAME, "baseline": ...}` | The shot matches its baseline (below) |
 | `{"snapshot": NAME, "baseline": ...}` | The UI on screen reads the same as its baseline (below) |
 
-EXPR is a Godot expression with `eval`'s inputs ([live.md](live.md#seeing-the-game)): the current scene is its base, and `scene`, `tree`, `root`, the autoloads, the engine's singletons and the GDScript global classes by their `class_name` are available. It has no statements, assignments or lambdas, and `x if c else y` is `x` whatever `c` is ([what an Expression can't do](live.md#what-an-expression-cant-do)). A check is named by its `name`, else by its expression (`clicks == 1`, `until ...`, `shot NAME`).
+EXPR is a Godot expression with `eval`'s inputs ([live.md](live.md#seeing-the-game)): the current scene is its base, and `scene`, `tree`, `root`, the autoloads, the engine's singletons and the GDScript global classes by their `class_name` are available, and so are GDScript's `load`, `preload`, `len` and `range`. It has no statements, assignments or lambdas, and `x if c else y` is `x` whatever `c` is ([what an Expression can't do](live.md#what-an-expression-cant-do)). A check is named by its `name`, else by its expression (`clicks == 1`, `until ...`, `shot NAME`).
 
 Every scenario also has checks of its own. `steps` passes when every step ran. `no engine errors` passes when the game raised none during the run (warnings don't count), unless `allow_errors` is set; engine errors raised as the game loads count too.
 

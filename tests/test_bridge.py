@@ -150,10 +150,14 @@ def test_exec_fails_a_script_that_raises_an_error_as_it_runs(project, tmp_path):
     later = ('extends RefCounted\n\nfunc run(editor):\n'
              '\teditor.get_base_control().get_node.call_deferred("NoSuchNodeForGdh")\n\treturn 1\n')
     editor_bridge.call(project, {"cmd": "exec", "code": later})
-    time.sleep(0.5)
-    reply = editor_bridge.call(project, {"cmd": "exec", "code": "extends RefCounted\n\nfunc run(editor):\n\treturn 2\n"})
-    assert reply["ok"] is True and reply["result"] == 2 and reply["errors"] == []
-    assert any("NoSuchNodeForGdh" in e["message"] for e in reply["earlier_errors"])
+    # The deferred call runs once the editor gets to it, later on a busy machine: ask until it has.
+    earlier, deadline = [], time.monotonic() + 10
+    while not any("NoSuchNodeForGdh" in e["message"] for e in earlier) and time.monotonic() < deadline:
+        time.sleep(0.2)
+        reply = editor_bridge.call(project, {"cmd": "exec", "code": "extends RefCounted\n\nfunc run(editor):\n\treturn 2\n"})
+        assert reply["ok"] is True and reply["result"] == 2 and reply["errors"] == []
+        earlier += reply["earlier_errors"]
+    assert any("NoSuchNodeForGdh" in e["message"] for e in earlier), earlier
 
 
 def test_hooks_refuse_edits_that_fight_the_editor(project):

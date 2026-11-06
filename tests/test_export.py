@@ -45,3 +45,16 @@ def test_a_project_without_presets_is_told_how_to_add_one(project):
     (project / "export_presets.cfg").unlink()
     proc = gdh("export", "--project", project, check=False)
     assert proc.returncode == 1 and "Project > Export" in proc.stderr
+
+
+def test_reads_presets_with_values_over_several_lines(tmp_path):
+    # As the editor writes a dedicated server's preset: its customized_files a dictionary over several lines.
+    from gdh.export import read_presets
+    (tmp_path / "export_presets.cfg").write_text(
+        '[preset.0]\n\nname="Server (Linux)"\nplatform="Linux"\ndedicated_server=true\nexport_filter="customized"\n'
+        'customized_files={\n"res://": "strip",\n"res://name=\\"odd\\"": "keep"\n}\nexport_path="build/server.x86_64"\n\n'
+        '[preset.0.options]\n\nbinary_format/embed_pck=true\n\n'
+        '[preset.1]\n\nname="Windows"\nplatform="Windows Desktop"\nexport_path="build/game.exe"\n')
+    assert read_presets(tmp_path) == [
+        {"name": "Server (Linux)", "platform": "Linux", "export_path": "build/server.x86_64"},
+        {"name": "Windows", "platform": "Windows Desktop", "export_path": "build/game.exe"}]

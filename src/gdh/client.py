@@ -236,18 +236,16 @@ class Session:
         first check (every `every` frames) where it holds, and runs at most `max` frames (else `frames`, else 3600);
         an until that doesn't hold is in the result (until.met false), as the protocol has it: until() raises."""
         args = self._step_args(frames, until, every, max, trace, shot_every, events, inputs)
-        reply = self._send("step", args, instance, timeout=live.reply_timeout("step", args))
-        return self._result(reply)
+        return self._result(self._step(args, instance))
 
     def until(self, expr, max=None, every=1, *, instance=0, **inputs):
         """Step until `expr` holds, checked every `every` frames, at most `max` frames (default 3600), with input as
         step() takes it. Returns the until record ({"expr", "met", "value", "frame", "checks"}); raises Unmet when
         it never held."""
         args = self._step_args(None, expr, every, max, (), 0, (), inputs)
-        reply = self._send("step", args, instance, timeout=live.reply_timeout("step", args))
-        result = self._result(reply)
+        result = self._result(self._step(args, instance))
         if isinstance(result, list):
-            result = result[0]
+            result = next((r for r in result if "until" in r), result[0])
         until = result.get("until", {})
         if not until.get("met"):
             ran = result.get("ran", result.get("frames"))
@@ -363,6 +361,18 @@ class Session:
         return done
 
     # --- Steps as the protocol takes them ----------------------------------------------------------------------
+
+    def _step(self, args, instance):
+        """Send a step. One with an until, in a session of several instances, runs them together and checks it on
+        `instance` alone (live.step_until_together)."""
+        timeout = live.reply_timeout("step", args)
+        if "until" in args and len(live.instances(live.load_session(self.name))) > 1:
+            if instance == "all":
+                raise ClientError("An until is checked on one instance: give instance=K.")
+            if args.get("trace") or args.get("shot_every"):
+                raise ClientError("trace and shot_every go with until in a session of one instance.")
+            return live.step_until_together(lambda c, a, i: self._send(c, a, i, timeout=timeout), args, int(instance))
+        return self._send("step", args, instance, timeout=timeout)
 
     def _step_args(self, frames, until, every, most, trace, shot_every, events, inputs):
         unknown = sorted(set(inputs) - set(STEP_INPUTS))

@@ -70,6 +70,51 @@ def test_a_hold_is_let_go_by_its_event(pair):
     assert live("eval", "right_down")["result"]["value"] is False
 
 
+def values(reply):
+    return [r["result"]["value"] for r in reply["instances"]]
+
+
+# [frames ui_right was held, frames run]
+COUNTS = "[held_right, synced]"
+
+
+def test_until_is_checked_on_the_instance_named_and_stops_every_instance_together(pair):
+    # Only instance 1 is given the key, so only it can meet the until. Checked on instance 0 too, the step would run
+    # all 60 frames; with each instance stopping on its own, they'd part.
+    before = values(live("eval", COUNTS, "--instance", "all"))
+    reply = live("step", "--until", f"held_right >= {before[1][0] + 7}", "--hold", "ui_right", "--max", "60",
+                 "--instance", "1")
+    after = values(live("eval", COUNTS, "--instance", "all"))
+    assert [a[1] - b[1] for a, b in zip(after, before)] == [7, 7]
+    assert [a[0] - b[0] for a, b in zip(after, before)] == [0, 7]
+    until = reply["instances"][1]["result"]["until"]
+    assert until["met"] and until["checks"] == 7
+    # Stopped early, the hold is still let go, as a step of one instance lets it go.
+    assert live("eval", "right_down", "--instance", "1")["result"]["value"] is False
+
+
+def test_an_until_that_never_holds_runs_every_instance_its_most(pair):
+    before = values(live("eval", COUNTS, "--instance", "all"))
+    proc = gdh("live", "step", "--until", "held_right < 0", "--max", "12", "--every", "5", "--instance", "1",
+               "--session", SESSION, check=False)
+    after = values(live("eval", COUNTS, "--instance", "all"))
+    assert proc.returncode == 1 and "held_right < 0" in proc.stderr
+    assert [a[1] - b[1] for a, b in zip(after, before)] == [12, 12]
+
+
+def test_a_scenario_until_stops_every_instance_together(pair):
+    from gdh import client
+    with client.Session.attach(SESSION, echo=False) as game:
+        before = game.eval(COUNTS, instance="all")
+        until = game.until(f"held_right >= {before[1][0] + 4}", max=30, instance=1, hold="ui_right")
+        after = game.eval(COUNTS, instance="all")
+        with pytest.raises(client.Unmet):
+            game.until("held_right < 0", max=3, instance=1)
+        last = game.eval(COUNTS, instance="all")
+    assert until["met"] and [a[1] - b[1] for a, b in zip(after, before)] == [4, 4]
+    assert [c[1] - a[1] for c, a in zip(last, after)] == [3, 3]
+
+
 def test_one_instance_answers_alone(pair):
     reply = live("eval", "synced", "--instance", "1")
     assert reply["instance"] == 1 and "instances" not in reply

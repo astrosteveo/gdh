@@ -331,6 +331,7 @@ func _set_held(held: bool) -> void:
 ## Events with "at": k are injected before frame k+1 of the step (0 = before
 ## the first frame). They're injected right after unpausing, where real input
 ## arrives, so _input, is_action_just_pressed and is_action_pressed all see them.
+## A step of 0 frames runs none: its events go to the game, and it stays held.
 func _cmd_step(args: Dictionary) -> Dictionary:
 	var aimed: Variant = _aim_events(args.get("events", []))
 	if aimed is String:
@@ -338,7 +339,7 @@ func _cmd_step(args: Dictionary) -> Dictionary:
 	var clicked: Variant = _check_clicks(args.get("events", []))
 	if clicked is String:
 		return {"error": clicked}
-	var frames := maxi(int(args.get("frames", 1)), 1)
+	var frames := maxi(int(args.get("frames", 1)), 0)
 	var shot_every := int(args.get("shot_every", 0))
 	var cover_every := int(args.get("cover_every", 0))
 	var cover_samples := []

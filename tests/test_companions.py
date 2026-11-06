@@ -115,6 +115,15 @@ def test_a_scenario_until_stops_every_instance_together(pair):
     assert [c[1] - a[1] for c, a in zip(last, after)] == [3, 3]
 
 
+def test_a_scenario_until_whose_check_fails_counts_it_as_not_yet(pair):
+    # A check that can't be evaluated yet (a node not there, a scene changing) isn't the scenario's end.
+    from gdh import client
+    with client.Session.attach(SESSION, echo=False) as game:
+        with pytest.raises(client.Unmet) as unmet:
+            game.until("get_node('Nothing').visible", max=3, instance=1)
+    assert unmet.value.until["checks"] == 3 and unmet.value.until.get("error")
+
+
 def test_one_instance_answers_alone(pair):
     reply = live("eval", "synced", "--instance", "1")
     assert reply["instance"] == 1 and "instances" not in reply

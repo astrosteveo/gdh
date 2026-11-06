@@ -371,8 +371,18 @@ class Session:
                 raise ClientError("An until is checked on one instance: give instance=K.")
             if args.get("trace") or args.get("shot_every"):
                 raise ClientError("trace and shot_every go with until in a session of one instance.")
-            return live.step_until_together(lambda c, a, i: self._send(c, a, i, timeout=timeout), args, int(instance))
+            return live.step_until_together(lambda c, a, i: self._send_quietly(c, a, i, timeout), args, int(instance))
         return self._send("step", args, instance, timeout=timeout)
+
+    def _send_quietly(self, cmd, args, instance, timeout):
+        """_send, but an eval that fails comes back as its failed reply (a check not yet answerable counts as not
+        yet), as live.call's does."""
+        try:
+            return self._send(cmd, args, instance, timeout=timeout)
+        except ClientError as e:
+            if cmd != "eval":
+                raise
+            return {"ok": False, "error": str(e)}
 
     def _step_args(self, frames, until, every, most, trace, shot_every, events, inputs):
         unknown = sorted(set(inputs) - set(STEP_INPUTS))

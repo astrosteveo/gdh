@@ -9,7 +9,6 @@ and the files it wrote. --pack writes only the game's data (.pck), which needs n
 long, and fails on a crash, an early exit or engine errors in its log; it saves the screen at the end. A pack runs on
 gdh's Godot (--main-pack), which is the editor build, so OS.has_feature("editor") is true there as it isn't in an export.
 """
-import configparser
 import os
 import re
 import shutil
@@ -24,17 +23,24 @@ from gdh.imports import ensure_imported
 
 
 def read_presets(project):
-    """[{"name", "platform", "export_path"}] from export_presets.cfg, in order."""
+    """[{"name", "platform", "export_path"}] from export_presets.cfg, in order. Godot's config isn't INI: a value
+    can run over several lines (a dedicated server's customized_files dictionary), so this reads only the lines
+    that start a key, in each [preset.N] section."""
     path = Path(project) / "export_presets.cfg"
     if not path.exists():
         return []
-    parser = configparser.ConfigParser(interpolation=None, strict=False)
-    parser.read_string(path.read_text())
-    presets = []
-    for section in parser.sections():
-        if re.fullmatch(r"preset\.\d+", section):
-            p = parser[section]
-            presets.append({k: p.get(k, "").strip('"') for k in ("name", "platform", "export_path")})
+    presets, current = [], None
+    for line in path.read_text().splitlines():
+        header = re.fullmatch(r"\[(.+)\]", line.strip())
+        if header:
+            current = {"name": "", "platform": "", "export_path": ""} if re.fullmatch(r"preset\.\d+",
+                                                                                     header[1]) else None
+            if current is not None:
+                presets.append(current)
+            continue
+        key = re.fullmatch(r'(name|platform|export_path)="(.*)"', line.strip())
+        if current is not None and key:
+            current[key[1]] = key[2]
     return presets
 
 

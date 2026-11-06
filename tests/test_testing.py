@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import gdh
+from conftest import GPU_DISPLAY, gdh
 
 # The frameworks are fetched once, at these versions, into gdh's cache; their tests skip without a network.
 FRAMEWORKS = {
@@ -90,3 +90,40 @@ def test_a_test_file_that_doesnt_parse_is_a_failure(tmp_path):
     proc = gdh("test", "--project", project, "--out", tmp_path / "out", check=False)
     assert proc.returncode == 1
     assert "(load)" in proc.stdout and "Parse Error" in proc.stdout
+
+
+READBACK = ('extends RefCounted\n\nfunc test_reads_a_color_back():\n\tvar multimesh := MultiMesh.new()\n'
+            '\tmultimesh.mesh = BoxMesh.new()\n\tmultimesh.transform_format = MultiMesh.TRANSFORM_3D\n'
+            '\tmultimesh.use_colors = true\n\tmultimesh.instance_count = 1\n'
+            '\tmultimesh.set_instance_color(0, Color.RED)\n'
+            '\tassert(multimesh.get_instance_color(0) == Color.RED, "read back %s" % multimesh.get_instance_color(0))\n')
+
+
+def readback_project(directory):
+    (directory / "test").mkdir(parents=True)
+    (directory / "project.godot").write_text('config_version=5\n\n[application]\n\nconfig/name="readback"\n')
+    (directory / "test" / "test_readback.gd").write_text(READBACK)
+    return directory
+
+
+def test_a_failing_headless_test_that_reads_render_data_gets_a_note(tmp_path):
+    project = readback_project(tmp_path / "game")
+    proc = gdh("test", "--project", project, "--out", tmp_path / "out", check=False)
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "res://test/test_readback.gd (get_instance_color)" in proc.stdout and "--display gpu" in proc.stdout
+    report = json.loads((tmp_path / "out" / "report.json").read_text())
+    assert len(report["notes"]) == 1 and "get_instance_color" in report["notes"][0]
+
+
+def test_a_failing_test_that_reads_no_render_data_gets_no_note(tmp_path):
+    project = make_project(tmp_path / "game", "gdh")
+    proc = gdh("test", "--project", project, "--out", tmp_path / "out", "--json", check=False)
+    assert proc.returncode == 1 and "notes" not in json.loads(proc.stdout)
+
+
+@pytest.mark.skipif(not GPU_DISPLAY, reason="the GPU display needs weston and Xwayland")
+def test_a_test_that_reads_render_data_passes_on_the_gpu_display(tmp_path):
+    project = readback_project(tmp_path / "game")
+    proc = gdh("test", "--project", project, "--display", "gpu", "--out", tmp_path / "out", check=False)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "note:" not in proc.stdout

@@ -6,6 +6,7 @@ under gdh keep user:// in gdh's own directory, so tests never touch the player's
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -21,6 +22,10 @@ RUNNER = HARNESS / "test_runner.gd"
 DEFAULT_DIRS = ("res://test", "res://tests")
 # gdUnit4 takes its report directory relative to the project, so its reports go in the editor's cache.
 GDUNIT_REPORTS = "res://.godot/gdh/gdunit"
+# Reads of data only a renderer keeps. Headless, Godot's renderer is a stand-in that keeps none of it: a MultiMesh's
+# instances and buffer read back as defaults, a viewport's image as null.
+READBACKS = re.compile(r"\b(get_instance_(?:transform(?:_2d)?|color|custom_data)|get_image|get_buffer"
+                       r"|RenderingServer\.\w+)\s*\(|\.(buffer)\b")
 
 
 def detect(project):
@@ -117,6 +122,9 @@ def cmd_test(args):
     code = result["exit"]
     if scenarios:
         result = with_scenarios(result, scenarios, args, out, junit)
+    notes = readback_notes(project, result["failures"]) if args.display == "none" else []
+    if notes:
+        result["notes"] = notes
     (out / "report.json").write_text(json.dumps(result, indent=2))
     if args.json:
         print(json.dumps(result, indent=2))
@@ -132,6 +140,8 @@ def cmd_test(args):
             print(f"FAILED {f['suite']} > {f['test']}")
             for line in f["message"].splitlines()[:8]:
                 print(f"    {line}")
+        for note in notes:
+            print(f"note: {note}")
         if code == "timeout":
             print(f"note: the run took over {args.timeout} s and was stopped; the results may be partial")
         shown = result["engine_errors"][:10]
@@ -143,6 +153,26 @@ def cmd_test(args):
     if result["tests"] == 0:
         print("note: no tests ran. Tests live in res://test or res://tests, or pass paths.")
     return 0 if ok else 1
+
+
+def readback_notes(project, failures):
+    """For a headless run: a note naming the failing tests' files that read render data, which the stand-in renderer
+    doesn't keep. A suite that isn't a res:// .gd path (a scenario, a gdUnit4 class) is skipped."""
+    found = {}
+    for f in failures:
+        suite = f["suite"]
+        path = project / suite.removeprefix("res://")
+        if suite in found or not (suite.startswith("res://") and suite.endswith(".gd") and path.is_file()):
+            continue
+        calls = sorted({m.group(1) or m.group(2) for m in READBACKS.finditer(path.read_text(errors="replace"))})
+        if calls:
+            found[suite] = calls
+    if not found:
+        return []
+    files = "; ".join(f"{suite} ({', '.join(calls)})" for suite, calls in found.items())
+    return [f"the tests ran headless, where Godot's renderer keeps no render data: a MultiMesh's instance transforms, "
+            f"colors and buffer read back as defaults, and a viewport's image as null. Failing tests read such data "
+            f"in {files}. If that's why they failed, run them again with --display gpu."]
 
 
 def with_scenarios(result, files, args, out, junit):

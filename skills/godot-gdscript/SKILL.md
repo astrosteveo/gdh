@@ -147,6 +147,8 @@ Give logic with no picture to check (rules, inventories, save data, maths) tests
 runs. In a project without GUT or gdUnit4, gdh's own runner takes each `test*.gd` file under `res://test` or
 `res://tests`, and each method whose name starts with `test` is a test. A test fails when it raises an engine error:
 a failed `assert()`, a `push_error()`, a script error. Give `assert()` a message, which the failure report shows.
+Tests run headless, where the renderer keeps no data: a test that reads a MultiMesh's instances or buffer, or a
+viewport's image, gets defaults and nulls. Run that one with `gdh test --display gpu`.
 
 ```gdscript
 # res://test/test_inventory.gd

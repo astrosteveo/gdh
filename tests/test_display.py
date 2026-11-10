@@ -12,11 +12,11 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops
 
-from conftest import GPU_DISPLAY, TESTBED, gdh, gdh_json
+from conftest import GPU_DISPLAY, GPU_SKIP_REASON, TESTBED, gdh, gdh_json
 from gdh.godot import pid_alive
 
 SESSION = f"test-display-{os.getpid()}"
-needs_gpu_display = pytest.mark.skipif(not GPU_DISPLAY, reason="the GPU display needs weston and Xwayland")
+needs_gpu_display = pytest.mark.skipif(not GPU_DISPLAY, reason=GPU_SKIP_REASON)
 
 
 @pytest.fixture(scope="session")
@@ -222,7 +222,7 @@ def test_stopping_a_group_reaps_our_own_children_without_waiting():
 @pytest.mark.parametrize("kind", ["gpu", "xvfb"])
 def test_a_display_stops_as_soon_as_its_processes_have_exited(kind):
     if kind == "gpu" and not GPU_DISPLAY:
-        pytest.skip("the GPU display needs weston and Xwayland")
+        pytest.skip(GPU_SKIP_REASON)
     from gdh.display import open_display
     display = open_display(kind, "640x360")
     record = display.record()

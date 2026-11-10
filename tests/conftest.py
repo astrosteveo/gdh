@@ -11,10 +11,25 @@ from gdh.godot import no_core_dumps
 
 ROOT = Path(__file__).resolve().parent.parent
 TESTBED = ROOT / "testbed"
-GPU_DISPLAY = bool(shutil.which("weston") and shutil.which("Xwayland"))
 # CI runs a pull request's tests on the GPU display only (GDH_TEST_DISPLAYS=gpu) to halve the run, as test_display.py
 # still checks the two against each other, and main's on Xvfb only.
 DISPLAYS = os.environ.get("GDH_TEST_DISPLAYS", "gpu,xvfb").split(",")
+
+
+def gpu_display_unavailable():
+    """Why the GPU display can't start on this machine, or None if it can. Checked by starting it once: weston and
+    Xwayland can be installed where it still can't run (WSL2 has no DRM device that renders)."""
+    from gdh.display import DisplayUnavailable, start_gpu
+    try:
+        start_gpu("320x240").stop()
+    except DisplayUnavailable as e:
+        return str(e)
+    return None
+
+
+GPU_DISPLAY_UNAVAILABLE = gpu_display_unavailable() if "gpu" in DISPLAYS else "not in GDH_TEST_DISPLAYS"
+GPU_DISPLAY = GPU_DISPLAY_UNAVAILABLE is None
+GPU_SKIP_REASON = f"the GPU display can't start here: {GPU_DISPLAY_UNAVAILABLE}"
 
 if not (shutil.which("Xvfb") and shutil.which("godot")):
     pytest.skip("needs godot and Xvfb on PATH", allow_module_level=True)
@@ -44,7 +59,10 @@ def display(request):
     """Every test runs on each display in DISPLAYS: gdh reads GDH_DISPLAY when --display isn't given.
     A module-scoped fixture that starts a game must depend on this, so it starts again for each."""
     if request.param == "gpu" and not GPU_DISPLAY:
-        pytest.skip("the GPU display needs weston and Xwayland")
+        if "GDH_TEST_DISPLAYS" in os.environ:
+            # Asked for by name (CI): a GPU display that won't start is a failure, not a reason to skip.
+            pytest.fail(GPU_SKIP_REASON)
+        pytest.skip(GPU_SKIP_REASON)
     os.environ["GDH_DISPLAY"] = request.param
     yield request.param
     os.environ.pop("GDH_DISPLAY", None)

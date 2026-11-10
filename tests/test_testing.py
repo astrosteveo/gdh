@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import GPU_DISPLAY, gdh
+from conftest import GPU_DISPLAY, GPU_SKIP_REASON, gdh
 
 # The frameworks are fetched once, at these versions, into gdh's cache; their tests skip without a network.
 FRAMEWORKS = {
@@ -121,7 +121,7 @@ def test_a_failing_test_that_reads_no_render_data_gets_no_note(tmp_path):
     assert proc.returncode == 1 and "notes" not in json.loads(proc.stdout)
 
 
-@pytest.mark.skipif(not GPU_DISPLAY, reason="the GPU display needs weston and Xwayland")
+@pytest.mark.skipif(not GPU_DISPLAY, reason=GPU_SKIP_REASON)
 def test_a_test_that_reads_render_data_passes_on_the_gpu_display(tmp_path):
     project = readback_project(tmp_path / "game")
     proc = gdh("test", "--project", project, "--display", "gpu", "--out", tmp_path / "out", check=False)

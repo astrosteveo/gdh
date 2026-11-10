@@ -270,3 +270,34 @@ def test_stale_runtime_directories_are_swept(tmp_path):
         sweep_stale(root)
     assert sorted(p.name for p in root.iterdir()) == ["held", "starting"]
     shutil.rmtree(root)
+
+
+def test_xvfb_runs_without_a_socket_file_in_x11_unix():
+    """WSLg mounts /tmp/.X11-unix read-only, so Xvfb must not need its socket file there:
+    clients reach it on the abstract socket alone."""
+    import socket
+
+    from gdh.display import start_xvfb
+
+    display = start_xvfb("320x240")
+    try:
+        number = display.name.lstrip(":")
+        assert not Path(f"/tmp/.X11-unix/X{number}").exists()
+        with socket.socket(socket.AF_UNIX) as client:
+            client.connect(f"\0/tmp/.X11-unix/X{number}")
+    finally:
+        display.stop()
+
+
+def test_xvfbs_started_at_once_get_different_displays():
+    from concurrent.futures import ThreadPoolExecutor
+
+    from gdh.display import start_xvfb
+
+    with ThreadPoolExecutor(4) as pool:
+        displays = list(pool.map(lambda _: start_xvfb("320x240"), range(4)))
+    try:
+        assert len({d.name for d in displays}) == 4
+    finally:
+        for display in displays:
+            display.stop()

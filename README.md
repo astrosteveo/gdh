@@ -16,6 +16,8 @@ Linux only for now.
 - [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+, Pillow and NumPy)
 - For a C# project: Godot's .NET build as `godot-mono`, and the .NET SDK (`dotnet`)
 
+On WSL2, gdh runs on Xvfb: WSL has no DRM device that can render, so the GPU display can't start, and Godot's Vulkan uses llvmpipe on the CPU. Screenshots are right; frame and GPU timings aren't meaningful there.
+
 ## C# projects
 
 A project with a `.csproj` is a C# project. Before `capture`, `live start` and `import`, gdh builds its assemblies with `dotnet build`, since Godot run from the command line loads them but never builds them. It builds only when a `.cs`, `.csproj`, `.sln` or props/targets file changed since its last build, so don't build by hand first; `--rebuild` forces a build. It runs `godot-mono` unless `GODOT` names another binary. A failed build stops gdh with the compiler's errors. `--no-build` skips the build.

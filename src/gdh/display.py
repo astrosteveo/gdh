@@ -20,6 +20,7 @@ import os
 import re
 import select
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -131,31 +132,62 @@ def read_display_number(fd, timeout):
     return data.decode().strip() if data.endswith(b"\n") else ""
 
 
+X11_SOCKETS = Path("/tmp/.X11-unix")
+
+
+def display_in_use(number):
+    """Whether another X server has this display: its lock file, its socket file, or its abstract socket.
+
+    The lock alone isn't enough: WSLg's X server keeps none in /tmp (only its
+    socket file), and an Xvfb that loses a race for a number deletes the
+    winner's lock as it exits."""
+    if Path(f"/tmp/.X{number}-lock").exists() or (X11_SOCKETS / f"X{number}").exists():
+        return True
+    with socket.socket(socket.AF_UNIX) as probe:
+        try:
+            probe.connect(f"\0{X11_SOCKETS}/X{number}")
+            return True
+        except OSError:
+            return False
+
+
 def start_xvfb(resolution, log=None, timeout=15):
     """Start Xvfb on a free display, in a new process group.
 
-    -displayfd lets Xvfb pick the display number itself, so concurrent runs
-    never collide the way `xvfb-run -a` can. -terminate makes it exit when its
-    last client (Godot) disconnects. Xvfb gets its own session and process
-    group, so it outlives the gdh command that started it.
+    It takes the first display number no other X server has. If another run
+    takes it first, Xvfb exits at once and the next number is tried, so
+    concurrent runs never collide the way `xvfb-run -a` can. -displayfd says
+    when it's ready. -terminate makes it exit when its last client (Godot)
+    disconnects. Xvfb gets its own session and process group, so it outlives
+    the gdh command that started it.
+
+    -nolisten unix leaves out the socket file in /tmp/.X11-unix, which WSLg
+    mounts read-only, so Xvfb couldn't start there. Clients reach it on the
+    abstract socket instead, which libxcb tries first on Linux.
     """
     width, height = parse_resolution(resolution)
     if not shutil.which("Xvfb"):
         raise GdhError("Xvfb isn't installed (Arch: xorg-server-xvfb, Debian/Ubuntu: xvfb).")
-    read_fd, write_fd = os.pipe()
-    with open(log or os.devnull, "w") as out:
-        proc = subprocess.Popen(
-            ["Xvfb", "-displayfd", str(write_fd), "-screen", "0", f"{width}x{height}x24", "-nolisten", "tcp",
-             "-terminate"],
-            pass_fds=[write_fd], stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
-            start_new_session=True)
-    os.close(write_fd)
-    number = read_display_number(read_fd, timeout)
-    if not number:
+    free = (n for n in range(1000) if not display_in_use(n))
+    for attempt, candidate in enumerate(free, start=1):
+        read_fd, write_fd = os.pipe()
+        with open(log or os.devnull, "w") as out:
+            proc = subprocess.Popen(
+                ["Xvfb", f":{candidate}", "-displayfd", str(write_fd), "-screen", "0", f"{width}x{height}x24",
+                 "-nolisten", "tcp", "-nolisten", "unix", "-terminate"],
+                pass_fds=[write_fd], stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.STDOUT,
+                start_new_session=True)
+        os.close(write_fd)
+        number = read_display_number(read_fd, timeout)
+        if number:
+            return Display("xvfb", f":{number}", proc, [proc.pid], log=str(log) if log else None)
         kill_groups(proc.pid)
         proc.wait()
-        raise GdhError("Xvfb didn't start. Is it installed (Arch: xorg-server-xvfb, Debian/Ubuntu: xvfb)?")
-    return Display("xvfb", f":{number}", proc, [proc.pid], log=str(log) if log else None)
+        # Usually another run took this number first; after several failures in a row it's something else.
+        if attempt == 10:
+            detail = f": {log_tail(log)}" if log else ""
+            raise GdhError(f"Xvfb didn't start on any of 10 displays, the last :{candidate}{detail}")
+    raise GdhError("Xvfb found no free display number below 1000.")
 
 
 def displays_root():

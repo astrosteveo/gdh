@@ -109,6 +109,7 @@ func _start() -> void:
 		"errors": errors.drain(),
 		"output": errors.drain_output().output,
 		"user_dir": OS.get_user_data_dir(),
+		"adapter": RenderingServer.get_video_adapter_name(),
 	}
 	write_ready(info)
 	if err != OK:

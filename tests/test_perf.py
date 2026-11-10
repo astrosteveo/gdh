@@ -163,6 +163,20 @@ def readings(values, every=10):
     return [{"frame": i * every, "objects": v, "nodes": 10} for i, v in enumerate(values)]
 
 
+def test_times_from_a_cpu_renderer_are_warned_about():
+    from gdh.godot import software_renderer
+
+    for adapter in ("llvmpipe (LLVM 21.1.8, 256 bits)", "lavapipe", "SwiftShader Device (Subzero)"):
+        assert software_renderer(adapter)
+    for adapter in ("NVIDIA GeForce RTX 5080", "Microsoft Direct3D12 (NVIDIA GeForce RTX 5080)", "", None):
+        assert not software_renderer(adapter)
+
+    cpu = perf.add_warnings({}, {"adapter": "llvmpipe (LLVM 21.1.8, 256 bits)"}, None)
+    assert cpu["software_renderer"] and any("a CPU renderer" in w for w in cpu["warnings"])
+    gpu = perf.add_warnings({}, {"adapter": "NVIDIA GeForce RTX 5080"}, None)
+    assert not gpu["software_renderer"] and gpu["warnings"] == []
+
+
 def test_the_leak_rule():
     steady = readings([100 + i for i in range(40)])
     assert [leak["counter"] for leak in perf.leaks(steady, 0)] == ["objects"]

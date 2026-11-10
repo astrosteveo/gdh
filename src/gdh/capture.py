@@ -7,7 +7,8 @@ from pathlib import Path
 
 from gdh import measure as m
 from gdh.display import open_display, parse_resolution
-from gdh.godot import HARNESS, GdhError, alert_shims, build_csharp, godot_cmd, godot_env, kill_groups, size_mismatch
+from gdh.godot import (HARNESS, GdhError, alert_shims, build_csharp, godot_cmd, godot_env, kill_groups, size_mismatch,
+                       software_renderer, software_renderer_note)
 from gdh.images import crop_findings, save_tiles
 from gdh.imports import describe_missing, ensure_imported, missing_resources
 
@@ -48,6 +49,7 @@ def capture_one(project, scene, out_dir, args, shims, baseline=None):
     missing = missing_resources(report.get("errors", []))
     if report:
         report["display"] = display.kind
+        report["software_renderer"] = software_renderer(report.get("adapter"))
         if mismatch:
             report["size_mismatch"] = mismatch
         if missing:
@@ -65,6 +67,8 @@ def capture_one(project, scene, out_dir, args, shims, baseline=None):
     warnings = sum(f["severity"] == "warning" for f in findings)
     print(f"{scene}: exit={code} adapter={report.get('adapter', '?')} display={display.kind} errors={errors} "
           f"warnings={warnings} findings={len(findings)} images={','.join(pngs) or 'none'} -> {out_dir}")
+    if report.get("software_renderer"):
+        print(software_renderer_note(report["adapter"]), file=sys.stderr)
     for f in findings:
         crop = f"  [{f['crop']}]" if f.get("crop") else ""
         print(f"  {f['severity']}: {f['probe']} {f['node']}: {f['message']}{crop}")

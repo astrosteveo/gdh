@@ -1,5 +1,5 @@
 """gdh live bench, monitors and audio: a frame-time budget, Godot's Performance monitors and the leaks they show, and
-what the game plays. Also the warnings on a frame-time record: the renderer timing its passes, and other games on the
+what the game plays. Also the warnings on a frame-time record: a CPU renderer, the renderer timing its passes, and other games on the
 machine.
 
 The game's side is harness/frames.gd (the frame record), harness/monitors.gd and harness/audio.gd; bridge.gd's step
@@ -13,7 +13,7 @@ import threading
 from pathlib import Path
 
 from gdh import measure as m
-from gdh.godot import GdhError, pid_alive
+from gdh.godot import GdhError, pid_alive, software_renderer
 
 # The names Godot's binaries run under (a process's name is its binary's, cut to 15 characters).
 GODOT_NAMES = ("godot", "godot-mono")
@@ -135,6 +135,7 @@ def add_warnings(summary, record, game_pid, others=()):
     games on the machine while the record ran (at its start, from the record, and `others`). Sets "gpu_passes",
     "other_games" and "warnings"."""
     summary["gpu_passes"] = bool("groups" in summary or (game_pid and gpu_profiled(game_pid)))
+    summary["software_renderer"] = software_renderer(record.get("adapter"))
     games = {}
     for game in [*record.get("others_at_start", []), *others]:
         game = {**game, "pid": int(game["pid"])}  # (a number through Godot's JSON comes back a float)
@@ -142,6 +143,9 @@ def add_warnings(summary, record, game_pid, others=()):
             games.setdefault(game["pid"], game)
     summary["other_games"] = list(games.values())
     warnings = []
+    if summary["software_renderer"]:
+        warnings.append(f"the frames were rendered on {record['adapter']}, a CPU renderer: these times measure the "
+                        f"CPU, not a GPU, so they say nothing about the game's performance")
     if summary["gpu_passes"]:
         warnings.append("the renderer timed each of its passes (--gpu-passes), which adds GPU time to every frame: "
                         "time a budget in a session started without it")

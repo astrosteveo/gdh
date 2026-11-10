@@ -359,6 +359,20 @@ def size_mismatch(window_size, resolution):
             f"are at the window's size; change what sizes it, or ask for {got[0]}x{got[1]}.")
 
 
+SOFTWARE_RENDERERS = ("llvmpipe", "lavapipe", "softpipe", "swiftshader")
+
+
+def software_renderer(adapter):
+    """Whether Godot's video adapter is a renderer that runs on the CPU (llvmpipe on WSL2, say)."""
+    return any(name in (adapter or "").lower() for name in SOFTWARE_RENDERERS)
+
+
+def software_renderer_note(adapter):
+    """Why times from this adapter mean nothing, for stderr: its images are still right."""
+    return (f"gdh: note: Godot renders on {adapter}, a CPU renderer: images are right, but frame and GPU times "
+            f"measure the CPU, not a GPU, so don't report them as the game's performance.")
+
+
 def project_ticks(project):
     """The project's physics ticks per second (Godot's default is 60)."""
     text = (Path(project) / "project.godot").read_text()

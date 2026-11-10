@@ -33,7 +33,7 @@ from pathlib import Path
 from gdh import companions, netem, restart, spawned, timeline
 from gdh.display import CHOICES, open_display, parse_resolution, stop_displays
 from gdh.godot import (HARNESS, GdhError, build_csharp, godot_cmd, godot_env, kill_groups, pid_alive, project_ticks,
-                       size_mismatch, write_alert_shims)
+                       size_mismatch, software_renderer, software_renderer_note, write_alert_shims)
 from gdh.images import crop_findings, save_tiles
 from gdh.imports import describe_missing, ensure_imported, missing_resources
 
@@ -501,6 +501,8 @@ def cmd_start(args):
     for i, (record, info) in enumerate(zip(games, infos)):
         prefix = "" if len(games) == 1 else f"[{i}] "
         print(describe_status(info["status"], prefix))
+        if software_renderer(info.get("adapter")):
+            print(prefix + software_renderer_note(info["adapter"]), file=sys.stderr)
         if len(games) > 1:
             print(f"{prefix}pid {record['pid']}, {describe_display(record)}, output in {record['out']}")
     print(f"session '{name}': pid {first['pid']}"

@@ -58,3 +58,23 @@ def test_live_start_takes_a_locale(tmp_path):
                 assert "(Button) \"[" in outline  # snapshot reads the text as the button draws it
         finally:
             gdh("live", "stop", "--session", session)
+
+
+def test_capture_and_live_start_say_when_godot_renders_on_the_cpu(tmp_path):
+    """On llvmpipe (WSL2, a machine without a GPU driver) times mean nothing, so both say so; on a GPU neither does."""
+    from gdh.godot import software_renderer
+
+    proc = gdh("capture", "--project", TESTBED, "--scene", "res://live/arena.tscn", "--modes", "normal",
+               "--out", tmp_path / "capture")
+    report = json.loads((tmp_path / "capture" / "report.json").read_text())
+    cpu = software_renderer(report["adapter"])
+    assert report["software_renderer"] == cpu
+    assert ("a CPU renderer" in proc.stderr) == cpu
+
+    session = f"test-cpu-note-{os.getpid()}"
+    proc = gdh("live", "start", "--project", TESTBED, "--scene", "res://live/arena.tscn", "--session", session,
+               "--out", tmp_path / "live")
+    try:
+        assert ("a CPU renderer" in proc.stderr) == cpu
+    finally:
+        gdh("live", "stop", "--session", session)

@@ -138,7 +138,7 @@ gdh live bench 600 --budget-p99 8.3 --session <name>   # time 600 frames; exit 1
 ```
 
 - **Compare like with like:** a shot against the same shot changed one way, never two different shots. `term WITHOUT WITH` measures what one setting adds.
-- **Timing.** Time budgets in a session started without `--gpu-passes`, which inflates times (start with it, then `gdh live frames`, to see what each pass costs). Re-time if the summary names other games on the machine. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. Under Xvfb the GPU idles between frames, so say which display ran.
+- **Timing.** Time budgets in a session started without `--gpu-passes`, which inflates times (start with it, then `gdh live frames`, to see what each pass costs). Re-time if the summary names other games on the machine. A game's own pass shows when it calls `RenderingDevice.capture_timestamp("Name")`. Under Xvfb the GPU idles between frames, so say which display ran. When gdh notes that Godot renders on a CPU renderer (llvmpipe, as on WSL2), its images are right but no time means anything: say so instead of reporting one.
 - **Leaks and sound.** `gdh live monitors --leak` exits 1 when nodes, orphan nodes, objects, resources or video memory grow steadily; `step N --monitors` shows a step's change. `gdh live audio` after a step gives each bus's peak and what played; mixing runs in real time, so step a few hundred frames first.
 - **`black` and `crush` have blind spots:** a black object on purpose in front of something lit reads as a NaN's hole, and which regions should hold detail is yours to choose (`--box`, `--mask`).
 

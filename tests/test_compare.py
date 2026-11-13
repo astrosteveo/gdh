@@ -124,7 +124,9 @@ def test_matrix_captures_each_screen_and_quality(tmp_path):
     for cell, size in zip(record["cells"][::2], [(1280, 720), (720, 1280), (1000, 500)]):
         with Image.open(Path(cell["dir"]) / "normal.png") as img:
             assert img.size == size
-            assert img.getpixel((2, 2)) == (25, 127, 25)  # --set's clear color, through the override.cfg
+            # --set's clear color, through the override.cfg. Its channels are halfway between two values (25.5 and 127.5 of 255),
+            # which Mesa's software Vulkan rounds up and a GPU down.
+            assert all(abs(a - b) <= 1 for a, b in zip(img.getpixel((2, 2)), (25, 127, 25)))
         assert (Path(cell["dir"]) / "report.json").exists()
     assert record["cells"][1]["settings"]["rendering/scaling_3d/scale"] == 0.5
     with Image.open(out / "matrix.png") as img:

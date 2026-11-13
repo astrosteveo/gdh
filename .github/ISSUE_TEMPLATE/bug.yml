@@ -9,6 +9,11 @@ body:
       description: "What goes wrong, and the evidence: the steps that cause it, the output or the error message."
     validations:
       required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "What `gdh --version` and `godot --version` print."
   - type: textarea
     id: goal
     attributes:

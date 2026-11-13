@@ -1,6 +1,8 @@
 """gdh guide, and every gdh example in the docs against the CLI: each --flag must be one the command takes."""
+import json
 import re
 import subprocess
+import tomllib
 
 from conftest import ROOT
 
@@ -39,6 +41,13 @@ def test_guide_prints_the_cheat_sheet():
     assert "gdh live step --until" in out and len(out.splitlines()) < 70
     assert "gdh guide" in subprocess.run(["uv", "run", "gdh", "--help"], cwd=ROOT, capture_output=True,
                                          text=True).stdout
+
+
+def test_version_is_the_packages_and_the_plugins():
+    out = subprocess.run(["uv", "run", "gdh", "--version"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())["version"]
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    assert out.strip() == f"gdh {project}" and project == plugin
 
 
 def test_every_documented_flag_is_one_the_command_takes():

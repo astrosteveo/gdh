@@ -17,6 +17,7 @@ An agent new to gdh: `gdh guide` prints a one-page cheat sheet.
 import argparse
 import re
 import sys
+from importlib.metadata import version
 
 from gdh import api, editor, editor_bridge, events, export, guide, live, measure_cli, movie, review, scenario, testing
 from gdh.capture import cmd_capture
@@ -29,6 +30,7 @@ def build_parser():
     """The gdh command's parser, every subcommand on it."""
     parser = argparse.ArgumentParser(prog="gdh", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--version", action="version", version=f"gdh {version('gdh')}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     cap = sub.add_parser("capture", help="Render scenes and save one PNG per debug view")

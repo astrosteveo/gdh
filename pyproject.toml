@@ -1,6 +1,6 @@
 [project]
 name = "gdh"
-version = "0.1.0"
+version = "0.2.0"
 description = "Render Godot scenes off-screen on the real GPU and check them for visual defects"
 readme = "README.md"
 authors = [

@@ -3,6 +3,7 @@ brownish grey square of about the backdrop's brightness; Ghost, a Node2D drawn b
 the backdrop), and gdh measure palette on made-up images."""
 import json
 import os
+import re
 
 import numpy as np
 import pytest
@@ -41,7 +42,9 @@ def test_contrast_against_what_is_round_the_node(game, tmp_path):
 
 def test_contrast_fails_on_request_and_says_what_it_cant_measure(game):
     proc = gdh("live", "contrast", "--node", "Murky", "--fail", "--session", SESSION, check=False)
-    assert proc.returncode == 1 and "Murky: contrast 1.04:1" in proc.stdout and "hard to pick out" in proc.stdout
+    # 1.04:1 on a GPU, 1.03:1 on Mesa's software Vulkan, which rounds the colors a little differently.
+    ratio = re.search(r"Murky: contrast ([\d.]+):1", proc.stdout)
+    assert proc.returncode == 1 and ratio and 1.02 <= float(ratio[1]) <= 1.06 and "hard to pick out" in proc.stdout
     gdh_json("live", "eval", "get_node('Bright').hide()", "--session", SESSION)
     try:
         proc = gdh("live", "contrast", "--node", "Bright", "--session", SESSION, check=False)

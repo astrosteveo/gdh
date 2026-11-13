@@ -32,22 +32,63 @@ jobs:
 
   suite:
     name: pytest
-    # The suite runs on the development machine's GPU. The repository is public, so a pull request from a fork never
-    # runs there: its code would run on that machine.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, gpu]
-    timeout-minutes: 180
+    # GitHub's hosted runner has no GPU, so Godot renders with Mesa's software Vulkan (lavapipe) on Xvfb, and the GPU
+    # display's tests skip. Run the suite on a machine with a GPU before a release.
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      GODOT_VERSION: 4.7.2
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # for the diff in "Find what changed"
+      - name: Install Xvfb, software Vulkan, ffmpeg and xmessage
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb mesa-vulkan-drivers libvulkan1 ffmpeg x11-utils
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - uses: astral-sh/setup-uv@v10
+      - name: Cache Godot
+        id: godot-cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-linux-x86_64
+      # Godot's standard and .NET builds, and the standard build's Linux export templates (the templates archive holds
+      # every platform's, about 1 GB, so only the Linux ones are kept).
+      - name: Download Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/$GODOT_VERSION-stable"
+          mkdir -p ~/godot/bin && cd ~/godot
+          curl -fsSLO "$base/Godot_v$GODOT_VERSION-stable_linux.x86_64.zip"
+          curl -fsSLO "$base/Godot_v$GODOT_VERSION-stable_mono_linux_x86_64.zip"
+          curl -fsSLO "$base/Godot_v$GODOT_VERSION-stable_export_templates.tpz"
+          unzip -q "Godot_v$GODOT_VERSION-stable_linux.x86_64.zip"
+          unzip -q "Godot_v$GODOT_VERSION-stable_mono_linux_x86_64.zip"
+          templates=~/.local/share/godot/export_templates/$GODOT_VERSION.stable
+          mkdir -p "$templates"
+          unzip -q -j "Godot_v$GODOT_VERSION-stable_export_templates.tpz" 'templates/linux_*.x86_64' \
+            'templates/version.txt' -d "$templates"
+          rm ./*.zip ./*.tpz
+          mv "Godot_v$GODOT_VERSION-stable_linux.x86_64" bin/godot
+          # The .NET build finds GodotSharp beside its own file, so it stays in its folder.
+          ln -s ~/godot/Godot_v$GODOT_VERSION-stable_mono_linux_x86_64/Godot_v$GODOT_VERSION-stable_mono_linux.x86_64 \
+            bin/godot-mono
+      - name: Put Godot on PATH
+        run: echo "$HOME/godot/bin" >> "$GITHUB_PATH"
       # Without godot or Xvfb, conftest.py skips every test and pytest passes, so fail here instead.
       - name: Check the tools the suite needs
         run: |
-          for tool in godot Xvfb weston Xwayland uv; do
+          for tool in godot godot-mono dotnet Xvfb ffmpeg xmessage uv; do
             command -v "$tool" || { echo "::error::$tool is not on the runner's PATH"; exit 1; }
           done
           godot --version
+          godot-mono --version
       - name: Install gdh and pytest
         run: uv sync --locked
       # A change to Markdown files only can still break the docs check (tests/test_guide.py), but needs no game. When the
@@ -63,23 +104,6 @@ jobs:
           fi
       - name: Run the suite
         env:
-          # A pull request runs on the GPU display only, as tests/test_display.py still checks Xvfb against it. Main runs
-          # on Xvfb only, as its pull request ran the GPU display on the same code. A manual run does both.
-          GDH_TEST_DISPLAYS: ${{ github.event_name == 'pull_request' && 'gpu' || github.event_name == 'push' && 'xvfb' || 'gpu,xvfb' }}
+          GDH_TEST_DISPLAYS: xvfb
           TESTS: ${{ steps.changes.outputs.tests }}
-        # A re-run of a failed job runs only the tests that failed in the attempt before, once that attempt finished
-        # (pytest exited 0 or 1): an interrupted one (2, as on a cancel) saved a last-failed list of only the tests it got
-        # to. The cache is the run's own, kept outside the checkout, which actions/checkout cleans.
-        run: |
-          cache="$HOME/.cache/gdh-ci/$GITHUB_RUN_ID"
-          find "$HOME/.cache/gdh-ci" -mindepth 1 -maxdepth 1 -mtime +14 -exec rm -rf {} + 2>/dev/null || true
-          args=(-ra -o "cache_dir=$cache")
-          if [ -e "$cache/finished" ]; then
-            args+=(--last-failed)
-          fi
-          status=0
-          uv run pytest "${args[@]}" ${TESTS:+"$TESTS"} || status=$?
-          if [ "$status" -le 1 ]; then
-            mkdir -p "$cache" && touch "$cache/finished"
-          fi
-          exit "$status"
+        run: uv run pytest -ra --durations=30 ${TESTS:+"$TESTS"}

@@ -120,12 +120,14 @@ def test_an_export_takes_a_click_that_changes_what_it_draws(build, tmp_path):
     try:
         ready = wait_log(name, "clicker: ready")
         assert f"export {str(build['export']).lower()}" in ready
-        assert near(shot(name).getpixel((20, 20)), DARK)
+        # The program logs that it's ready before its first frame reaches the screen, which comes a while later on
+        # software Vulkan: until then the screen shows Godot's boot splash.
+        assert wait_for(lambda: near(shot(name).getpixel((20, 20)), DARK))
         sent = gdh("live", "input", "--click", BUTTON, "--session", name).stdout
         assert 'on window 1280x720 at 0,0 "clicker' in sent
         # One click: gdh gives the window the focus first, which Godot would otherwise take from the click.
         assert "clicker: clicked 1" in wait_log(name, "clicker: clicked")
-        assert near(shot(name).getpixel((20, 20)), GREEN)
+        assert wait_for(lambda: near(shot(name).getpixel((20, 20)), GREEN))
         status = json.loads(gdh("live", "status", "--session", name, "--json").stdout)
         assert status["running"] and status["export"] == build["export"]
         assert [(w["width"], w["height"]) for w in status["windows"]] == [(1280, 720)]
@@ -249,7 +251,7 @@ def test_keep_children_drives_what_a_launcher_hands_off_to(pack, tmp_path):
         [child] = [p["pid"] for p in status["spawned"]]
         gdh("live", "input", "--click", BUTTON, "--session", name)
         wait_log(name, "clicker: clicked 1")
-        assert near(shot(name).getpixel((20, 20)), GREEN)
+        assert wait_for(lambda: near(shot(name).getpixel((20, 20)), GREEN))
         assert "the session lasts while the processes it spawned run" in gdh("live", "status", "--session", name).stdout
     finally:
         gdh("live", "stop", "--session", name)

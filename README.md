@@ -443,4 +443,4 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 
 ## License
 
-To be decided.
+MIT. See [LICENSE](LICENSE).

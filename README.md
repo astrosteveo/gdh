@@ -34,15 +34,14 @@ Resources that still fail to load (`Failed loading resource`, `Error loading res
 
 ## Install
 
-From a clone of this repo:
-
 ```sh
-uv tool install .
+uv tool install git+https://github.com/astrosteveo/gdh
 ```
 
-This puts `gdh` on your `PATH`. After pulling changes, run `uv tool install --reinstall .`.
+This puts `gdh` on your `PATH`, and `uv tool upgrade gdh` updates it. To install a release instead of the latest
+commit, name its tag: `uv tool install git+https://github.com/astrosteveo/gdh@v0.2.0`.
 
-To run it from the repo without installing, use `uv run gdh ...`.
+To work on gdh itself, clone the repo and run it there with `uv run gdh ...`.
 
 `gdh guide` prints a one-page cheat sheet of the commands that save an agent the most calls, for an agent that has gdh but not the plugin below.
 
@@ -54,7 +53,7 @@ The repo is also a Claude Code plugin. To try it without installing:
 claude --plugin-dir /path/to/gdh
 ```
 
-To install it from GitHub ([astrosteveo/gdh](https://github.com/astrosteveo/gdh), private for now, so you need access to it):
+To install it from GitHub, in Claude Code:
 
 ```
 /plugin marketplace add astrosteveo/gdh

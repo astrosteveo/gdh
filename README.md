@@ -13,7 +13,7 @@ Linux only for now.
 - A Vulkan driver for your GPU
 - weston and Xwayland, for the display the GPU presents to (Arch: `weston xorg-xwayland`, Debian/Ubuntu: `weston xwayland`). Tested with weston 15 and Xwayland 24.1. Older releases may not have what gdh uses (rootful Xwayland, weston's `--renderer=gl` on its headless backend), and then gdh falls back to Xvfb.
 - Xvfb, the fallback when that display can't start (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
-- [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+, Pillow and NumPy)
+- [uv](https://docs.astral.sh/uv/) (it provides Python 3.11+, Pillow and NumPy)
 - For a C# project: Godot's .NET build as `godot-mono`, and the .NET SDK (`dotnet`)
 
 ## C# projects
@@ -34,15 +34,14 @@ Resources that still fail to load (`Failed loading resource`, `Error loading res
 
 ## Install
 
-From a clone of this repo:
-
 ```sh
-uv tool install .
+uv tool install git+https://github.com/astrosteveo/gdh
 ```
 
-This puts `gdh` on your `PATH`. After pulling changes, run `uv tool install --reinstall .`.
+This puts `gdh` on your `PATH`, and `uv tool upgrade gdh` updates it. To install a release instead of the latest
+commit, name its tag: `uv tool install git+https://github.com/astrosteveo/gdh@v0.2.0`.
 
-To run it from the repo without installing, use `uv run gdh ...`.
+To work on gdh itself, clone the repo and run it there with `uv run gdh ...`.
 
 `gdh guide` prints a one-page cheat sheet of the commands that save an agent the most calls, for an agent that has gdh but not the plugin below.
 
@@ -54,7 +53,7 @@ The repo is also a Claude Code plugin. To try it without installing:
 claude --plugin-dir /path/to/gdh
 ```
 
-To install it from GitHub ([astrosteveo/gdh](https://github.com/astrosteveo/gdh), private for now, so you need access to it):
+To install it from GitHub, in Claude Code:
 
 ```
 /plugin marketplace add astrosteveo/gdh
@@ -443,4 +442,4 @@ For each run, gdh also writes stand-ins for `zenity`, `kdialog`, `Xdialog` and `
 
 ## License
 
-To be decided.
+MIT. See [LICENSE](LICENSE).

@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Run this checkout with `uv run gdh ...`. The `gdh` on PATH is an older `uv tool` install, and this session's gdh plugin (skills, hooks, agent) loads from `~/.claude/plugins/cache/`, not from this folder.
+- Run this checkout with `uv run gdh ...`.
 - REVIEW.md lists what counts as a bug here: gdh reporting success after a failure, touching the user's desktop, `user://` or editor settings, or leaving a process it started running. Keep to it.
 
 ## Tests

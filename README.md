@@ -13,7 +13,7 @@ Linux only for now.
 - A Vulkan driver for your GPU
 - weston and Xwayland, for the display the GPU presents to (Arch: `weston xorg-xwayland`, Debian/Ubuntu: `weston xwayland`). Tested with weston 15 and Xwayland 24.1. Older releases may not have what gdh uses (rootful Xwayland, weston's `--renderer=gl` on its headless backend), and then gdh falls back to Xvfb.
 - Xvfb, the fallback when that display can't start (Arch: `xorg-server-xvfb`, Debian/Ubuntu: `xvfb`)
-- [uv](https://docs.astral.sh/uv/) (it provides Python 3.10+, Pillow and NumPy)
+- [uv](https://docs.astral.sh/uv/) (it provides Python 3.11+, Pillow and NumPy)
 - For a C# project: Godot's .NET build as `godot-mono`, and the .NET SDK (`dotnet`)
 
 ## C# projects

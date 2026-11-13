@@ -157,7 +157,13 @@ def test_exec_fails_a_script_that_raises_an_error_as_it_runs(project, tmp_path):
         reply = editor_bridge.call(project, {"cmd": "exec", "code": "extends RefCounted\n\nfunc run(editor):\n\treturn 2\n"})
         assert reply["ok"] is True and reply["result"] == 2 and reply["errors"] == []
         earlier += reply["earlier_errors"]
-    assert any("NoSuchNodeForGdh" in e["message"] for e in earlier), earlier
+    if not any("NoSuchNodeForGdh" in e["message"] for e in earlier):
+        # It has failed this way on CI now and then (#62), but never where it could be watched. Whether the editor's own
+        # log has the error says which side lost it: Godot never raised it, or the bridge's logger didn't keep it.
+        log = (editor_bridge.session_dir(project) / "godot.log").read_text(errors="replace")
+        raised = [line for line in log.splitlines() if "NoSuchNodeForGdh" in line]
+        raise AssertionError(f"no NoSuchNodeForGdh among the earlier errors {earlier}. The editor's log has it "
+                             f"{len(raised)} times: {raised[:3]}")
 
 
 def test_hooks_refuse_edits_that_fight_the_editor(project):

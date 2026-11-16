@@ -20,7 +20,7 @@ there, and xdg-open and its kin are stand-ins that log what would have opened. V
 are turned off, since the screen would show them.
 
 gdh export --smoke runs a build the same way for a number of seconds, and fails on a crash, an early exit or engine
-errors in its log (smoke()).
+errors in its log (smoke()). A Windows build runs under Wine there, in a Wine prefix of its own (wine.py).
 """
 import argparse
 import json
@@ -34,7 +34,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from gdh import companions, live, spawned, x11
+from gdh import companions, live, spawned, wine, x11
 from gdh.display import open_display, parse_resolution
 from gdh.editor_bridge import parse_engine_errors
 from gdh.godot import godot_env, kill_groups, pid_alive, write_alert_shims
@@ -52,6 +52,9 @@ exit 0
 """
 # Signals that mean the program crashed, rather than was stopped.
 CRASH_SIGNALS = {signal.SIGSEGV, signal.SIGABRT, signal.SIGBUS, signal.SIGILL, signal.SIGFPE, signal.SIGTRAP}
+# Log lines that mean it crashed: Godot's crash handler's (on Linux and Windows), and Wine's for a Windows program,
+# which ends with an exit code rather than a signal.
+CRASH_LINES = ("Program crashed with signal", "wine: Unhandled ")
 # What a --binary session takes, besides start; anything else needs the harness (PASS goes to live as it is).
 COMMANDS = ("stop", "status", "shot", "input", "wait")
 PASS = ("list",)
@@ -86,13 +89,15 @@ def export_pack(binary):
     return beside if beside.is_file() else None
 
 
-def command(binary, game_args, resolution, pack):
-    """The command line: an export gets Godot's off-screen options first, and its arguments after Godot's --."""
+def command(binary, game_args, resolution, pack, wine=None):
+    """The command line: an export gets Godot's off-screen options first, and its arguments after Godot's --. With
+    wine, a Windows build runs under it: its one display driver is Windows's, which Wine draws on X."""
     if pack is None:
         return [str(binary), *game_args]
     gpu = ["--gpu-index", os.environ["GDH_GPU_INDEX"]] if "GDH_GPU_INDEX" in os.environ else []
-    return [str(binary), "--display-driver", "x11", "--audio-driver", "Dummy", "--resolution", resolution, *gpu,
-            *(["--", *game_args] if game_args else [])]
+    driver = [] if wine else ["--display-driver", "x11"]
+    return [*([str(wine)] if wine else []), str(binary), *driver, "--audio-driver", "Dummy", "--resolution",
+            resolution, *gpu, *(["--", *game_args] if game_args else [])]
 
 
 def write_shims(directory):
@@ -181,13 +186,14 @@ def describe_exit(ended, log):
     after = f" after {ended['seconds']:.1f} s"
     if ended.get("idle"):
         return f"was stopped{after} without a gdh live command (--idle-timeout)"
+    crash_logged = any(line in tail_text(log, 200) for line in CRASH_LINES)
     if code >= 0:
-        return f"exited with code {code}{after}"
+        return f"crashed (exit code {code}){after}" if crash_logged else f"exited with code {code}{after}"
     try:
         sig = signal.Signals(-code)
     except ValueError:
         return f"was ended by signal {-code}{after}"
-    crashed = sig in CRASH_SIGNALS or "Program crashed with signal" in tail_text(log, 200)
+    crashed = sig in CRASH_SIGNALS or crash_logged
     return f"{'crashed' if crashed else 'was ended'} with signal {-code} ({sig.name}){after}"
 
 
@@ -734,22 +740,32 @@ def add_live_parsers(commands, command):
 
 # --- gdh export --smoke --------------------------------------------------------------------------------------------
 
-def smoke(cmd, seconds, out, display_choice, resolution):
+def smoke(cmd, seconds, out, display_choice, resolution, wine_binary=None):
     """Run a build black-box for `seconds` and check it: still running at the end, and no engine errors in its log.
-    Saves the screen at the end to <out>/smoke.png. Returns (passed, report lines)."""
+    Saves the screen at the end to <out>/smoke.png. With wine_binary, cmd runs a Windows build under Wine, in a prefix
+    of its own (wine.py). Returns (passed, report lines)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     log, exit_file = out / "program.log", out / "exit.json"
     mark = os.urandom(8).hex()
+    width, height = parse_resolution(resolution)
     with tempfile.TemporaryDirectory(prefix="gdh-smoke-") as tmp:
         shims = write_shims(Path(tmp) / "shims")
-        display = open_display(display_choice, resolution, out / "display.log")
+        # Under Wine a window's title bar counts against the screen, though nothing draws one here: on a screen the
+        # window's size, Godot makes the window shorter to fit. The screen is taller, and the window's part is saved.
+        screen = f"{width}x{height + wine.FRAME_ROOM}" if wine_binary else resolution
+        display = open_display(display_choice, screen, out / "display.log")
+        env = program_env(shims, display.name)
         pid = runner = None
         try:
             # Hold a connection to the display for the run: an X server started with -terminate exits when its last
             # client leaves, which a program that restarts its window would otherwise be.
             with x11.Display(display.name) as d:
-                runner, pid = run(cmd, program_env(shims, display.name), log, exit_file, mark)
+                if wine_binary:
+                    env = wine.environment(env, tmp)
+                    # Marked as the build is, so the cleanup finds wineserver and Wine's services however it ends.
+                    wine.boot(wine_binary, {**env, spawned.VAR: mark}, out / "wineboot.log")
+                runner, pid = run(cmd, env, log, exit_file, mark)
                 deadline = time.monotonic() + seconds
                 windows = []
                 while time.monotonic() < deadline and pid_alive(pid):
@@ -759,13 +775,21 @@ def smoke(cmd, seconds, out, display_choice, resolution):
                 shot = None
                 if alive:
                     shot = out / "smoke.png"
-                    x11.grab(display.name).save(shot)
+                    image = x11.grab(display.name)
+                    shown = [w for w in d.windows() if not w["popup"]]
+                    if wine_binary and shown:
+                        w = shown[-1]
+                        image = image.crop((w["x"], w["y"], w["x"] + w["width"], w["y"] + w["height"]))
+                    image.save(shot)
         finally:
+            if wine_binary:
+                wine.stop(wine_binary, env)
             stop_run(pid, runner, display, mark)
     errors = merge([e for e in parse_engine_errors(Path(log).read_text(errors="replace")) if e["type"] != "warning"])
     lines, passed = [], alive and not errors
     if alive:
-        lines.append(f"ran {seconds:g} s{'' if windows else ', and showed no window'}; screen: {shot}")
+        under = f" under {wine.version(wine_binary)}" if wine_binary else ""
+        lines.append(f"ran {seconds:g} s{under}{'' if windows else ', and showed no window'}; screen: {shot}")
     else:
         ended = read_exit(exit_file, 2)
         lines.append(f"the build {describe_exit(ended, log)}, before {seconds:g} s. Last lines of {log}:\n"

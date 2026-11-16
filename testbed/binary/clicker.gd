@@ -2,8 +2,8 @@ extends Control
 ## A window for --binary sessions, run as an export: the background turns from dark blue to green when the button
 ## is clicked, and it prints what reaches it (clicks, keys, typed text, the wheel) so a session can wait for it in the
 ## log. User arguments: --exit-after SECONDS [--code N] quits with code N; --kill-after SECONDS ends the process
-## with SIGKILL, as a crash would end it; --error raises an engine error as it starts; --open URL opens it with
-## OS.shell_open.
+## with SIGKILL, as a crash would end it; --crash-after SECONDS crashes it (OS.crash), through Godot's crash handler;
+## --error raises an engine error as it starts; --open URL opens it with OS.shell_open.
 
 const GREEN := Color(0.1, 0.8, 0.2)
 
@@ -21,6 +21,8 @@ func _ready() -> void:
 		get_tree().create_timer(float(_args["exit-after"])).timeout.connect(_quit)
 	if _args.has("kill-after"):
 		get_tree().create_timer(float(_args["kill-after"])).timeout.connect(_kill)
+	if _args.has("crash-after"):
+		get_tree().create_timer(float(_args["crash-after"])).timeout.connect(_crash)
 	if _args.has("open"):
 		print("clicker: opening ", _args["open"], ": ", error_string(OS.shell_open(_args["open"])))
 	print("clicker: ready, export %s" % (not OS.has_feature("editor")))
@@ -57,6 +59,11 @@ func _quit() -> void:
 func _kill() -> void:
 	print("clicker: killing itself")
 	OS.kill(OS.get_process_id())
+
+
+func _crash() -> void:
+	print("clicker: crashing")
+	OS.crash("clicker: a deliberate crash")
 
 
 func _user_args() -> Dictionary:

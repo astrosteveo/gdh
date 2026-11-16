@@ -6,8 +6,9 @@ what's missing, imports the project if its import cache is stale, runs the expor
 and the files it wrote. --pack writes only the game's data (.pck), which needs no templates.
 
 --smoke SECONDS then runs the build as a --binary session runs a program (blackbox.py), on a display of gdh's, for that
-long, and fails on a crash, an early exit or engine errors in its log; it saves the screen at the end. A pack runs on
-gdh's Godot (--main-pack), which is the editor build, so OS.has_feature("editor") is true there as it isn't in an export.
+long, and fails on a crash, an early exit or engine errors in its log; it saves the screen at the end. A Windows build
+runs under Wine, in a Wine prefix of its own (wine.py). A pack runs on gdh's Godot (--main-pack), which is the editor
+build, so OS.has_feature("editor") is true there as it isn't in an export.
 """
 import os
 import re
@@ -15,11 +16,15 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from gdh import blackbox
+from gdh import blackbox, wine
 from gdh.api import godot_version
 from gdh.editor_bridge import parse_engine_errors
 from gdh.godot import GdhError, alert_shims, build_csharp, csharp_project, godot_binary, godot_env
 from gdh.imports import ensure_imported
+
+# The export platforms --smoke runs: Linux as it is, Windows under Wine.
+LINUX = ("Linux", "Linux/X11")
+WINDOWS = ("Windows Desktop",)
 
 
 def read_presets(project):
@@ -77,8 +82,13 @@ def cmd_export(args):
     out_path = (project / out).resolve() if not os.path.isabs(out) else Path(out)
     if args.pack and out_path.suffix not in (".pck", ".zip"):
         out_path = out_path.with_suffix(".pck")
-    if args.smoke is not None and not args.pack and chosen["platform"] not in ("Linux", "Linux/X11"):
-        raise GdhError(f"--smoke runs a Linux build, and the preset {args.preset!r} is for {chosen['platform']}.")
+    wine_binary = None
+    if args.smoke is not None and not args.pack:
+        if chosen["platform"] in WINDOWS:
+            wine_binary = wine.find()
+        elif chosen["platform"] not in LINUX:
+            raise GdhError(f"--smoke runs a Linux build, or a Windows one under Wine, and the preset {args.preset!r} "
+                           f"is for {chosen['platform']}.")
     binary = godot_binary(project)
     csharp = csharp_project(project) is not None
     if not args.pack:
@@ -115,21 +125,22 @@ def cmd_export(args):
         for e in errors[:15]:
             print(f"  {e['type']}: {e['message']} at {e['where']}")
     if args.smoke is not None:
-        return smoke(args, binary, out_path)
+        return smoke(args, binary, out_path, wine_binary)
     return 0
 
 
-def smoke(args, binary, out_path):
-    """Run the build black-box for --smoke seconds: a pack on gdh's Godot, an export as it is."""
+def smoke(args, binary, out_path, wine_binary=None):
+    """Run the build black-box for --smoke seconds: a pack on gdh's Godot, an export as it is, a Windows one under
+    wine_binary."""
     if args.pack:
         cmd = blackbox.command(shutil.which(binary) or binary, args.game_args, args.resolution, out_path)
         cmd[1:1] = ["--main-pack", str(out_path)]
     elif blackbox.export_pack(out_path):
-        cmd = blackbox.command(out_path, args.game_args, args.resolution, out_path)
+        cmd = blackbox.command(out_path, args.game_args, args.resolution, out_path, wine_binary)
     else:
         raise GdhError(f"--smoke found no pack in or beside {out_path}, so it isn't a Godot build it can run.")
     out = Path(args.smoke_out or Path.cwd() / "captures" / "smoke" / re.sub(r"[^A-Za-z0-9_.-]", "_", args.preset))
-    passed, lines = blackbox.smoke(cmd, args.smoke, out.resolve(), args.display, args.resolution)
+    passed, lines = blackbox.smoke(cmd, args.smoke, out.resolve(), args.display, args.resolution, wine_binary)
     print(f"smoke: {'passed' if passed else 'FAILED'}: " + "\n".join(lines))
     if not passed:
         raise GdhError(f"The smoke run of {out_path.name} failed (above).")
@@ -147,8 +158,9 @@ def add_parser(sub, add_display_option):
     p.add_argument("--timeout", type=int, default=1800, help="Seconds before the export is stopped (default 1800)")
     p.add_argument("--no-build", action="store_true", help="Don't build a C# project's assemblies first")
     p.add_argument("--smoke", type=float, metavar="SECONDS",
-                   help="Then run the build off-screen for SECONDS, and fail on a crash, an early exit or engine errors "
-                        "in its log; saves the screen at the end (arguments after -- go to the game)")
+                   help="Then run the build off-screen for SECONDS (a Windows build under Wine), and fail on a crash, "
+                        "an early exit or engine errors in its log; saves the screen at the end (arguments after -- go "
+                        "to the game)")
     p.add_argument("--smoke-out", metavar="DIR", help="The smoke run's log and screen (default: ./captures/smoke/<preset>)")
     p.add_argument("--resolution", default="1280x720", help="The smoke run's window (default 1280x720)")
     add_display_option(p)

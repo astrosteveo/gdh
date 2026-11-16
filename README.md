@@ -373,7 +373,7 @@ gdh export --project path/to/game --preset Linux     # release build to the pres
 gdh export --project path/to/game --preset Linux --pack   # the .pck alone, no templates needed
 ```
 
-It checks the preset and the export templates for the exact Godot version first, and says what's missing. `--smoke SECONDS` then runs the build off-screen for that long, fails on a crash, an early exit or engine errors in its log, and saves `smoke.png`.
+It checks the preset and the export templates for the exact Godot version first, and says what's missing. `--smoke SECONDS` then runs the build off-screen for that long, fails on a crash, an early exit or engine errors in its log, and saves `smoke.png`. A Windows build runs under Wine (`wine` on `PATH`), in a Wine prefix of its own that's deleted afterwards.
 
 To drive an exported build, a launcher or any other X program as it is (where `OS.has_feature("editor")` matters), run it as a black box on gdh's display: `gdh live start --binary build/game.x86_64`, then `wait --log REGEX`, `shot`, `input --click X,Y --type TEXT --key Return`, `status` and `stop`. Shots read the display, input goes through XTest, and gdh gives the window the focus so one click is one click. Commands that need gdh's harness (`step`, `eval`, `tree`, `find`) say so. See [docs/live.md](docs/live.md).
 

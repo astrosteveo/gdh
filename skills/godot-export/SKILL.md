@@ -43,7 +43,8 @@ gdh export --project <dir> --preset Linux --pack             # only the game's d
 - Report the files written and their sizes (`gdh export` prints them).
 - Smoke-test a Linux build: `gdh export --project <dir> --preset Linux --smoke 10` exports, runs the build off-screen
   for 10 s, and fails on a crash, an early exit or engine errors in its log; look at the `smoke.png` it saves.
-  Arguments after `--` go to the game. A Windows or macOS build can't be run here; say so.
+  Arguments after `--` go to the game. A Windows build runs the same way under Wine (`--preset Windows --smoke 10`),
+  in a Wine prefix of its own; it needs `wine` installed. A macOS build can't be run here; say so.
 - To drive the build itself (a menu, a launcher; where `OS.has_feature("editor")` matters), run it as a black box:
   `gdh live start --binary build/game.x86_64`, then `gdh live wait --log REGEX`, `shot`, `input --click X,Y`,
   `status` and `stop` (`${CLAUDE_PLUGIN_ROOT}/docs/live.md`, "Programs as they are"). Never run the build bare: it would open on the

@@ -3,10 +3,12 @@ as they are on gdh's display, seen with shot, driven through XTest, waited on, a
 
 Two builds of the clicker run: Godot's release export template beside the clicker's pack, as gdh export writes a Linux
 build (skipped without export templates for this Godot version), and gdh's Godot running the pack (--main-pack), which
-needs none."""
+needs none. gdh export --smoke also runs a Windows export under Wine (skipped without Wine or the Windows template)."""
 import json
 import os
 import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -27,6 +29,9 @@ BUTTON, FIELD = "640,360", "640,460"
 PROJECT = 'config_version=5\n\n[application]\n\nconfig/name="clicker"\nrun/main_scene="res://binary/clicker.tscn"\n'
 PRESETS = ('[preset.0]\n\nname="Linux"\nplatform="Linux"\nrunnable=true\nexport_filter="all_resources"\n'
            'include_filter=""\nexclude_filter=""\nexport_path="build/clicker.x86_64"\n\n[preset.0.options]\n\n'
+           'binary_format/architecture="x86_64"\n\n'
+           '[preset.1]\n\nname="Windows"\nplatform="Windows Desktop"\nrunnable=true\nexport_filter="all_resources"\n'
+           'include_filter=""\nexclude_filter=""\nexport_path="build/windows/clicker.exe"\n\n[preset.1.options]\n\n'
            'binary_format/architecture="x86_64"\n')
 ENGINE = ["--display-driver", "x11", "--audio-driver", "Dummy", "--resolution", "1280x720"]
 
@@ -321,6 +326,64 @@ def test_export_smoke_runs_a_real_export(clicker, tmp_path):
     assert proc.returncode == 0 and "smoke: passed" in proc.stdout, proc.stdout + proc.stderr
 
 
+def windows_smoke(clicker, out, *user, seconds="3"):
+    """gdh export --smoke of the clicker's Windows preset, under Wine; skips without Wine or the Windows template."""
+    if not shutil.which("wine"):
+        pytest.skip("needs Wine")
+    if not (templates_dir(godot_version(GODOT), False) / "windows_release_x86_64.exe").is_file():
+        pytest.skip("no Godot Windows export template for this version")
+    return gdh("export", "--project", clicker, "--preset", "Windows", "--smoke", seconds, "--smoke-out", out,
+               *(["--", *user] if user else []), check=False)
+
+
+def wine_left():
+    """Processes still running in a smoke run's Wine prefix (WINEPREFIX in a gdh-smoke- directory)."""
+    found = []
+    for entry in os.scandir("/proc"):
+        try:
+            with open(f"/proc/{entry.name}/environ", "rb") as f:
+                env = f.read().split(b"\0")
+        except OSError:
+            continue
+        if any(v.startswith(b"WINEPREFIX=") and b"/gdh-smoke-" in v for v in env):
+            found.append(int(entry.name))
+    return found
+
+
+def test_export_smoke_runs_a_windows_build_under_wine(clicker, tmp_path):
+    proc = windows_smoke(clicker, tmp_path)
+    assert proc.returncode == 0 and "smoke: passed: ran 3 s under wine-" in proc.stdout, proc.stdout + proc.stderr
+    assert "clicker: ready, export true" in (tmp_path / "program.log").read_text()
+    # The window at the size asked for, though Wine counts a title bar nothing draws (wine.FRAME_ROOM).
+    screen = Image.open(tmp_path / "smoke.png").convert("RGB")
+    assert screen.size == (1280, 720)
+    assert near(screen.getpixel((20, 20)), DARK) and near(screen.getpixel((1260, 710)), DARK)
+    assert wait_for(lambda: not wine_left()), wine_left()
+
+
+def test_export_smoke_fails_a_windows_build_that_crashes_errs_or_exits_early(clicker, tmp_path):
+    crashed = windows_smoke(clicker, tmp_path, "--crash-after", "0.5")
+    assert crashed.returncode == 1 and "the build crashed (exit code" in crashed.stdout, crashed.stdout
+    assert "wine: Unhandled" in crashed.stdout  # the end of its log
+    erring = windows_smoke(clicker, tmp_path, "--error")
+    assert erring.returncode == 1 and "1 engine error in its log" in erring.stdout
+    assert "clicker: an error as it starts" in erring.stdout
+    early = windows_smoke(clicker, tmp_path, "--exit-after", "0.2", "--code", "3")
+    assert early.returncode == 1 and "exited with code 3" in early.stdout and "before 3 s" in early.stdout
+    assert wait_for(lambda: not wine_left()), wine_left()
+
+
+def test_export_smoke_of_a_windows_preset_says_when_wine_is_missing(clicker, tmp_path):
+    # Godot, and nothing else, on PATH: it fails before exporting.
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "godot").symlink_to(GODOT)
+    proc = subprocess.run([sys.executable, "-m", "gdh", "export", "--project", str(clicker), "--preset", "Windows",
+                           "--smoke", "2", "--out", str(tmp_path / "game.exe")], capture_output=True, text=True,
+                          env={**os.environ, "PATH": str(tmp_path / "bin")}, timeout=120)
+    assert proc.returncode == 1 and "under Wine" in proc.stderr and "pacman -S wine" in proc.stderr, proc.stderr
+    assert not (tmp_path / "game.exe").exists()
+
+
 def test_exports_are_told_from_other_programs_and_endings_described(tmp_path):
     embedded = tmp_path / "embedded.x86_64"
     embedded.write_bytes(b"\x7fELF...pack...GDPC")
@@ -334,12 +397,21 @@ def test_exports_are_told_from_other_programs_and_endings_described(tmp_path):
     assert blackbox.export_pack(other) is None
     assert blackbox.command(other, ["--a"], "640x360", None) == [str(other), "--a"]
     assert blackbox.command(beside, ["--a"], "640x360", beside)[-2:] == ["--", "--a"]
+    # A Windows build runs under Wine, with no X11 display driver: Windows has only its own.
+    windows = blackbox.command(tmp_path / "game.exe", [], "640x360", beside, "/usr/bin/wine")
+    assert windows[:2] == ["/usr/bin/wine", str(tmp_path / "game.exe")] and "--display-driver" not in windows
     log = tmp_path / "log"
     log.write_text("handle_crash: Program crashed with signal 11\n")
     assert blackbox.describe_exit({"code": -11, "seconds": 1, "idle": False}, log).startswith("crashed with signal 11 "
                                                                                             "(SIGSEGV)")
     assert blackbox.describe_exit({"code": -15, "seconds": 1, "idle": False}, tmp_path / "none").startswith(
         "was ended with signal 15 (SIGTERM)")
+    # A Windows program's crash under Wine ends with an exit code: the log says it crashed.
+    log.write_text("CrashHandlerException: Program crashed with signal 4\n"
+                   "wine: Unhandled illegal instruction at address 00007FF60534BB0E (thread 0024)\n")
+    assert blackbox.describe_exit({"code": 29, "seconds": 1, "idle": False}, log).startswith("crashed (exit code 29)")
+    assert blackbox.describe_exit({"code": 29, "seconds": 1, "idle": False}, tmp_path / "none").startswith(
+        "exited with code 29")
     assert x11.parse_key("ctrl+s") == [0xffe3, ord("s")]
     assert x11.parse_key("Enter") == [0xff0d]
     with pytest.raises(LiveError):

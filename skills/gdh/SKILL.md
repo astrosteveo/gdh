@@ -7,13 +7,13 @@ description: See and drive a Godot 4 game on Linux with gdh. Render scenes off-s
 
 `gdh` runs Godot with Vulkan on the real GPU, on a virtual display of its own, so nothing appears on the user's desktop. `gdh capture` renders a scene once: six views, the engine errors and the probe findings. `gdh live` starts the game held at frame 0 and steps it an exact number of frames with input, so you can look between steps. `gdh movie` records a video, and `gdh editor` saves what the Godot editor shows. `gdh guide` prints a one-page cheat sheet.
 
-Use it to check your own work before you tell the user it's done. The user judges whether the game feels good (controls, pacing, fun). You cover whether it loads without errors, renders correctly and behaves as specified, and you measure what feel is made of: latency, speeds, jumps, hit-stop, shake. For each change:
+gdh shows whether a change loads without errors, draws right, behaves as specified and shows in the editor, and it measures what feel is made of: latency, speeds, jumps, hit-stop, shake. It can't tell whether the game feels good (controls, pacing, fun): that takes a human playtest. The checks, for each change:
 
 1. **It loads.** The hooks hand back Godot's errors for each `.gd` you write: fix them first. A `.tscn` or `.tres` isn't always checked, and Godot drops a misspelt property in one without a word; the `godot-editor` skill says how to check them.
 2. **It draws right.** `gdh capture` each scene you made or changed. Read its errors, `DEFECT:` lines and findings, then open `normal.png`, and in 3D the debug views ([Looking at images](#looking-at-images)).
 3. **It behaves right.** After a change to controls, gameplay or UI flow, drive it with `gdh live` and measure: a position before and after, a frame count, a value read with `eval`.
 4. **It shows in the editor.** The user works in the Godot editor, so run `gdh editor --scene` for each scene you made or changed and look at `viewport.png` ([below](#the-editor)). A scene whose script builds everything at run time is empty there, and the user can't inspect or change it; the `godot-project` skill says how to build scenes that show.
-5. **Keep it, and say what you checked.** If you drove it, save that as a scenario with checks, so it replays as a regression test. Report what you verified and how, and what you didn't ([Reporting](#reporting-to-the-user)).
+5. **Keep it.** If you drove it, save that as a scenario with checks, so it replays as a regression test.
 
 Load this plugin's other skills before the work each covers, not only when something goes wrong: `godot-project` before making or restructuring a scene, a screen or a system; `godot-gdscript` before writing GDScript; `godot-editor` before changing a `.tscn`, `.tres`, script, shader or project setting, and whenever the editor may be open (`gdh bridge`, UIDs); `godot-export` for builds. The `playtester` agent plays a scene against a goal, reports back and keeps what passed as a scenario.
 
@@ -45,7 +45,7 @@ gdh live stop --session <name>
 
 ## Setup
 
-Check that `gdh guide` works. If it doesn't, or a command or option this skill names is missing, the `gdh` on PATH is missing or older than this plugin. The plugin's own copy is at `${CLAUDE_PLUGIN_ROOT}` (two directories above this skill): run it in place (`uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh ...`), or, with the user's agreement, install it (`uv tool install --reinstall "${CLAUDE_PLUGIN_ROOT}"`). It needs Linux, Godot 4.x as `godot` (or `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb; a C# project also needs `godot-mono` and the .NET SDK.
+Check that `gdh guide` works. If it doesn't, or a command or option this skill names is missing, the `gdh` on PATH is missing or older than this plugin. The plugin's own copy is at `${CLAUDE_PLUGIN_ROOT}` (two directories above this skill): run it in place (`uv run --project "${CLAUDE_PLUGIN_ROOT}" gdh ...`), or install it (`uv tool install --reinstall "${CLAUDE_PLUGIN_ROOT}"`). It needs Linux, Godot 4.x as `godot` (or `GODOT=/path/to/godot`), a Vulkan driver, weston and Xwayland, and Xvfb; a C# project also needs `godot-mono` and the .NET SDK.
 
 - **Builds and imports.** gdh builds a C# project when its code changed and imports a project whose import cache is missing or stale, before `capture` and `live start`, so don't run `dotnet build` or a Godot import yourself (`gdh import` does it, for instance after changing only import settings). A `DEFECT: ... failed to load` line means the game drew without those resources: report it, never treat it as log noise.
 - **Window size.** `--resolution` is checked: if the game sizes its own window otherwise, `capture` exits 1 and `live start` refuses, naming the size it found.
@@ -194,12 +194,6 @@ The probes check scene data for likely defects: objects floating above surfaces,
 ## Checking a Godot API name
 
 The installed Godot may be newer than your training data, and Godot 3 names (`KinematicBody2D`, `instance()`, `yield`) slip in easily. Look up what you aren't sure of in the installed version's reference: `gdh api CharacterBody2D` (its chain and members), `gdh api CharacterBody2D.move_and_slide` (one member), `gdh api --search floor`, `gdh api @GDScript`, and an annotation with its `@` (`gdh api @GDScript.@export_range`). A wrong name exits 1 with close matches. The properties it lists are the names a `.tscn` or `.tres` uses, and its theme properties are how a scene overrides a control's look (the `godot-editor` skill: Writing scenes and resources).
-
-## Reporting to the user
-
-- **Verified and unverified:** say what you verified and how ("stepped 30 frames holding right; the player moved 60 px, which matches 120 px/s"), and what you didn't check.
-- **Evidence:** the paths of the screenshots or crops that show a problem or a fix, and the scenario that replays it. If a file-sending tool is available, send the key image.
-- **Game feel:** give the numbers you can measure (`gdh live latency`, `feel`, `hitstop`, `shake`, `follow`: frames, speeds, heights, windows) against the target the user gave, and leave the judgment of whether it feels good to them. Say which parts need a human playtest: pacing, fun, sound.
 
 ## References
 

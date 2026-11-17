@@ -39,7 +39,7 @@ uv tool install git+https://github.com/astrosteveo/gdh
 ```
 
 This puts `gdh` on your `PATH`, and `uv tool upgrade gdh` updates it. To install a release instead of the latest
-commit, name its tag: `uv tool install git+https://github.com/astrosteveo/gdh@v0.3.0`.
+commit, name its tag: `uv tool install git+https://github.com/astrosteveo/gdh@v0.3.1`.
 
 To work on gdh itself, clone the repo and run it there with `uv run gdh ...`.
 

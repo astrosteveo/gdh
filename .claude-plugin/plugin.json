@@ -1,6 +1,6 @@
 {
   "name": "gdh",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Lets Claude make Godot 4 games: see and drive them off-screen on the GPU, work through the open editor with real UIDs, check scripts and the API, run tests and export builds.",
   "license": "MIT",
   "author": {

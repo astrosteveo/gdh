@@ -1,6 +1,6 @@
 name: Bug
 description: "Something doesn't work as it should."
-labels: [bug]
+labels: [fix]
 body:
   - type: textarea
     id: problem

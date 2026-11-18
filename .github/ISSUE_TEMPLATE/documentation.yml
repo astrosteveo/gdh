@@ -1,6 +1,6 @@
 name: Documentation
 description: "Documentation that is missing, wrong or unclear."
-labels: [documentation]
+labels: [docs]
 body:
   - type: textarea
     id: problem

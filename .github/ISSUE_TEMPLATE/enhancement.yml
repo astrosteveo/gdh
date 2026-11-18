@@ -1,6 +1,6 @@
 name: Enhancement
 description: "Something new, or a change to how something works."
-labels: [enhancement]
+labels: [feat]
 body:
   - type: textarea
     id: problem
